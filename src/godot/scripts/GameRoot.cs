@@ -84,8 +84,19 @@ public sealed partial class GameRoot : Node3D
     private bool _shotPower;
     private int? _shotBoard;
 
-    /// <summary><c>--zone=N</c>（board-link-mode F.4b）：无人值守演示里本机锁定的出生棋盘编号（1 起，缺省 1）。用来演示"本机为被贴方"的拼接——本机在 1 号时永远是锚点。</summary>
-    private int _autoZone = 1;
+    /// <summary><c>--zone=N</c>（board-link-mode F.4b）：无人值守演示里本机锁定的出生棋盘编号（1 起，缺省 1）。用来演示"本机为被贴方"的拼接——本机在 1 号时永远是锚点。大图没有座位编号，显式给出即报错（段 B 追加裁决 31）。</summary>
+    private int? _autoZoneArg;
+    private int AutoZone => _autoZoneArg ?? 1;
+
+    /// <summary>右下角小地图（big-map 裁决 8 / D9）：只在大图上显示，M 键显隐，点击跳转注视点。</summary>
+    private Minimap _minimap = null!;
+    private bool _minimapHidden;
+
+    /// <summary><c>--pick-check</c> 在大图上的抽样格数（D9：按坐标散列确定性抽）。</summary>
+    private const int PickSample = 2000;
+
+    /// <summary>无人值守大图插旗的点击路径自检（<see cref="DemoPlantFlag"/>）是否失败：计入 <see cref="FinishAutoDemo"/> 的退出码。</summary>
+    private bool _flagCheckFailed;
     private bool _shotGroups;
     private bool _shotOwnership;
     private double _perfSampleSeconds;
@@ -134,7 +145,7 @@ public sealed partial class GameRoot : Node3D
             // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
             _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
             // 上界随地图（seat-gap-25：出生座位数 = 人数），这里只拦非正整数；建局之后按本图的出生座位数再查（见下方 --zone 越界检查）。
-            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生座位编号（正整数，1–本图出生座位数 = 人数；中立平台不可选）", t => int.TryParse(t, out int v) && v >= 1 ? v : null) ?? 1;
+            _autoZoneArg = args.Value<int>("zone", "无人值守演示里本机锁定的出生座位编号（正整数，1–本图出生座位数 = 人数；中立平台不可选；大图没有座位）", t => int.TryParse(t, out int v) && v >= 1 ? v : null);
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
@@ -328,9 +339,17 @@ public sealed partial class GameRoot : Node3D
             // --zone= 越界：按本图出生座位数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
             // 选图界面路径上 _session 是进入时那张图的预览；自检（SelfCheckMapSelect）开始之前换回进入时的标识，锁定时用的正是这张图。
             int seats = _session.Match.Map.BirthZones.Length;   // seat-gap-25：只数出生座位（中立平台不可出生）
-            if (_autoZone > seats)
+            if (_session.IsLargeMap)
             {
-                throw new System.FormatException($"--zone={_autoZone} 越界：地图 {_session.Match.Map.Id} 的出生座位共 {seats} 个（中立平台不可出生），应为 1–{seats}。");
+                // big-map：大图基图没有出生座位（锁定时才物化），自由插旗没有座位编号可选——显式给了 --zone= 即报错，不静默忽略（段 B 追加裁决 31）。
+                if (_autoZoneArg is { } given)
+                {
+                    throw new System.FormatException($"--zone={given} 只对小图的出生座位有意义：地图 {_session.Match.Map.Id} 是大图（全图自由插旗，无人值守演示取合规旗格集合的正中一格）。");
+                }
+            }
+            else if (AutoZone > seats)
+            {
+                throw new System.FormatException($"--zone={AutoZone} 越界：地图 {_session.Match.Map.Id} 的出生座位共 {seats} 个（中立平台不可出生），应为 1–{seats}。");
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
@@ -355,6 +374,13 @@ public sealed partial class GameRoot : Node3D
         _hud = new Hud { Name = "Hud" };
         AddChild(_hud);
         _hud.Build();
+        // 小地图（big-map 裁决 8）：右下角、行动面板之上；只在大图上显示（RefreshViews 同步），点击跳转注视点。
+        var minimapLayer = new CanvasLayer { Name = "MinimapLayer", Layer = 2 };
+        AddChild(minimapLayer);
+        _minimap = new Minimap { Name = "Minimap", Visible = false };
+        Ui.Anchor(_minimap, 1f, 1f, -14f - Minimap.SizePx, -192f - Minimap.SizePx, -14f, -192f);
+        minimapLayer.AddChild(_minimap);
+        _minimap.CellClicked += JumpTo;
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         _hud.OverviewAvailable = _board.Rig.OverviewAvailable;
         Connect();
@@ -541,15 +567,32 @@ public sealed partial class GameRoot : Node3D
         }
     }
 
-    /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
+    /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。大图（big-map D9）没有全局预览，M 键改为小地图显隐。</summary>
     private void ToggleOverview()
     {
+        if (_board.Streaming)
+        {
+            _minimapHidden = !_minimapHidden;
+            GD.Print($"[minimap] 小地图 {(_minimapHidden ? "隐藏" : "显示")}（M 键）");
+            _dirty = true;
+            return;
+        }
+
         _follow.ManualInput(opponentActing: !_session.IsMyTurn);
         if (_board.Rig.ToggleOverview())
         {
             ApplyCamera("全局预览");
             _dirty = true;
         }
+    }
+    /// <summary>小地图点击（big-map 裁决 8）：注视点跳到该格（缩放不变，经视图模型夹取）。</summary>
+    private void JumpTo(Coord cell)
+    {
+        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+        (float x, float z) = _board.PlaneCenterOf(cell);
+        _board.Rig.Home(x, z);
+        ApplyCamera("小地图跳转");
+        _dirty = true;
     }
 
     /// <summary>
@@ -647,6 +690,17 @@ public sealed partial class GameRoot : Node3D
         }
 
         UpdateCamera(delta);
+        // 分块流式加载（big-map D9）：相机输入之后按注视点更新加载集，变了就重画棋子与叠加层；小图恒为 false。
+        if (_board.UpdateStreaming())
+        {
+            _dirty = true;
+        }
+
+        if (_minimap.Visible)
+        {
+            _minimap.SetView(_board.Rig.Pose, _board.Rig.VisibleWidth, _board.Rig.VisibleDepth);
+        }
+
         UpdateHover();
 
         if (_dirty)
@@ -677,7 +731,7 @@ public sealed partial class GameRoot : Node3D
             {
                 if (!passed || !_autoDemo)   // retire-legacy-maps 3.6：图形版只有链接模式，模式判定删除
                 {
-                    GetTree().Quit(passed ? 0 : 1);
+                    GetTree().Quit(passed && !_flagCheckFailed ? 0 : 1);
                 }
             }
 
@@ -685,7 +739,7 @@ public sealed partial class GameRoot : Node3D
             {
                 // open-map 实施裁决 A7：锁定后全图已可见，拾取只在锁定后对全图跑这一轮；"链接后重跑"随拼接一并取消（段 B 删代码），通过即退出。
                 GD.Print("[pick-check] 锁定后全图一轮通过；open-map 起不再有链接，退出");
-                GetTree().Quit(0);
+                GetTree().Quit(_flagCheckFailed ? 1 : 0);   // 大图插旗点击路径自检（[flag]）失败也要以失败退出
             }
 
             return;
@@ -874,8 +928,14 @@ public sealed partial class GameRoot : Node3D
     private void RefreshViews()
     {
         ShowMask mask = ShownMask();
-        _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask);
+        _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask, GridRange());
         _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
+        _minimap.Visible = _board.Streaming && !Selecting && !Supplying && !_minimapHidden;
+        if (_minimap.Visible)
+        {
+            _minimap.Refresh(_session.World.Board(), _session.ZoneOwners, _board.Rig.Pose, _board.Rig.VisibleWidth, _board.Rig.VisibleDepth);
+        }
+
         if (Selecting)
         {
             _hud.ShowMapSelect(_select!, PreviewInfo());
@@ -900,6 +960,28 @@ public sealed partial class GameRoot : Node3D
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
         RefreshCarry();
+    }
+
+    /// <summary>
+    /// 大图局部格网该画的范围（big-map 裁决 7）：本机部署阶段的合法落子范围（Core 唯一实现 <see cref="MatchSession.MyLegalRange"/>），盘上暂放了匠人时并上改造范围
+    /// （<see cref="MatchFlow.EditScopeFor"/>）。其余时刻与小图为 <c>null</c>（不画）。
+    /// </summary>
+    private IReadOnlySet<Coord>? GridRange()
+    {
+        if (!_board.Streaming || !_session.IsMyTurn || _session.Match.Stage != TurnStage.Deploy)
+        {
+            return null;
+        }
+
+        IReadOnlySet<Coord> range = _session.MyLegalRange;
+        if (!_session.Staged.Any(p => p.Type == PieceType.Artisan))
+        {
+            return range;
+        }
+
+        var merged = new HashSet<Coord>(range);
+        merged.UnionWith(_session.Match.EditScopeFor(_session.Me));
+        return merged;
     }
 
     private async void CaptureWhenDrawn(string path)
@@ -1007,9 +1089,34 @@ public sealed partial class GameRoot : Node3D
     {
         Vector2 size = GetViewport().GetVisibleRect().Size;
         var view = new Rect2(Vector2.Zero, size);
-        BoardCellView[] cells = [.. _session.World.Board().Cells.Where(c => c.Terrain == Terrain.Playable)];
+        DefaultBoardView pickBoard = _session.World.Board();
+        BoardCellView[] cells = [.. pickBoard.Cells.Where(c => c.Terrain == Terrain.Playable)];
+        int allPlayable = cells.Length;
+        if (_board.Streaming && cells.Length > PickSample)
+        {
+            // big-map D9：大图按坐标散列确定性抽 2000 格（整图 1.5 万格逐格两档居中 + 多位姿要跑很久，而拾取结论只取决于几何）；同一张图每次抽到同一批。
+            cells = [.. cells.OrderBy(c => PickHash(c.Coord)).ThenBy(c => c.Coord).Take(PickSample)];
+            GD.Print($"[pick-check] 大图抽样：按坐标散列从 {allPlayable} 个可落子格里确定性抽 {cells.Length} 格（区块已加载 {_board.ChunkCounts.Loaded} / {_board.ChunkCounts.Total}；未加载区块的格按几何拾取）");
+        }
+
         CameraPose saved = _board.Rig.Pose;
         bool ok = cells.Length > 0;
+        if (_board.Streaming)
+        {
+            // 小地图往返（裁决 8 / D9；段 B check）：格心 → 世界（BoardGeometry.Center 唯一映射）→ 格坐标（CellPositionOf 反算，须回到整数格）→ 小地图像素 → 格，须回到同一格；
+            // 小地图点击跳转（Minimap.CellClicked → JumpTo → PlaneCenterOf）走的就是这两段映射的反向。
+            var minimap = new Vector2(Minimap.SizePx, Minimap.SizePx);
+            int roundTrips = cells.Count(c =>
+            {
+                (float x, float z) = _board.PlaneCenterOf(c.Coord);
+                Vector2 at = BoardGeometry.CellPositionOf(new Vector3(x, 0f, z), pickBoard.Width, pickBoard.Height);
+                Coord back = Minimap.CellAt(Minimap.PixelOf(at.X + 0.5f, at.Y + 0.5f, pickBoard.Width, pickBoard.Height, minimap), pickBoard.Width, pickBoard.Height, minimap);
+                return Mathf.IsEqualApprox(at.X, c.Coord.X) && Mathf.IsEqualApprox(at.Y, c.Coord.Y) && back == c.Coord;
+            });
+            ok &= roundTrips == cells.Length;
+            GD.Print($"[minimap] 格心 → 世界 → 格坐标 → 小地图像素 → 格 往返一致 {roundTrips} / {cells.Length}；{(roundTrips == cells.Length ? "通过" : "失败")}");
+        }
+
         // board-link-mode D-c（回收 D12 / D24 的"无可验"例外）：注视中心的位姿不再注视画布中心，而是注视"画幅中心最近的可落子格"——
         // 多位姿层的中心 / 最近 / 最远三档都以它为注视点，画面内必须有格的要求照旧成立。
         // 没有可落子格（如插旗未锁定就跑自检）时注视画幅中心，随后按"可落子格 0"失败退出，不在这里抛异常。
@@ -1073,6 +1180,28 @@ public sealed partial class GameRoot : Node3D
             }));
         }
 
+        if (_board.Streaming)
+        {
+            // 大图没有全局预览、7 个固定位姿看不全 150×150：另按最远缩放的所见范围在可行矩形上铺一组"扫描"位姿（相邻重叠 20%），让每个抽样格至少在一个位姿下被验到。
+            _board.Rig.Set(new CameraPose(centerX, centerZ, _board.Rig.Farthest));
+            PlaneRect feasible = _board.Rig.Feasible;
+            float farthest = _board.Rig.Farthest;
+            int columns = System.Math.Max(1, (int)System.Math.Ceiling(feasible.Width / (_board.Rig.VisibleWidth * 0.8f))) + 1;
+            int rows = System.Math.Max(1, (int)System.Math.Ceiling(feasible.Depth / (_board.Rig.VisibleDepth * 0.8f))) + 1;
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < columns; c++)
+                {
+                    float x = columns == 1 ? feasible.CenterX : feasible.MinX + (feasible.Width * c / (columns - 1));
+                    float z = rows == 1 ? feasible.CenterZ : feasible.MinZ + (feasible.Depth * r / (rows - 1));
+                    stages.Add(($"扫描 {r + 1}/{rows}·{c + 1}/{columns}", () => _board.Rig.Set(new CameraPose(x, z, farthest))));
+                }
+            }
+
+            _board.Rig.Set(saved);
+            GD.Print($"[pick-check] 大图扫描位姿 {rows}×{columns} 个（最远缩放 {farthest:0.###}，可行矩形 {feasible.Width:0.#}×{feasible.Depth:0.#}）");
+        }
+
         foreach ((string name, System.Action apply) in stages)
         {
             apply();
@@ -1123,10 +1252,13 @@ public sealed partial class GameRoot : Node3D
 
         string[] missed = [.. cells.Where(c => !verified.Contains(c.Coord)).Select(c => c.Coord.ToNotation())];
         ok &= missed.Length == 0;
-        GD.Print($"[pick-check] 可落子格 {cells.Length}，至少在一个位姿下验到 {verified.Count}{(missed.Length == 0 ? string.Empty : "，未覆盖：" + string.Join("、", missed))}；{(ok ? "通过" : "失败")}");
+        GD.Print($"[pick-check] 可落子格 {cells.Length}{(cells.Length == allPlayable ? string.Empty : $"（抽样自 {allPlayable}）")}，至少在一个位姿下验到 {verified.Count}{(missed.Length == 0 ? string.Empty : "，未覆盖：" + string.Join("、", missed))}；{(ok ? "通过" : "失败")}");
         return ok;
 
         static float Flat(Vector3 v) => (v.X * v.X) + (v.Z * v.Z);
+
+        // 抽样用的坐标散列（与地砖变体同一族散列，只决定抽哪些格，不进任何规则）。
+        static uint PickHash(Coord c) => LowPolyMesh.Hash(unchecked((c.X * 73856093) ^ (c.Y * 19349663)), 7);
     }
 
     private void Drive(double delta)
@@ -1164,10 +1296,17 @@ public sealed partial class GameRoot : Node3D
         {
             if (_autoDemo)
             {
-                _session.ChooseZone(_autoZone - 1);
-                _board.Build(_session.World.Board(), _session.ZoneOwners);
-                FocusHome(opening: true);
-                _dirty = true;
+                if (_session.IsLargeMap)
+                {
+                    // big-map D9：大图没有座位，本机取合规旗格集合的正中一格（确定性次序），其余 AI 走既有盲选；经真实点击路径（OnBoardClicked → AfterFlagsLocked）并自检。
+                    DemoPlantFlag();
+                }
+                else
+                {
+                    _session.ChooseZone(AutoZone - 1);
+                    AfterFlagsLocked();
+                }
+
                 DefaultBoardView locked = _session.World.Board();
                 Flow(_audit.FlagsLocked(locked, _session.World.OwnZone ?? -1, _session.MyBattlefieldCells));
             }
@@ -1590,7 +1729,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         bool framed = HomePlatformFramed();
-        GetTree().Quit(framed && _audit.AllOk ? 0 : 1);
+        GetTree().Quit(framed && _audit.AllOk && !_flagCheckFailed ? 0 : 1);
     }
 
     /// <summary>打一行全流程自检结论（<c>[flow]</c>）；失败的条目另以错误打印，退出码由 <see cref="FinishAutoDemo"/> 汇总。</summary>
@@ -1641,7 +1780,48 @@ public sealed partial class GameRoot : Node3D
             _hover = hover;
             _board.SetCursor(hover);
             _hud.SetHoverReadout(HoverReadout.Of(hover, _session.World.Board()));
+            // 大图插旗阶段（big-map D9）：光标处画 9×9 出生圈 / 13×13 构筑范围的预览，合规与否只问 Core 的唯一实现。
+            _board.SetFlagPreview(_session.AwaitingZone && _session.IsLargeMap ? hover : null, hover is { } at && _session.IsLegalFlagCell(at));
         }
+    }
+    /// <summary>
+    /// 无人值守的大图插旗（big-map D9；段 B check 补的点击路径自检）：走与鼠标相同的 <see cref="OnBoardClicked"/>——先点一格不合规格（A1：旗心 13×13 出不了图，<c>FlagRules</c> 必拒）
+    /// 验证"只提示、状态不变"，再直接经 <see cref="MatchSession.ChooseCell"/> 送同一格验证 Core 也拒绝，最后点合规旗格集合的正中一格验证"已插且锁定、旗在所点格"。任一不符打错误并计入退出码。
+    /// </summary>
+    private void DemoPlantFlag()
+    {
+        var illegal = new Coord(0, 0);
+        OnBoardClicked(illegal);
+        bool unchanged = _session.AwaitingZone && _session.Match.Flags.FlagCellOf(_session.Me) is null;
+        bool noticed = _session.Notice.Contains("不是合规旗格", System.StringComparison.Ordinal);
+        Check(unchanged && noticed, $"点不合规格 {illegal.ToNotation()}：状态{(unchanged ? "不变" : "变了")}、提示{(noticed ? "已给" : "缺失")}（{_session.Notice}）");
+
+        _session.ChooseCell(illegal);
+        Check(_session.AwaitingZone && _session.Match.Flags.FlagCellOf(_session.Me) is null, $"Core 拒绝不合规格 {illegal.ToNotation()}：{(_session.AwaitingZone ? "仍在插旗阶段" : "竟然锁定了")}（{_session.Notice}）");
+
+        Coord flag = _session.DemoFlagCell();
+        OnBoardClicked(flag);
+        Coord? mine = _session.Match.Flags.FlagCellOf(_session.Me);
+        Check(!_session.AwaitingZone && mine == flag, $"点合规格 {flag.ToNotation()}：{(_session.AwaitingZone ? "未锁定" : $"已锁定，本机旗 {mine?.ToNotation()}")}；{_session.Notice}");
+
+        void Check(bool ok, string detail)
+        {
+            GD.Print($"[flag] {detail}；{(ok ? "通过" : "失败")}");
+            if (!ok)
+            {
+                GD.PrintErr($"[flag] 自检失败：{detail}");
+                _flagCheckFailed = true;
+            }
+        }
+    }
+
+    /// <summary>插旗锁定之后（两档、有人 / 无人值守共用）：按锁定后的归属重搭场景、开局对准自己的出生平台（大图：旗心 9×9 出生圈，近景）。</summary>
+    private void AfterFlagsLocked()
+    {
+        _board.SetFlagPreview(null, false);
+        _board.Build(_session.World.Board(), _session.ZoneOwners);
+        FocusHome(opening: true);
+        _dirty = true;
     }
 
     /// <summary>本局 AI 难度的一行说明（启动日志）：显示名、枚举名、实际生效的前瞻宽度与评价权重（地图专属覆盖或缺省表，v2-recalibration 2.4 人工核对用）。</summary>
@@ -1955,15 +2135,34 @@ public sealed partial class GameRoot : Node3D
     {
         if (_session.AwaitingZone)
         {
+            if (_session.IsLargeMap)
+            {
+                // big-map 裁决 4：点任一合规格即旗（合规判定 Core 唯一实现）；不合规只提示、不插。
+                if (!_session.IsLegalFlagCell(coord))
+                {
+                    _session.Notice = $"{coord.ToNotation()} 不是合规旗格：旗须插在高度 0、非桥、不在平台内的可落子格上，旗心 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 在图内且不压中立平台，{FlagRules.BirthRingSide}×{FlagRules.BirthRingSide} 出生圈内可落子格 ≥ {FlagRules.MinRingPlayable}。";
+                    _dirty = true;
+                    return;
+                }
+
+                _session.ChooseCell(coord);
+                if (_session.AwaitingZone)
+                {
+                    _dirty = true;   // Core 拒绝了（提示已在 Notice）
+                    return;
+                }
+
+                AfterFlagsLocked();
+                return;
+            }
+
             if (_session.BirthZoneAt(coord) is not int zone)
             {
                 return;
             }
 
             _session.ChooseZone(zone);
-            _board.Build(_session.World.Board(), _session.ZoneOwners);
-            FocusHome(opening: true);
-            _dirty = true;
+            AfterFlagsLocked();
             return;
         }
 

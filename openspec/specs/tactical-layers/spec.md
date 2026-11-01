@@ -84,6 +84,8 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 辅助设置 SHALL 允许把"按住显示"改为"点击切换"。
 
+大图（big-map 裁决 7）上任一信息层打开时，图形版 SHALL 对已加载区块显示全图格线（局部格网），退出信息层即撤回无格地面；小图照旧由衬底与台面墨线在信息层下变清晰（visual-style-baseline「地块、侧面与水系的造型」）。
+
 #### Scenario: 按住进入松开退出
 - **WHEN** 玩家按住战术视图键并随后松开
 - **THEN** 界面在按住期间显示信息层，松开后立即恢复默认棋盘

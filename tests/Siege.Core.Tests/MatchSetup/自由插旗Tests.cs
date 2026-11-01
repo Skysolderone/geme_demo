@@ -251,4 +251,29 @@ public class 自由插旗Tests
         Assert.All(match.LockedFlagCounts.Values, c => Assert.Equal(1, c));
         Assert.Contains("@", match.Events.Single(e => e.Kind == FlowEventKind.FlagsLocked).Detail, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void 插旗阶段座位视图公开整张基图()
+    {
+        // match-setup「大图自由插旗」/ information-visibility「开局信息公开范围」（段 B 追加裁决 29）：大图没有座位占位，插旗阶段各座位看到整张基图的地形、没有占位；
+        // 他人的旗格不在其中。小图插旗阶段未选者仍一格不见（「开局信息公开范围」守）。
+        MatchFlow match = CreateLarge();
+        match.Flags.PlantAt(P0, FlagRules.LegalFlagCells(Large)[0]);
+        foreach (PlayerId p in All)
+        {
+            SeatPublicView view = match.PublishFor(p);
+            Assert.Equal(Large.Width * Large.Height, view.Cells.Length);
+            Assert.Empty(view.Placeholders);
+            Assert.Equal(Large.AllCoords().Order().Select(c => c.ToNotation()), view.Cells.Select(c => c.Coord));
+        }
+
+        Assert.Empty(Create().PublishFor(P1).Cells);
+
+        // 锁定后：占位 = n 块 13×13 出生棋盘、全部展开，可见格仍是整张图。
+        match.LockFlags();
+        SeatPublicView locked = match.PublishFor(P1);
+        Assert.Equal(All.Length, locked.Placeholders.Length);
+        Assert.All(locked.Placeholders, p => Assert.Equal((FlagRules.BirthPlateSide, FlagRules.BirthPlateSide), (p.Width, p.Height)));
+        Assert.Equal(Large.Width * Large.Height, locked.Cells.Length);
+    }
 }

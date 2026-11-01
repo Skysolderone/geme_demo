@@ -86,6 +86,7 @@ public sealed class BoardCamera
     private float _z;
     private float _distance;
     private bool _overview;
+    private bool _overviewEnabled = true;
     private CameraPose _beforeOverview;
 
     /// <summary>
@@ -164,9 +165,26 @@ public sealed class BoardCamera
 
     /// <summary>
     /// 全局预览是否有意义（viewport-camera「全局预览」：当前战场一屏看全时 MUST NOT 出现按钮、M 键无效）：当前战场在最远上限下看不全才有。
-    /// 旧地图等于 <c>!FitsOneScreen</c>。
+    /// 旧地图等于 <c>!FitsOneScreen</c>。<see cref="OverviewEnabled"/> 关闭时恒为假。
     /// </summary>
-    public bool OverviewAvailable => FullViewDistance > FarthestCap;
+    public bool OverviewAvailable => _overviewEnabled && FullViewDistance > FarthestCap;
+    /// <summary>
+    /// 全局预览是否启用（big-map D9：大图分块流式加载、不提供全局预览，M 键改为小地图显隐；小图恒启用、行为与引入之前逐位相同）。
+    /// 关闭时 <see cref="OverviewAvailable"/> 恒为假、<see cref="ToggleOverview"/> 不起作用；正处于预览时关闭即退出预览、回到切入前的位姿。
+    /// </summary>
+    public bool OverviewEnabled
+    {
+        get => _overviewEnabled;
+        set
+        {
+            _overviewEnabled = value;
+            if (!value && _overview)
+            {
+                _overview = false;
+                Set(_beforeOverview);
+            }
+        }
+    }
 
     /// <summary>是否处于全局预览：整盘一屏可见，距离越过 <see cref="FarthestCap"/>，注视点锁在地图中心。</summary>
     public bool IsOverview => _overview;

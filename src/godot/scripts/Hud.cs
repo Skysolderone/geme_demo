@@ -382,12 +382,13 @@ public sealed partial class Hud : CanvasLayer
         PlayerId banner = view.CurrentPlayer ?? session.Me;
         FactionStyle faction = FactionTable.For(banner);
         _turnEmblem.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
+        // big-map 裁决 6：大图写"第 X / 60 大回合"（分母 = 对局的大回合上限，由公开快照给出），小图照旧不带分母；文案在 Labels，这里不拼数字。
         _turnTitle.Text = view.Phase == MatchPhase.FlagPlanting
             ? "插旗阶段"
-            : $"第 {view.MajorRound} 大回合 · {Labels.Player(banner)}";
+            : $"{Labels.MajorRoundTitle(view.MajorRound, view.RoundCap, view.Tier)} · {Labels.Player(banner)}";
         _turnSubtitle.Text = view.Phase switch
         {
-            MatchPhase.FlagPlanting => "点带编号的出生座位插旗（选中即锁定）",
+            MatchPhase.FlagPlanting => session.IsLargeMap ? "点任一合规格插旗（选中即锁定）" : "点带编号的出生座位插旗（选中即锁定）",
             MatchPhase.Ended => "对局结束",
             _ => $"{Names.Stage(view.Stage)} · 信息层模式：{(layers.Mode == LayerInputMode.HoldToShow ? "按住显示" : "点击切换")}（T 切换）{SameBoardText(world)}",
         };
@@ -636,7 +637,7 @@ public sealed partial class Hud : CanvasLayer
         PreviewPresentation? preview = world.Preview();
         if (preview is null)
         {
-            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? "先点一个带编号的出生座位插旗（选中即锁定）" : "等待其他玩家行动…", Ui.MutedText, wrap: true));
+            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? (session.IsLargeMap ? "先点任一合规格插旗（选中即锁定）" : "先点一个带编号的出生座位插旗（选中即锁定）") : "等待其他玩家行动…", Ui.MutedText, wrap: true));
             return;
         }
 
@@ -802,6 +803,18 @@ public sealed partial class Hud : CanvasLayer
         {
             CenterBox(0.5f, 700f, 220f);
             BuildResult(result, session.Me);
+            _centerPanel.Visible = true;
+            return;
+        }
+
+        if (session.AwaitingZone && session.IsLargeMap)
+        {
+            // 大图（big-map 裁决 4 / 5 / 6 / 8）：自由插旗、13×13 构筑范围、60 大回合、小地图——文案的数字都经 Labels 取 Core 常量。
+            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 160f, 392f, 500f);
+            _centerBody.AddChild(Ui.Heading("开局自由插旗"));
+            _centerBody.AddChild(Ui.Text($"{Labels.FlagLayout}。\n点任一合规格，旗即锁定（光标处预览出生圈与构筑范围，不合规为红）；其他玩家的旗不可见，太近的旗在锁定时按插旗先后改派。\n锁定后镜头落在自己的旗心。", Ui.InfoText, wrap: true));
+            _centerBody.AddChild(Ui.Text(Labels.FlagBuildHint, Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Text("地图很大：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家；右下小地图点击跳转，M 键显隐。", Ui.MutedText, wrap: true));
             _centerPanel.Visible = true;
             return;
         }

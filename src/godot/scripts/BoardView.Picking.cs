@@ -16,6 +16,7 @@ public sealed partial class BoardView
     private Node3D? _pickTerrainRoot;
     private float _pickTerrainHighest;
     private float? _pickTerrainScale;
+    private int _pickIndexedVersion = -1;
 
     private sealed class PickMesh(Mesh mesh)
     {
@@ -223,13 +224,15 @@ public sealed partial class BoardView
 
     private void EnsureTerrainPickIndex()
     {
-        if (ReferenceEquals(_pickTerrainRoot, _tiles) && _pickTerrainScale == _batchScale)
+        // 重搭、缩放变化或区块加载 / 卸载（_pickVersion，big-map D9）之后重建索引。
+        if (ReferenceEquals(_pickTerrainRoot, _tiles) && _pickTerrainScale == _batchScale && _pickIndexedVersion == _pickVersion)
         {
             return;
         }
 
         _pickTerrainRoot = _tiles;
         _pickTerrainScale = _batchScale;
+        _pickIndexedVersion = _pickVersion;
         _pickTerrain.Clear();
         _pickBatchedTerrain.Clear();
         _pickTerrainHighest = float.NegativeInfinity;
@@ -283,6 +286,27 @@ public sealed partial class BoardView
 
                     entries.Add(instance);
                 });
+            }
+
+            // 流式模式（big-map D9）：区块里的地砖 / 石沿 / 水面 / 装饰都是挂在区块节点下的 MultiMesh，逐实例登记到覆盖格（与 DecorationBatch 下的合批同一做法）。
+            // 常驻模式（小图）不走这一支：Tiles 下唯一的 MultiMesh（场景面砖）在改前就不进索引，拾取与改前一致。
+            if (_streaming && node is MultiMeshInstance3D { Multimesh: { Mesh: { } batchedMesh } batched } batchedNode && IsOpaqueMultiMesh(batchedNode, batchedMesh))
+            {
+                for (int i = 0; i < batched.InstanceCount; i++)
+                {
+                    int index = i;
+                    Transform3D toBoard = GlobalTransform.AffineInverse() * batchedNode.GlobalTransform * batched.GetInstanceTransform(index);
+                    AddToCoveredCells(batchedMesh, toBoard, cell =>
+                    {
+                        if (!_pickBatchedTerrain.TryGetValue(cell, out List<(MultiMeshInstance3D Node, int Instance)>? entries))
+                        {
+                            entries = [];
+                            _pickBatchedTerrain.Add(cell, entries);
+                        }
+
+                        entries.Add((batchedNode, index));
+                    });
+                }
             }
 
             foreach (Node child in node.GetChildren())

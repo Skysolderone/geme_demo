@@ -124,6 +124,9 @@ public static class BoardGeometry
         return new Rect2I(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
     }
 
+    /// <summary>世界坐标 → 格坐标系里的浮点位置（x 向东、y 向北，格心在整数上；可在画布外）：小地图的视口框据此画（big-map D9）。仍是 <see cref="Center(Coord, int, int)"/> 那一份映射的反算。</summary>
+    public static Vector2 CellPositionOf(Vector3 point, int width, int height) => CellPosition(point, width, height);
+
     // 以唯一的格心映射作为原点，避免重新实现棋盘居中与行方向换算。
     private static Vector2 CellPosition(Vector3 point, int width, int height)
     {

@@ -102,7 +102,10 @@ public sealed partial class MatchFlow
         int? zone = Phase == MatchPhase.FlagPlanting ? Flags.FlagOf(seat) : _records[seat].BirthZone;
         int? battlefield = zone is null || Phase == MatchPhase.FlagPlanting ? null : PublicRules.BattlefieldOf(Board, zone.Value).Id;
 
-        ImmutableHashSet<Coord> visible = zone is null ? []
+        // big-map D3（match-setup「大图自由插旗」、information-visibility「开局信息公开范围」）：大图没有座位占位，插旗阶段公开的就是整张基图的地形
+        // （地图派生量，凭标识即可重生成）；他人的旗格不是格、不在其中，只经 FlagPlanting.ViewFor 给本人。小图插旗阶段"未选为空 / 已选只给那一块"一字不动。
+        bool largePlanting = Phase == MatchPhase.FlagPlanting && Board.BaseMap.Tier == MapTier.Large;
+        ImmutableHashSet<Coord> visible = zone is null ? (largePlanting ? [.. Board.Map.AllCoords()] : [])
             // 插旗阶段锁定后只公开这一块出生棋盘的布局：取整块棋盘（棋盘清单），不是出生区——链接档的出生区是核心区（link-map-terrain D1）。
             : Phase == MatchPhase.FlagPlanting ? [.. Board.Map.BirthBoard(zone.Value).Cells()]
             // 插旗阶段结束（全员锁定）之后（map-expand-25 段 B；原 G1 = 本战场各棋盘外接矩形）：整张图的全部格——平台、平台之间的低地（河道、桥、岩石）与画布留白。

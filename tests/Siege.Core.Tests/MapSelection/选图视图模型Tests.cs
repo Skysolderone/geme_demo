@@ -297,4 +297,51 @@ public class 选图视图模型Tests
     }
 
     private static readonly ulong[] Golden = [0UL, 969246250UL, 774983618UL, 268246356UL, 102909540UL, 97086102UL, 142409162UL];
+
+    [Fact]
+    public void 尺寸选项_缺省小图三段_选大图四段_回退与确认带尺寸()
+    {
+        // 规格 map-selection「开局选图界面」尺寸：小 / 大，缺省小（big-map 裁决 11）；选大即标识带 :l，由链接图标识的唯一实现拼出；换一张 / 输入种子不改尺寸。
+        var model = new MapSelectModel(InitialSeed);
+        Assert.Equal(MapTier.Small, model.Tier);
+        Assert.Equal(MapSelectModel.DefaultTier, model.Tier);
+        Assert.Equal([MapTier.Small, MapTier.Large], MapSelectModel.TierOptions);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Small), model.CurrentId);
+        model.Accept();
+
+        Assert.False(model.SelectTier(MapTier.Small));   // 没变
+        Assert.True(model.SelectTier(MapTier.Large));
+        Assert.Equal(MapTier.Large, model.Tier);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Large), model.CurrentId);
+        Assert.EndsWith(":l", model.CurrentId, StringComparison.Ordinal);
+        Assert.Equal((InitialSeed, 4, MapTier.Large), LinkMapId.Parse(model.CurrentId));
+
+        // 换一张与输入种子都保留尺寸；人数同样。
+        Assert.True(model.Reroll(777UL));
+        Assert.Equal(LinkMapId.Format(777UL, 4, MapTier.Large), model.CurrentId);
+        Assert.True(model.SubmitSeed("12345"));
+        Assert.Equal(LinkMapId.Format(12345UL, 4, MapTier.Large), model.CurrentId);
+        Assert.True(model.SelectPlayers(2));
+        Assert.Equal(LinkMapId.Format(12345UL, 2, MapTier.Large), model.CurrentId);
+
+        // 生成失败回到上一张成功的图：种子、人数、尺寸一起退回。
+        model.RollBack("x");
+        Assert.Equal(MapTier.Small, model.Tier);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Small), model.CurrentId);
+
+        // 按四段标识预填带上尺寸；小图四段写法规范化回三段。
+        Assert.True(model.TrySelectId(LinkMapId.Format(9UL, 3, MapTier.Large)));
+        Assert.Equal((9UL, 3, MapTier.Large), (model.MapSeed, model.Players, model.Tier));
+        Assert.True(model.TrySelectId("link:9:3:s"));
+        Assert.Equal(MapTier.Small, model.Tier);
+        Assert.Equal(LinkMapId.Format(9UL, 3), model.CurrentId);
+        Assert.False(model.TrySelectId("link:9:3:x"));
+
+        // 确认开局给出的是已接受的尺寸。
+        Assert.True(model.SelectTier(MapTier.Large));
+        model.Accept();
+        Assert.Equal(LinkMapId.Format(9UL, 3, MapTier.Large), model.Confirm());
+        Assert.Throws<InvalidOperationException>(() => model.SelectTier(MapTier.Small));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new MapSelectModel(1UL).SelectTier((MapTier)7));
+    }
 }

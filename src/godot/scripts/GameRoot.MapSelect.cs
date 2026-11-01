@@ -72,6 +72,7 @@ public sealed partial class GameRoot
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
         _hud.MapStartPressed += StartMatch;
         _hud.MapPlayersPicked += players => OnSelectionChanged(_select?.SelectPlayers(players));   // 人数是标识的一部分：变了即重解析、重搭预览
+        _hud.MapTierPicked += tier => OnSelectionChanged(_select?.SelectTier(tier));   // 尺寸同理（big-map 裁决 11）：选大即四段标识、预览换成 150×150 大陆
         _hud.MapDifficultyPicked += difficulty =>
         {
             _select?.SelectDifficulty(difficulty);
@@ -121,6 +122,11 @@ public sealed partial class GameRoot
 
         // 反过来：从一屏看不全的图换回看得全的图时，BoardCamera.Rebound 自己退出残留的预览（原 DropStaleOverview 已收进 Rebound）。
         ApplyCamera("全局预览");
+        // 大图预览（big-map）：没有全局预览，相机停在画幅中心、分块流式只建中心附近（Build 末尾已按此位姿加载；这里兜住重定界后的位姿变化）。
+        if (_board.UpdateStreaming())
+        {
+            _dirty = true;
+        }
         if (_autoDemo)
         {
             SelfCheckMapSelect();
@@ -176,15 +182,15 @@ public sealed partial class GameRoot
             what = "输入种子 12345";
             OnSelectionChanged(model.SubmitSeed("12345"));
             // 预览会话未插旗：按座位过滤后没有任何格，只有各块占位（D18：背景只画占位轮廓，不显示棋盘布局；map-expand-25：块数 = 棋盘清单块数）。
-            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345:4" && _session.Match.Map.Id == model.CurrentId
-                && PlaceholdersOnly();
+            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == LinkMapId.Format(12345UL, model.Players, model.Tier) && _session.Match.Map.Id == model.CurrentId
+                && BackdropOk();
         }
         else if (step == 2)
         {
             what = "换一张";
             OnSelectionChanged(model.Reroll(NewMapSeed()));
             ok = model.CurrentId != before && model.MapSeed != 12345UL && _session.Match.Map.Id == model.CurrentId
-                && PlaceholdersOnly();
+                && BackdropOk();
         }
         else if (step is 3 or 4)
         {
@@ -193,9 +199,9 @@ public sealed partial class GameRoot
             ulong seedBefore = model.MapSeed;
             what = $"选 {players} 人";
             OnSelectionChanged(model.SelectPlayers(players));
-            ok = model.Players == players && model.MapSeed == seedBefore && model.CurrentId == LinkMapId.Format(seedBefore, players)
+            ok = model.Players == players && model.MapSeed == seedBefore && model.CurrentId == LinkMapId.Format(seedBefore, players, model.Tier)
                 && _session.Match.Map.Id == model.CurrentId && _session.Match.Map.MaxPlayers == players && _session.Match.Players.Length == players
-                && PlaceholdersOnly();
+                && BackdropOk();
         }
         else if (step == 5)
         {
@@ -239,6 +245,18 @@ public sealed partial class GameRoot
         int neutral = _session.Match.Map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
         return board.Cells.IsEmpty && board.Placeholders.Length > 0 && board.Placeholders.Length == _session.Match.Map.BirthZones.Length
             && neutral > 0 && board.NeutralPlates.Length == neutral;
+    }
+
+    /// <summary>
+    /// 预览背景是否正确：小图只有占位（<see cref="PlaceholdersOnly"/>）；大图（big-map 裁决 11、段 B 追加裁决 33）是整张基图的全部格、没有占位、中立平台全部展开、走分块流式
+    /// （map-selection「大图没有座位占位，背景就是整张基图的地形」）。`--map-select --auto-demo --map=link:<种子>:<人数>:l` 即按大图口径跑同一组步骤。
+    /// </summary>
+    private bool BackdropOk() => _session.IsLargeMap ? LargeBackdrop() : PlaceholdersOnly();
+
+    private bool LargeBackdrop()
+    {
+        DefaultBoardView board = _session.World.Board();
+        return board.Cells.Length == board.Width * board.Height && board.Placeholders.IsEmpty && board.NeutralPlates.IsEmpty && _board.Streaming;
     }
 
     private static int CountNodes(Node node)
