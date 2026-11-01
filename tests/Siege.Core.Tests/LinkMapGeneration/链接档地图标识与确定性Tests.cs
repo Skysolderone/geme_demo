@@ -22,8 +22,8 @@ public class 链接档地图标识与确定性Tests
     public void 标识解析与规范化()
     {
         Assert.Equal("link:42:4", LinkMapId.Format(42, 4));
-        Assert.Equal((42UL, 2), LinkMapId.Parse("link:42:2"));
-        Assert.Equal((42UL, 3), LinkMapId.Parse(" link:042:03 "));
+        Assert.Equal((42UL, 2, MapTier.Small), LinkMapId.Parse("link:42:2"));
+        Assert.Equal((42UL, 3, MapTier.Small), LinkMapId.Parse(" link:042:03 "));
         Assert.Equal("link:42:3", LinkMapId.Normalize(" link:042:03 "));
         Assert.Equal("link:18446744073709551615:4", LinkMapId.Normalize("link:18446744073709551615:4"));
         Assert.Equal("link:0:2", LinkMapId.Normalize("link:0:2"));

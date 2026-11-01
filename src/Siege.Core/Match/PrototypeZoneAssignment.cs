@@ -88,4 +88,37 @@ public static class PrototypeZoneAssignment
         ImmutableArray<int> picks = BlindPicks(seed, players, zoneCount, manual is { } human ? [human] : []);
         return [.. players.Select((p, i) => (p, picks[i]))];
     }
+
+    /// <summary>
+    /// 大图的原型插旗路径（big-map D3）：<paramref name="manual"/> 是人工指定的那一名玩家及其旗格（须合规），其余玩家按编号升序各从 <c>flag-pick</c> 子流在合规旗格里均匀抽一格（不看他人的旗）。
+    /// 产出：人工指定者在前（D3：人类先插旗——锁定时的间距改派按插旗先后，先插者保住原旗，人工选的旗格不会被 AI 的盲选挤走），其余按 <paramref name="players"/> 次序；
+    /// 太近的旗交给锁定时的 <see cref="FlagRules.Reassign"/> 按先后改派。同种子、同人工选择结果相同。
+    /// </summary>
+    public static ImmutableArray<(PlayerId Player, Coord Cell)> AssignBlindCells(
+        MapData map, GameSeed seed, IReadOnlyList<PlayerId> players, (PlayerId Player, Coord Cell)? manual = null)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(players);
+        ImmutableArray<Coord> legal = FlagRules.LegalFlagCells(map);
+        if (legal.IsEmpty)
+        {
+            throw new SiegeRuleException($"地图 {map.Id} 没有任何合规旗格（不是大图基图，或合规旗格为空），无法盲选。");
+        }
+
+        if (manual is { } m && (!players.Contains(m.Player) || !FlagRules.IsLegalFlagCell(map, m.Cell)))
+        {
+            throw new SiegeRuleException($"人工插旗不合法：玩家 {m.Player} 的旗格 {m.Cell.ToNotation()} 不是地图 {map.Id} 的合规旗格。");
+        }
+
+        RandomStream pick = seed.Stream(GameSeed.FlagPick);
+        var cells = new Dictionary<PlayerId, Coord>();
+        foreach (PlayerId player in players.Order())
+        {
+            cells[player] = manual is { } human && human.Player == player ? human.Cell : legal[pick.NextInt(legal.Length)];
+        }
+
+        return manual is { } first
+            ? [(first.Player, cells[first.Player]), .. players.Where(p => p != first.Player).Select(p => (p, cells[p]))]
+            : [.. players.Select(p => (p, cells[p]))];
+    }
 }

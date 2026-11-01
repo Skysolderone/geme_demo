@@ -29,7 +29,7 @@ public static class LogReplay
         // 与 Replayer 同一组前置核对：地图内容摘要、AI 评价版本——任一不同，今天的实现重现不了那一局的决策，不复盘。
         string mapId = header.Config.MapPerMatch ? header.MapId : header.Config.MapId;
         MapData map = MapCatalog.Resolve(mapId);
-        if (header.MapDigest is { } recorded && !string.Equals(recorded, MapFile.Digest(map), StringComparison.Ordinal))
+        if (header.MapDigest is { } recorded && !string.Equals(recorded, MapFile.Digest(SeatedMap.Of(map, header)), StringComparison.Ordinal))
         {
             return "地图摘要不一致";
         }

@@ -60,4 +60,12 @@ public sealed record MatchPublicView(
 
     /// <summary>本局使用的计分规则版本。</summary>
     public ScoringVersion ScoringVersion { get; init; } = ScoringVersions.Legacy;
+
+    /// <summary>地图档位（big-map D1：小图 / 大图）。开局固定、始终公开、插旗阶段即可读。不是位置参数，旧的构造写法不变（缺省小图）。</summary>
+    public MapTier Tier { get; init; } = MapTier.Small;
+
+    /// <summary>
+    /// 大回合上限是否就是该档位的缺省值（big-map D6：小图 100、大图 60），供界面写"第 X / 60 大回合"；显式给了别的值时为 <c>false</c>。不是位置参数（手写视图缺省 <c>false</c>）。
+    /// </summary>
+    public bool RoundCapIsDefault { get; init; }
 }

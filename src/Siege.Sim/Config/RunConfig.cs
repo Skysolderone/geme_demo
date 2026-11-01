@@ -241,8 +241,8 @@ public sealed record RunConfig
         }
 
         // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>:<人数>（map-expand-25 D1：人数不变）。
-        (ulong start, int players) = LinkMapId.Parse(MapId);
-        return LinkMapId.Format(checked(start + (ulong)index), players);
+        (ulong start, int players, MapTier tier) = LinkMapId.Parse(MapId);
+        return LinkMapId.Format(checked(start + (ulong)index), players, tier);
     }
 
     /// <summary>玩家编号列表。</summary>
@@ -396,8 +396,8 @@ public sealed record RunConfig
             ? this with { CandidateCellLimit = auto }
             : this;
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
-        // 大回合上限与停滞大回合数（cycle-stop D2 / D3）：未配置一律落成缺省值，config.json 与首部写明实际生效值。
-        resolved = resolved.RoundCap is null ? resolved with { RoundCap = MatchOptions.DefaultRoundCap } : resolved;
+        // 大回合上限与停滞大回合数（cycle-stop D2 / D3）：未配置一律落成缺省值，config.json 与首部写明实际生效值。big-map D6：缺省按地图档位（小图 100、大图 60）。
+        resolved = resolved.RoundCap is null ? resolved with { RoundCap = MatchOptions.DefaultRoundCapFor(map.Tier) } : resolved;
         resolved = resolved.StagnationRounds is null ? resolved with { StagnationRounds = AiSearchConfig.DefaultStagnationRounds } : resolved;
         // 整批候选开关（ai-whole-batch D4）：未配置落成缺省 1，首部写明；显式 0 保持 0（序列化时不写出，回放缺该项按 0）。
         resolved = resolved.WholeBatch is null ? resolved with { WholeBatch = AiSearchConfig.DefaultWholeBatch } : resolved;

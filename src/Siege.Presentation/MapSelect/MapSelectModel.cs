@@ -106,7 +106,7 @@ public sealed class MapSelectModel
         try
         {
             // 裸 link（没有种子）、已作废的两段写法与写错的标识都由唯一实现的 Parse 抛出 FormatException → 拒绝。
-            (ulong seed, int players) = LinkMapId.Parse(mapId);
+            (ulong seed, int players, _) = LinkMapId.Parse(mapId);
             Move(seed, players);
             return true;
         }

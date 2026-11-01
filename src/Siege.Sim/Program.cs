@@ -94,14 +94,14 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--seat <你的玩家编号 1–人数（不是出生座位；出生座位在开局盲选）>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--seat <你的玩家编号 1–人数（不是出生座位；出生座位在开局盲选）>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子:人数[:档]，缺省 link:1:<人数>；档 s 小图 / l 大图>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine("  Siege.Sim map [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4>] [--out <导出的地图文件>]（打印文本图、出生座位与中立平台清单、校验报告；给 --out 才导出）");
+        Console.WriteLine("  Siege.Sim map [--map <link:地图种子:人数[:档]，缺省 link:1:<人数>>] [--players <人数 2–4>] [--out <导出的地图文件>]（打印档位、外接矩形、可落子与合规旗格数、生成耗时、文本图、出生座位与中立平台清单、校验报告；给 --out 才导出）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine("                [--carry-in <每名 AI 的带入件数 0–5，缺省 0 = 关闭带入带出；1–5 = 每名 AI 从 carry-ai 子流随机带入该件数的普通信物（随机至多 2 件保险），结算只写日志、不读写档案>]");
-        Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
+        Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省按档位：小图 {Core.Match.MatchOptions.DefaultRoundCap} / 大图 {Core.Match.MatchOptions.DefaultRoundCapLarge}，0=不启用；到达时按势力强制结算（cycle-stop / big-map）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
         Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine($"                [--edit-seed <AI 搭桥候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultEditSeed}；1 = 标准 / 高难 / 专家另加以搭桥单点为起点的候选（全部合法空格、不经预筛、不受前 N），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>:<人数>，第 i 局用 起始 + i，人数不变）]");
@@ -211,11 +211,11 @@ public static class Program
             ? (players is { } n ? LinkMapId.Format(1, n) : DefaultMapId)
             : RequireLinkMap(mapId.Trim(), entry);
         id = MaterializeMapRequest(id, players ?? DefaultPlayers, output, mapSeedSource)!;
-        (ulong seed, int fromId) = LinkMapId.Parse(id);
+        (ulong seed, int fromId, MapTier tier) = LinkMapId.Parse(id);
         if (players is { } given && given != fromId)
         {
             throw new ArgumentException(
-                $"{entry} 的人数 {given} 与地图标识 {id} 的人数 {fromId} 不一致：浮空岛按人数生成，请改用 {LinkMapId.Format(seed, given)}，或去掉人数选项按标识的 {fromId} 人开局。");
+                $"{entry} 的人数 {given} 与地图标识 {id} 的人数 {fromId} 不一致：链接图按人数生成，请改用 {LinkMapId.Format(seed, given, tier)}，或去掉人数选项按标识的 {fromId} 人开局。");
         }
 
         return (id, fromId);
@@ -236,13 +236,24 @@ public static class Program
         cli.EnsureRecognized();   // map 只认 --map / --players / --out；结算在导出之前（strict-cli 2.4）
         // 只认 link:，缺省 link:1:<人数>；旧标识族报错（retire-legacy-maps）；人数口径与 play / run 相同（map-expand-25 D1）。
         (string resolvedId, _) = ResolveLinkRequest(mapId, players, "map", Console.Out, mapSeedSource);
+        var generation = System.Diagnostics.Stopwatch.StartNew();
         MapData map = MapCatalog.Resolve(resolvedId);
+        generation.Stop();
 
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
         Coord[] all = [.. map.AllCoords()];
 
-        Console.WriteLine($"地图 {map.Id}  {map.Width}×{map.Height}");
+        // big-map D7：档位、外接矩形（画布减留白）、生成耗时；大图另给合规旗格数（自由插旗的候选，FlagRules 唯一实现）。
+        int inset = LinkMapGenerator.Margin * 2;
+        string tier = map.Tier == MapTier.Large ? "大图" : "小图";
+        Console.WriteLine($"地图 {map.Id}  {map.Width}×{map.Height}  档位 {tier}  外接矩形 {map.Width - inset}×{map.Height - inset}  生成耗时 {generation.ElapsedMilliseconds} ms");
+        if (map.Tier == MapTier.Large)
+        {
+            int legal = Core.Match.FlagRules.LegalFlagCells(map).Length;
+            Console.WriteLine($"合规旗格 {legal}（占可落子格 {(map.PlayableCount == 0 ? 0 : legal * 100 / map.PlayableCount)}%；任意两旗切比雪夫距离 ≥ {Core.Match.FlagRules.FlagGap}，锁定时物化 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 出生平台与 {Core.Match.FlagRules.BirthRingSide}×{Core.Match.FlagRules.BirthRingSide} 出生圈）");
+        }
+
         Console.WriteLine(
             $"可落子格 {map.PlayableCount}   岩石 {map.Obstacles.Count}   深水 {all.Count(c => map.SurfaceAt(c) == Surface.DeepWater)}（其中桥 {terrain.Bridges.Count}）"
             + $"   栅栏 {terrain.Fences.Count}   林地 {all.Count(c => map.SurfaceAt(c) == Surface.Forest)}   土路 {all.Count(c => map.SurfaceAt(c) == Surface.Road)}"

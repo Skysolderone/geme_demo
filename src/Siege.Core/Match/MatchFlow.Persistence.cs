@@ -42,7 +42,10 @@ public sealed partial class MatchFlow
         {
             MapId = Map.Id,
             // 摘要取开局地图（与日志首部同口径）：恢复时调用方按标识重建出来的就是开局图，本局的改造在盘面段里。
+            // big-map D4（段 A 追加裁决 19）：大图锁定后开局图 = 落座图，摘要随之；恢复 / 回放先按旗格重做落座再比摘要。
             MapDigest = MapFile.Digest(Board.BaseMap),
+            // big-map D1：档位只在大图写出（小图存档逐字节不变）。
+            MapTier = Tier == MapTier.Large ? Tier.ToString() : null,
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             ArtisanWeight = ArtisanWeight,
@@ -69,6 +72,7 @@ public sealed partial class MatchFlow
                 HasEstablishedPower = _records[p].HasEstablishedPower,
                 BirthZone = _records[p].BirthZone,
                 Flag = Flags.FlagOf(p),
+                FlagCell = Flags.FlagCellOf(p)?.ToNotation(),
                 LastRoundPosition = _records[p].LastRoundPosition,
                 SeedRank = _records[p].SeedRank,
                 EliminationOrder = _records[p].EliminationOrder,
@@ -151,11 +155,42 @@ public sealed partial class MatchFlow
 
     private static MatchFlow RestoreChecked(MapData map, MatchSaveData data)
     {
-        RequireMap(map, data);
+        MapData seated = SeatedFor(map, data);
+        RequireMap(seated, data);
         GameSeed seed = GameSeed.Parse(data.Seed!);
         // B5：盘面先建空，再写入棋子、改造与信物层（见 RestoreLink）。
-        GameBoard board = GameBoard.Load(map);
+        GameBoard board = GameBoard.Load(seated);
         return RestoreCore(map, board, seed, data);
+    }
+
+    /// <summary>
+    /// 大图存档的落座重建（big-map D4）：锁定后保存的大图存档记着各玩家的旗格，恢复时先在基图上按出生区编号重做落座（<see cref="FlagRules.Seat"/>），
+    /// 再比摘要、建盘。小图或锁定前的存档原样返回。
+    /// </summary>
+    private static MapData SeatedFor(MapData map, MatchSaveData data)
+    {
+        if (map.Tier != MapTier.Large || !data.FlagsLocked || !map.BirthZones.IsDefaultOrEmpty)
+        {
+            return map;
+        }
+
+        Coord[] flags = [.. data.Players
+            .Where(p => p.BirthZone is not null)
+            .OrderBy(p => p.BirthZone)
+            .Select(p => Coord.Parse(p.FlagCell ?? throw new FormatException($"大图存档里玩家 {p.Player} 已锁定出生区却没有旗格（FlagCell）。")))];
+        if (flags.Length != data.Players.Count)
+        {
+            throw new FormatException($"大图存档已锁定插旗，却只有 {flags.Length} / {data.Players.Count} 名玩家带出生区。");
+        }
+
+        try
+        {
+            return FlagRules.Seat(map, flags);
+        }
+        catch (SiegeRuleException ex)
+        {
+            throw new FormatException($"大图存档的旗格无法落座：{ex.Message}", ex);
+        }
     }
 
     /// <summary>测试专用：在未校验的合成地图上恢复。同样只接受带链接模式字段的存档（retire-legacy-rules：不再有"缺字段即旧模式"的读法）。</summary>
@@ -163,8 +198,9 @@ public sealed partial class MatchFlow
     {
         MatchSaveData data = Parse(json);
         RequireLinkModeField(data);
-        RequireMap(map, data);
-        GameBoard board = GameBoard.LoadUnvalidated(map);
+        MapData seated = SeatedFor(map, data);
+        RequireMap(seated, data);
+        GameBoard board = GameBoard.LoadUnvalidated(seated);
         return RestoreCore(map, board, GameSeed.Parse(data.Seed!), data);
     }
 
@@ -259,6 +295,7 @@ public sealed partial class MatchFlow
             ScoringVersion = data.ScoringVersion ?? ScoringVersions.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = ImportLoadouts(data.CarryIns),
+            // 存档里存的是解析后的整数；缺字段的旧存档只可能是小图，按 100 回填（cycle-stop C4 / D4）。
             RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
         };
         // 与建局同一处校验（裁决 B1 / S1 → map-expand-25 D1）：只能是链接图、人数恰等于地图人数。
@@ -276,7 +313,7 @@ public sealed partial class MatchFlow
         ScoringVersions.RequireValid(options.ScoringVersion);
         try
         {
-            RequireValidRoundCap(options.RoundCap);
+            RequireValidRoundCap(options.RoundCap!.Value);
         }
         catch (ArgumentException ex)
         {
@@ -297,7 +334,7 @@ public sealed partial class MatchFlow
             map, board, seed, players,
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
-            options);
+            options, validated: true);
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         match.ContentSetBackfilled = contentSetBackfilled;
         match.ScoringVersionBackfilled = scoringVersionBackfilled;
@@ -323,7 +360,23 @@ public sealed partial class MatchFlow
             record.PowerAtResign = saved.PowerAtResign;
         }
 
-        if (data.FlagsLocked)
+        if (match.Flags.IsLarge)
+        {
+            // big-map D3 / D4：大图的旗是旗格；锁定后连同出生区编号一起写回，锁定前按原样重插（不改派、不消费随机）。
+            if (data.FlagsLocked)
+            {
+                match.Flags.RestoreLockedCells(data.Players.Where(p => p.Flag is not null && p.FlagCell is not null)
+                    .Select(p => (new PlayerId(p.Player), p.Flag!.Value, Coord.Parse(p.FlagCell!))));
+            }
+            else
+            {
+                foreach (PlayerSaveData saved in data.Players.Where(p => p.FlagCell is not null))
+                {
+                    match.Flags.PlantAt(new PlayerId(saved.Player), Coord.Parse(saved.FlagCell!));
+                }
+            }
+        }
+        else if (data.FlagsLocked)
         {
             match.Flags.RestoreLocked(data.Players.Where(p => p.Flag is not null).Select(p => KeyValuePair.Create(new PlayerId(p.Player), p.Flag!.Value)));
         }
@@ -383,6 +436,10 @@ public sealed class MatchSaveData
     /// 恢复时比对它，不同即报"地图不一致"。旧存档无此字段（<c>null</c>）→ 跳过比对，<see cref="MatchFlow.MapDigestBackfilled"/> 为 <c>true</c>。
     /// </summary>
     public string? MapDigest { get; set; }
+
+    /// <summary>地图档位（big-map D1）：只在大图写出 <c>Large</c>；小图不写（存档逐字节不变），缺字段即小图。恢复时只作记录，档位以标识重建出的地图为准。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MapTier { get; set; }
 
     public string? Seed { get; set; }
 
@@ -481,6 +538,10 @@ public sealed class PlayerSaveData
     public int? BirthZone { get; set; }
 
     public int? Flag { get; set; }
+
+    /// <summary>大图的旗格（围棋记法，big-map D3 / D4）：锁定后恢复按它重做落座；小图或未插旗不写。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FlagCell { get; set; }
 
     public int? LastRoundPosition { get; set; }
 

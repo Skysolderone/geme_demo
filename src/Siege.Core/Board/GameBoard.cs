@@ -92,8 +92,32 @@ public sealed partial class GameBoard
     /// </summary>
     public MapData Map { get; private set; }
 
-    /// <summary>本局开局时的地图（不含对局中的改造；open-map 起地图整局不变，<see cref="Map"/> = 它 + 全部改造）。存档、日志首部的地图摘要与"改造了什么"的比对读它。</summary>
-    public MapData BaseMap { get; }
+    /// <summary>
+    /// 本局开局时的地图（不含对局中的改造；open-map 起地图锁定后不变，<see cref="Map"/> = 它 + 全部改造）。存档、日志首部的地图摘要与"改造了什么"的比对读它。
+    /// big-map D4：大图在插旗锁定那一刻经 <see cref="Reseat"/> 换成落座图（基图 + 出生区 / 出生棋盘），此后不再变；锁定前是基图。
+    /// </summary>
+    public MapData BaseMap { get; private set; }
+
+    /// <summary>
+    /// 落座（big-map D4）：插旗锁定时把 <see cref="BaseMap"/> 与 <see cref="Map"/> 一起换成落座图（地形、障碍与基图相同，只多出生区与出生棋盘），从零建派生表、推进突变版本号。
+    /// 只允许在空盘（没有棋子、没有改造、没有信物）上调用，所以全部持有本盘面引用的对象（结算驱动器、势力榜、暂放批次）不需要换——它们每次都从 <see cref="Map"/> 现读。
+    /// </summary>
+    public void Reseat(MapData seated)
+    {
+        ArgumentNullException.ThrowIfNull(seated);
+        if (_edits.Count > 0 || _occupants.Any(o => o is not null) || RelicsOnBoard().Any())
+        {
+            throw new SiegeRuleException("落座只能在空盘上进行：盘上已有棋子、改造或信物。");
+        }
+
+        if (seated.Width != Map.Width || seated.Height != Map.Height)
+        {
+            throw new SiegeRuleException($"落座图 {seated.Width}×{seated.Height} 与基图 {Map.Width}×{Map.Height} 尺寸不同。");
+        }
+
+        BaseMap = seated;
+        ReplaceMap(seated);
+    }
 
     /// <summary>本局已完成的改造，按应用顺序。不可逆，只增不减（terrain-edit「改造不可逆」）。</summary>
     public ImmutableArray<TerrainEdit> TerrainEdits => [.. _edits];
