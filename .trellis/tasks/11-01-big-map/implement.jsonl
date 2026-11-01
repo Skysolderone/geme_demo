@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/core/index.md", "reason": "规则内核开发前清单与质检清单"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "随机子流隔离、整数运算——大图新增随机消费必须遵守"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、单一实现、视图分离"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "坐标记法与单一映射（旗格记法入存档 / 日志）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、变异验证"}
+{"file": ".trellis/tasks/11-01-big-map/prd.md", "reason": "裁决 1–14 与分段验收"}
+{"file": ".trellis/tasks/11-01-big-map/design.md", "reason": "D1–D10 技术设计、接口契约、歧义 15–18"}
+{"file": "openspec/specs/link-map-generation/spec.md", "reason": "现行链接档地图规格（初始布局一节已废弃，本次重写）"}
+{"file": "openspec/specs/match-setup/spec.md", "reason": "建局与插旗规格"}
+{"file": "openspec/specs/turn-sequence/spec.md", "reason": "合法落子范围的对外契约"}
