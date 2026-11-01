@@ -1110,7 +1110,7 @@ public sealed partial class GameRoot : Node3D
             {
                 (float x, float z) = _board.PlaneCenterOf(c.Coord);
                 Vector2 at = BoardGeometry.CellPositionOf(new Vector3(x, 0f, z), pickBoard.Width, pickBoard.Height);
-                Coord back = Minimap.CellAt(Minimap.PixelOf(at.X + 0.5f, at.Y + 0.5f, pickBoard.Width, pickBoard.Height, minimap), pickBoard.Width, pickBoard.Height, minimap);
+                Coord back = BoardGeometry.MinimapCellAt(BoardGeometry.MinimapPixelOf(at.X + 0.5f, at.Y + 0.5f, pickBoard.Width, pickBoard.Height, minimap), pickBoard.Width, pickBoard.Height, minimap);
                 return Mathf.IsEqualApprox(at.X, c.Coord.X) && Mathf.IsEqualApprox(at.Y, c.Coord.Y) && back == c.Coord;
             });
             ok &= roundTrips == cells.Length;

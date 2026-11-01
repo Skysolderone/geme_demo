@@ -10,7 +10,8 @@ namespace Siege.Godot;
 
 /// <summary>
 /// 右下角小地图（big-map 裁决 8 / D9，只在大图上显示）：建局时按地图数据一次绘出地形色底图（岛面地表 / 深水 / 障碍，虚空透明），每次刷新叠棋子点、出生区框与相机视口框；
-/// 点击 → 相机注视点跳到该格（<see cref="CellClicked"/>），M 键显隐（GameRoot）。格 ↔ 像素只做等比缩放（北在上），世界 → 格经 <see cref="BoardGeometry.CellPositionOf"/> 那一份映射。
+/// 点击 → 相机注视点跳到该格（<see cref="CellClicked"/>），M 键显隐（GameRoot）。格 ↔ 像素只做等比缩放（北在上），映射本体在 <see cref="BoardGeometry.MinimapPixelOf"/> / <see cref="BoardGeometry.MinimapCellAt"/>；
+/// 世界 → 格经 <see cref="BoardGeometry.CellPositionOf"/> 那一份映射——本类不另写任何换算（coordinates.md「映射唯一」）。
 /// 只读默认棋盘视图模型与相机位姿，不读地图、不判规则。
 /// </summary>
 public sealed partial class Minimap : Control
@@ -97,22 +98,11 @@ public sealed partial class Minimap : Control
     }
 
     /// <summary>格坐标系里的点（x 向东、y 向北，格左下角为整数）→ 控件像素（北在上）。</summary>
-    private Vector2 PixelOf(float x, float y) => PixelOf(x, y, _board?.Width ?? 1, _board?.Height ?? 1, Size);
+    private Vector2 PixelOf(float x, float y) => BoardGeometry.MinimapPixelOf(x, y, _board?.Width ?? 1, _board?.Height ?? 1, Size);
 
-    private Coord? CellAt(Vector2 pixel) => _board is null ? null : CellAt(pixel, _board.Width, _board.Height, Size);
+    private Coord? CellAt(Vector2 pixel) => _board is null ? null : BoardGeometry.MinimapCellAt(pixel, _board.Width, _board.Height, Size);
 
-    /// <summary>格坐标系里的点 → 控件像素 的纯函数（<paramref name="size"/> 为控件尺寸）：与 <see cref="CellAt(Vector2, int, int, Vector2)"/> 互逆，<c>--pick-check</c> 在大图上做往返自检。</summary>
-    public static Vector2 PixelOf(float x, float y, int width, int height, Vector2 size) => new(x * size.X / width, (height - y) * size.Y / height);
-
-    /// <summary>控件像素 → 格 的纯函数（出界夹到边缘格）。</summary>
-    public static Coord CellAt(Vector2 pixel, int width, int height, Vector2 size)
-    {
-        int x = Math.Clamp((int)MathF.Floor(pixel.X * width / size.X), 0, width - 1);
-        int y = Math.Clamp(height - 1 - (int)MathF.Floor(pixel.Y * height / size.Y), 0, height - 1);
-        return new Coord(x, y);
-    }
-
-    /// <summary>地形色底图：每格一个像素，岛面按地表取地砖色、深水取水色、岛内障碍取障碍色、虚空透明（岛面判定与 3D 场景同一份 <see cref="BoardView.IslandCells"/>）。</summary>
+    /// <summary>地形色底图：每格一个像素，岛面按地表取地砖色（与 3D 地砖同一份 <see cref="BoardView.SurfaceTileColorOf"/>）、深水取水色、岛内障碍取障碍色、虚空透明（岛面判定与 3D 场景同一份 <see cref="BoardView.IslandCells"/>）。</summary>
     private static ImageTexture BuildTerrain(DefaultBoardView board)
     {
         var image = Image.CreateEmpty(board.Width, board.Height, false, Image.Format.Rgba8);
@@ -127,16 +117,7 @@ public sealed partial class Minimap : Control
 
             Color color = cell.Surface == Surface.DeepWater ? (cell.HasBridge ? Visuals.BridgeDeck : Visuals.DeepWater)
                 : cell.Terrain != Terrain.Playable ? Visuals.TileObstacle
-                : cell.Surface switch
-                {
-                    Surface.Road => Visuals.TileRoad,
-                    Surface.Forest => Visuals.TileForest,
-                    Surface.Desert => Visuals.TileDesert,
-                    Surface.Marsh => Visuals.TileMarsh,
-                    Surface.Crag => Visuals.TileCrag,
-                    Surface.Shallows => Visuals.TileShallows,
-                    _ => Visuals.TilePlayableGreen,
-                };
+                : BoardView.SurfaceTileColorOf(cell.Surface) ?? Visuals.TilePlayableGreen;
             if (cell.Terrain == Terrain.Playable && cell.Height > 0)
             {
                 color = color.Lightened(cell.Height == 1 ? 0.12f : 0.26f);

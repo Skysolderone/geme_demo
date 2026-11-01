@@ -377,7 +377,9 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         batch.Clear();
 
-        ImmutableArray<PointScore> ranking = RankPoints(batch, rehearse, evaluator, out ImmutableArray<PointScore> ranked);
+        // big-map D8：大图上候选只在局部范围内枚举（小图 = 合法范围同一引用，逐步不变）；合法范围本身不动。
+        IReadOnlySet<Coord> range = LargeMapFocus.LocalRange(view, batch.Board, Player, context.LegalRange);
+        ImmutableArray<PointScore> ranking = RankPoints(batch, rehearse, evaluator, range, out ImmutableArray<PointScore> ranked);
         LastPointRanking = ranking;
         LastDecisive = null;
         LastStagnation = null;
@@ -404,7 +406,7 @@ public sealed class HeuristicTurnController : ITurnController
         }
         else
         {
-            choice = ChooseByCandidates(ranking, ranked, batch, rehearse, evaluator, passThreshold, view);
+            choice = ChooseByCandidates(ranking, ranked, batch, rehearse, evaluator, passThreshold, view, range);
         }
 
         // 决胜一手（ai-pass-review 2.1，P7 = A 窄版）：只在"本将 Pass、这次 Pass 会让本战场整轮 Pass 结算、自己落后"时检查；
@@ -476,7 +478,7 @@ public sealed class HeuristicTurnController : ITurnController
     /// </summary>
     private CandidateBatch ChooseByCandidates(
         ImmutableArray<PointScore> ranking, ImmutableArray<PointScore> ranked, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
-        MatchPublicView view)
+        MatchPublicView view, IReadOnlySet<Coord> range)
     {
         var candidates = new List<CandidateBatch>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -504,7 +506,7 @@ public sealed class HeuristicTurnController : ITurnController
         // ai-bridge-candidate D1 / D2：同上，开关为 0 或简单难度时整段不进入，与引入之前逐步相同。追加在整批候选之后，不调用 Perturb，零随机。
         if (Config.EditSeed == 1 && !Config.ImmediateOnly)
         {
-            LastBridgeSeed = AppendBridgeSeed(ranking, ranked, batch, rehearse, evaluator, passThreshold, Pass, candidates, keys);
+            LastBridgeSeed = AppendBridgeSeed(ranking, ranked, batch, rehearse, evaluator, passThreshold, Pass, candidates, keys, range);
         }
 
         LastCandidates = [.. candidates];
@@ -713,7 +715,8 @@ public sealed class HeuristicTurnController : ITurnController
         int legalCells = context.LegalRange.Count(c => batch.Board[c].IsPlayableEmpty);
         BigInteger passTotal = evaluator.Evaluate([], rehearse(), context).Total;
         var rejections = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator, rejections);
+        IReadOnlySet<Coord> range = LargeMapFocus.LocalRange(view, batch.Board, Player, context.LegalRange);
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator, range, rejections);
         ImmutableArray<PointScore> ranked = [.. Rank(points)];
 
         ImmutableArray<PlayerId> rivals = RivalsInBattlefield(view, Player);
@@ -784,9 +787,11 @@ public sealed class HeuristicTurnController : ITurnController
         batch.Clear();
 
         MapData map = batch.Board.Map;
-        ImmutableArray<Coord> legal = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
+        // big-map D8：大图上改造目标的范围枚举同样限在局部范围内（小图 = 合法范围）。
+        IReadOnlySet<Coord> range = LargeMapFocus.LocalRange(view, batch.Board, Player, context.LegalRange);
+        ImmutableArray<Coord> legal = [.. range.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
         BigInteger passTotal = evaluator.Evaluate([], rehearse(), context).Total;
-        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator);
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator, range);
         ImmutableArray<PointScore> ranked = [.. Rank(points)];
         var enumerated = new HashSet<Coord>(cells);
         bool holdsEditor = context.Stock.GetValueOrDefault(TerrainEditRules.EditorType) > 0;
@@ -967,9 +972,10 @@ public sealed class HeuristicTurnController : ITurnController
     /// 改造不新增评估维度（design D-J）：匠人的每个合法改造目标只是多一个候选暂放，
     /// "提子""通路""覆盖变化"由既有的 <see cref="EvaluationWeights"/> 维度经预演结果自然反映。
     /// </remarks>
-    private ImmutableArray<PointScore> RankPoints(StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, out ImmutableArray<PointScore> ranked)
+    private ImmutableArray<PointScore> RankPoints(
+        StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, IReadOnlySet<Coord> range, out ImmutableArray<PointScore> ranked)
     {
-        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator);
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator, range);
         LastCandidateCells = cells;
         ranked = [.. Rank(points)];
         return [.. ranked.Take(Config.CandidatePointCount)];
@@ -991,11 +997,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// </summary>
     /// <param name="rejections">复盘用的落选计数（暂放被拒 / 预演不合法按失败种类、活形硬约束淘汰）；正式决策传 <c>null</c>，只计数、不改变任何分支。</param>
     private (ImmutableArray<Coord> Cells, List<PointScore> Points) ScorePoints(
-        StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, SortedDictionary<string, int>? rejections = null)
+        StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, IReadOnlySet<Coord> range, SortedDictionary<string, int>? rejections = null)
     {
         BatchContext context = batch.Context;
         ImmutableArray<PieceType> types = [.. context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
-        ImmutableArray<Coord> cells = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
+        // range = 合法范围（小图）或大图局部范围（LargeMapFocus，big-map D8）；候选格上限 K 的预筛在其后照常。
+        ImmutableArray<Coord> cells = [.. range.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
         if (Config.CandidateCellLimit > 0 && cells.Length > Config.CandidateCellLimit && !types.IsEmpty)
         {
             cells = PrefilterCells(cells, types, batch, rehearse, evaluator, Config.CandidateCellLimit);
@@ -1243,7 +1250,7 @@ public sealed class HeuristicTurnController : ITurnController
     /// </summary>
     private BridgeSeedCandidate AppendBridgeSeed(
         ImmutableArray<PointScore> ranking, ImmutableArray<PointScore> ranked, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
-        Func<EvaluationBreakdown> pass, List<CandidateBatch> candidates, HashSet<string> keys)
+        Func<EvaluationBreakdown> pass, List<CandidateBatch> candidates, HashSet<string> keys, IReadOnlySet<Coord> range)
     {
         BatchContext context = batch.Context;
         if (context.StockOf(TerrainEditRules.EditorType) <= 0)
@@ -1254,7 +1261,8 @@ public sealed class HeuristicTurnController : ITurnController
         var enumerated = new HashSet<Coord>(LastCandidateCells);
         var bridges = new List<PointScore>(ranked.Where(p => p.Type == TerrainEditRules.EditorType && p.Edit?.Kind == TerrainEditKind.Bridge));
         int scored = 0;
-        foreach (Coord cell in context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty && !enumerated.Contains(c)).Order())
+        // 大图上"全部可落子空格"= 局部范围内的全部可落子空格（big-map D8）；小图 range 即合法范围，逐步不变。
+        foreach (Coord cell in range.Where(c => batch.Board[c].IsPlayableEmpty && !enumerated.Contains(c)).Order())
         {
             foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, TerrainEditRules.EditorType, context.EditScope))
             {

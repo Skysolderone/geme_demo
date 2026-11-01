@@ -29,6 +29,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——链接图生成器一旦改版，同一 `link:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
 | 原型插旗路径的 AI 选区 | `PrototypeZoneAssignment.AssignBlind`（盲选，见 `determinism.md` 的 `flag-pick`）；正式插旗的锁定改派（`FlagPlanting.LockAll`）与它共用 `PrototypeZoneAssignment.BlindPicks` 一处（seat-gap-25 E4：座位互斥）；retire-legacy-maps 删除了冒险概率与旧顺排 / `zone-pick` 选区。三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门 `原型插旗替代路径Tests.三个入口的选区都走内核的唯一实现`） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
+| 大图局部候选预筛（big-map D8） | `LargeMapFocus.LocalRange`（`Siege.Core.Ai`）：只在 `MapTier.Large` 上把 AI 的候选枚举范围收窄到己方棋子 / 旗心 ≤ 8 ∪ 对手棋子 ≤ 2（∩ 合法范围；无子时旗心 13×13），单点枚举、搭桥候选、匠人诊断、专家前瞻模拟对手与两层扫描都经它；小图返回合法范围同一引用。合法落子范围本身（`PublicRules.LegalRange`）不动 |
 | 相机位姿 | 纯计算在 `Siege.Presentation.Camera`（状态只有注视点与距离，俯角恒 60°、朝向恒定——缩放若带俯角变化，拾取会在某个缩放档静默出错）；`src/godot/` 只采输入，写相机节点的唯一位置是 `BoardView.ApplyCameraPose` |
 | 图形版命令行 | `LaunchArgs`：只校验 `--` 之后的用户参数，合法选项集合唯一来自读取动作，未知 / 带错值一律退出码 1 并列出合法选项；全仓没有第二个读原始命令行的地方 |
 | 出生区编号的对人显示（1–8） | `BirthZoneLabel.Of` / `Number`；校验器、平衡分析报告、`FlagsLocked` 事件文本、`map` 文本图、`play` 棋盘与插旗提示都经它换算，不得手写 `+ 1`；内部索引与日志数据字段保持 0 起（`play` 读入玩家输入的 `z - 1` 是输入解析，不在此列） |

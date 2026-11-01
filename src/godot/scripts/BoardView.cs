@@ -407,17 +407,7 @@ public sealed partial class BoardView : Node3D
                 patchCells[GrassPatch(cell.Coord)]++;
             }
 
-            Color color = cell.Surface switch
-            {
-                Surface.Grass => GrassPatchColor(GrassPatch(cell.Coord)),
-                Surface.Road => Visuals.TileRoad,
-                Surface.Forest => Visuals.TileForest,
-                Surface.Desert => Visuals.TileDesert,
-                Surface.Marsh => Visuals.TileMarsh,
-                Surface.Crag => Visuals.TileCrag,
-                Surface.Shallows => Visuals.TileShallows,
-                _ => Visuals.TilePlayable,
-            };
+            Color color = cell.Surface == Surface.Grass ? GrassPatchColor(GrassPatch(cell.Coord)) : SurfaceTileColorOf(cell.Surface) ?? Visuals.TilePlayable;
             if (playable && cell.Height > 0)
             {
                 color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.98f, 0.96f, 1.0f), 0.30f).Lightened(0.06f);
@@ -838,15 +828,9 @@ public sealed partial class BoardView : Node3D
             return false;
         }
 
-        // 注视点 → 格：世界 → 格只经 BoardGeometry 的那一份反算；注视点可能落在画幅外沿（可行矩形含标注边距），先夹回格心范围再反算。
+        // 注视点 → 格：世界 → 格只经 BoardGeometry 的那一份反算；注视点可能落在画幅外沿（可行矩形含标注边距），出界夹到边缘格（NearestCell）。
         CameraPose pose = Rig.Pose;
-        Vector3 low = BoardGeometry.Center(new Coord(0, 0), _width, _height);
-        Vector3 high = BoardGeometry.Center(new Coord(_width - 1, _height - 1), _width, _height);
-        var point = new Vector3(Math.Clamp(pose.FocusX, Math.Min(low.X, high.X), Math.Max(low.X, high.X)), 0f, Math.Clamp(pose.FocusZ, Math.Min(low.Z, high.Z), Math.Max(low.Z, high.Z)));
-        if (!BoardGeometry.TryFromWorld(point, _width, _height, out Coord focus))
-        {
-            return false;
-        }
+        Coord focus = BoardGeometry.NearestCell(new Vector3(pose.FocusX, 0f, pose.FocusZ), _width, _height);
 
         (int X, int Y) center = ChunkOf(focus);
         if (_chunkCenter == center)
@@ -1129,9 +1113,11 @@ public sealed partial class BoardView : Node3D
 
         int reach = CursorGridSide / 2;
         var cells = new List<Coord>();
-        for (int y = Math.Max(0, at.Y - reach); y <= Math.Min(_height - 1, at.Y + reach); y++)
+        Coord low = BoardGeometry.ClampToBoard(at.X - reach, at.Y - reach, _width, _height);
+        Coord high = BoardGeometry.ClampToBoard(at.X + reach, at.Y + reach, _width, _height);
+        for (int y = low.Y; y <= high.Y; y++)
         {
-            for (int x = Math.Max(0, at.X - reach); x <= Math.Min(_width - 1, at.X + reach); x++)
+            for (int x = low.X; x <= high.X; x++)
             {
                 var c = new Coord(x, y);
                 if (_visible.Contains(c) && _levels.ContainsKey(c))
@@ -1228,8 +1214,8 @@ public sealed partial class BoardView : Node3D
         void Frame(Coord center, int reach, float width, float height, StandardMaterial3D material)
         {
             const float half = BoardGeometry.CellSize * 0.5f;
-            Vector3 a = BoardGeometry.Center(new Coord(Math.Max(0, center.X - reach), Math.Max(0, center.Y - reach)), _width, _height);
-            Vector3 b = BoardGeometry.Center(new Coord(Math.Min(_width - 1, center.X + reach), Math.Min(_height - 1, center.Y + reach)), _width, _height);
+            Vector3 a = BoardGeometry.Center(BoardGeometry.ClampToBoard(center.X - reach, center.Y - reach, _width, _height), _width, _height);
+            Vector3 b = BoardGeometry.Center(BoardGeometry.ClampToBoard(center.X + reach, center.Y + reach, _width, _height), _width, _height);
             float minX = Math.Min(a.X, b.X) - half, maxX = Math.Max(a.X, b.X) + half;
             float minZ = Math.Min(a.Z, b.Z) - half, maxZ = Math.Max(a.Z, b.Z) + half;
             float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
@@ -1294,6 +1280,21 @@ public sealed partial class BoardView : Node3D
     /// 不在本次视图里的格（插旗阶段只见部分）一律当虚空、可被泛洪穿过——与改前"留白格不铺地面"的口径一致。
     /// 纯表现：只读视图模型的地表与坐标，4 邻用坐标算术，不调规则内核的邻接查询（visual-style-baseline）。
     /// </remarks>
+    /// <summary>
+    /// 六种非草地地表 → 地砖基色的唯一映射（守门 <c>新地表判断唯一Tests</c> 允许清单里本文件登记为"地砖色"）：3D 地砖与小地图底图（<see cref="Minimap"/>）共用。
+    /// 草地按坐标分片（<see cref="GrassPatchColor"/>）、深水 / 障碍另有分支，都不在此——其余返回 <c>null</c>，由调用方取各自的缺省色。
+    /// </summary>
+    internal static Color? SurfaceTileColorOf(Surface surface) => surface switch
+    {
+        Surface.Road => Visuals.TileRoad,
+        Surface.Forest => Visuals.TileForest,
+        Surface.Desert => Visuals.TileDesert,
+        Surface.Marsh => Visuals.TileMarsh,
+        Surface.Crag => Visuals.TileCrag,
+        Surface.Shallows => Visuals.TileShallows,
+        _ => null,
+    };
+
     internal static HashSet<Coord> IslandCells(DefaultBoardView board)
     {
         var ground = new HashSet<Coord>(board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater).Select(c => c.Coord));

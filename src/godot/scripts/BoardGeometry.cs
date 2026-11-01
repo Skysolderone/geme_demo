@@ -7,6 +7,8 @@ namespace Siege.Godot;
 /// <summary>
 /// 围棋记法坐标 ↔ 3D 世界位置的<b>唯一</b>映射（.trellis/spec/core/coordinates.md「映射唯一」）。
 /// A1 在左下：列 X 向右增长（+X），行 Y 向上增长（屏幕远处，即 −Z）；高度（terrain-model）沿 +Y 按层抬升。别处一律调用本类，不要再写第二份。
+/// big-map D9 起格 ↔ 小地图像素（<see cref="MinimapPixelOf"/> / <see cref="MinimapCellAt"/>）与"夹进画布 / 最近格"（<see cref="ClampToBoard"/> / <see cref="NearestCell"/>）也只在这里——
+/// 守门 <c>Godot层不含规则计算Tests.坐标映射在Godot侧唯一</c> 精确计数本文件的换算处数，每加一处都要复审并更新计数。
 /// </summary>
 public static class BoardGeometry
 {
@@ -88,8 +90,7 @@ public static class BoardGeometry
     /// <summary>世界坐标（y 任意）落在哪一格；出界为 <c>false</c>。</summary>
     public static bool TryFromWorld(Vector3 point, int width, int height, out Coord coord)
     {
-        int x = Mathf.RoundToInt((point.X / CellSize) + ((width - 1) * 0.5f));
-        int y = Mathf.RoundToInt((-point.Z / CellSize) + ((height - 1) * 0.5f));
+        (int x, int y) = Nearest(point, width, height);
         if (x < 0 || x >= width || y < 0 || y >= height)
         {
             coord = default;
@@ -99,6 +100,28 @@ public static class BoardGeometry
         coord = new Coord(x, y);
         return true;
     }
+
+    /// <summary>世界坐标（y 任意）最近的<b>盘内</b>格：与 <see cref="TryFromWorld"/> 同一反算，出界不拒绝而是夹到边缘格（流式加载按相机注视点取区块，big-map D9）。</summary>
+    public static Coord NearestCell(Vector3 point, int width, int height)
+    {
+        (int x, int y) = Nearest(point, width, height);
+        return ClampToBoard(x, y, width, height);
+    }
+
+    /// <summary>把格下标夹进画布（列 0..width−1、行 0..height−1）：光标格网、插旗预览框与注视格都经它取盘内范围，不各写一份上界夹取。</summary>
+    public static Coord ClampToBoard(int x, int y, int width, int height) => new(Math.Clamp(x, 0, width - 1), Math.Clamp(y, 0, height - 1));
+
+    /// <summary>小地图（big-map D9）：格坐标系里的点（x 向东、y 向北，格左下角为整数）→ 控件像素（北在上，等比缩放；<paramref name="size"/> 为控件尺寸）。与 <see cref="MinimapCellAt"/> 互逆，<c>--pick-check</c> 在大图上做往返自检。</summary>
+    public static Vector2 MinimapPixelOf(float x, float y, int width, int height, Vector2 size) => new(x * size.X / width, (height - y) * size.Y / height);
+
+    /// <summary>小地图控件像素 → 格（出界夹到边缘格）。</summary>
+    public static Coord MinimapCellAt(Vector2 pixel, int width, int height, Vector2 size) =>
+        ClampToBoard((int)MathF.Floor(pixel.X * width / size.X), height - 1 - (int)MathF.Floor(pixel.Y * height / size.Y), width, height);
+
+    // 世界 → 格的反算本体（未夹、可出界）：TryFromWorld 与 NearestCell 共用，四舍五入只在这里出现。
+    private static (int X, int Y) Nearest(Vector3 point, int width, int height) => (
+        Mathf.RoundToInt((point.X / CellSize) + ((width - 1) * 0.5f)),
+        Mathf.RoundToInt((-point.Z / CellSize) + ((height - 1) * 0.5f)));
 
     /// <summary>线段沿棋盘平面的候选格范围；返回的矩形右边和上边不包含在范围内。</summary>
     public static Rect2I CellsAlongSegment(Vector3 first, Vector3 last, int width, int height)

@@ -419,7 +419,8 @@ internal sealed class ExpertLookahead
         }
 
         ImmutableArray<PieceType> types = [.. next.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
-        ImmutableArray<Coord> cells = [.. next.LegalRange.Where(c => after.Board[c].IsPlayableEmpty).Order()];
+        // big-map D8：大图上只扫局部范围（LargeMapFocus，与部署决策同一实现）；小图即合法范围。
+        ImmutableArray<Coord> cells = [.. LargeMapFocus.LocalRange(after, after.Board, _me, next.LegalRange).Where(c => after.Board[c].IsPlayableEmpty).Order()];
         if (_config.CandidateCellLimit > 0 && cells.Length > _config.CandidateCellLimit && !types.IsEmpty)
         {
             cells = HeuristicTurnController.PrefilterCells(cells, types, staged, Rehearse, evaluator, _config.CandidateCellLimit);

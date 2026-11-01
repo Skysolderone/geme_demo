@@ -59,8 +59,8 @@
 
 ### 段 C：AI 最小适配（局部候选预筛）
 
-- [ ] 大图上标准难度 4 人一局每步 ≤ 3 s（本机），`--turn-limit 20` 跑完（含第 4 大回合起的全图阶段）；小图 15 份基线与黄金值逐步不变（预筛只在大图生效）。
-- [ ] AI 盲选旗格用 `flag-pick` 子流在合规旗格里均匀抽。
+- [x] 大图上标准难度 4 人一局每步 ≤ 3 s（本机），`--turn-limit 20` 跑完（含第 4 大回合起的全图阶段）；小图 15 份基线与黄金值逐步不变（预筛只在大图生效）。（check 复跑 Release：`link:7:4:l` 标准 × 4 种子 3 每步 111 / 227 / 2291 ms（最小 / 中位 / 最大，总 11.0 s）、种子 11 每步 95 / 193 / 794 ms（总 7.6 s），20 小回合跑完、无一步 > 3 s；小图 `link:1:4` 标准 20 小回合与专家 12 小回合日志与主目录 10-31 Release Sim 去耗时字段后逐字节相同；AI / 基线测试 415 通过。专家难度大图见追加裁决 45。）
+- [x] AI 盲选旗格用 `flag-pick` 子流在合规旗格里均匀抽。（段 A 已落：`PrototypeZoneAssignment.AssignBlindCells` 按玩家编号升序各抽一次 `NextInt(合规旗格数)`，determinism.md `flag-pick` 行；守门 `自由插旗Tests.AI盲选锁定后两两间距不小于60` / `AI盲选不扰动首回合顺序` / `人工插旗排在AI之前_不被盲选挤走`。）
 
 ## 边界
 
@@ -82,6 +82,14 @@
 - 实测：大图建场景 445–490 ms（冷启动 1438），区块 10×10 常驻 25 块，pick-check 抽样 2000/2000，小地图往返 2000/2000，静止 60.4 fps；小图 `link:5:4` / `link:9:3` 固定帧率截图改前改后逐字节相同，pick-check 1366/1366，自检日志仅多一行 `[build]`；新局界面七步自检小图 / 大图均退出 0；相关测试 246 通过 / 0 失败；`openspec validate --specs --strict` 34/0。
 - Core 仅改 `SeatPublicView.PublishFor` 一处（大图插旗阶段公开整张基图）。check 补：无人值守插旗走真实点击路径 + `[flag]` 三条自检、`[minimap]` 往返自检、栅栏跨区块归档漏画、新局界面自检按档位取期望、HANDOFF 自检一节更新。
 - 待负责人实机点：新局面板尺寸切换预览、插旗悬停绿 / 红框、不合规提示文案、部署阶段光标 7×7 与 1 键全格、小地图点击与 M 键。
+
+### 段 C（AI，2026-11-01 check）
+- 追加裁决 38–47 负责人 2026-11-01 全按建议通过（39 无子只取旗心 13×13；40 暂不做；45 专家全图阶段耗时只记录，按"AI 放最后"）。
+
+- 追加裁决 38–43 待负责人（39 / 40 需拍板，其余报备）；check 追加 44–47（45 需拍板，44 / 46 / 47 报备）。
+- 实测（check 复跑，Release）：大图 `link:7:4:l` 标准 × 4 种子 3 每步 111 / 227 / 2291 ms（总 11.0 s）、种子 11 每步 95 / 193 / 794 ms（总 7.6 s），无一步 > 3 s；专家 × 4 种子 3 `--turn-limit 16` 全图阶段四步 2062 / 2632 / 2635 / 5019 ms（第 16 小回合超 3 s，追加裁决 45）。改前（d11cdca9 导出另编 Release）与改后大图构筑期 12 小回合日志去耗时字段后逐字节相同（50 / 50 条），改前每步 1.0–4.7 s → 改后 0.11–0.77 s。小图 `link:1:4` 标准 20 小回合 / 专家 12 小回合与主目录 10-31 Release Sim 首部（地图摘要、AI 评价版本 13）相同、正文去 `ElapsedMs` / `MajorRoundMs` / `TotalMs` 后逐字节相同；AI / 基线测试 415 通过；全量快速测试 2046 通过 / 0 失败 / 1 跳过（共 2047，10 m 15 s）；`openspec validate --specs --strict` 34 / 0；sln Release 与 Godot 工程 0 警告 0 错误。
+- check 修（段 B 遗留三条源码扫描红，追加裁决 42 → 44）：地表地砖色抽成 `BoardView.SurfaceTileColorOf` 供小地图复用；小地图像素映射、"夹进画布"与"最近盘内格"并入 `BoardGeometry`（`MinimapPixelOf` / `MinimapCellAt` / `ClampToBoard` / `NearestCell`），`BoardView` 四处与 `GameRoot` 自检改为调用；`坐标映射在Godot侧唯一` 精确计数 6 → 9（逐项列明）；`Godot障碍造型只经视图模型取用` 锚点改为 `sink.Decoration.AddChild(rock)` + 常驻 sink 挂 `_decoration`（唯一一处改测试，理由见 44）。修后小图 `link:5:4` 固定帧率第 60 帧截图与段 B 改前逐字节相同；大图 `link:5:4:l` 自检 `[flag]` 三条 / `[minimap]` 2000 / 2000 / `[pick-check]` 2000 / 2000 退出 0；小图 pick-check 1366 / 1366。
+- 待负责人实机点（合并段 B 五项，合回 main 前）：大图开一局到第 4 大回合看 AI 每步是否流畅、落子是否贴着自己棋子 / 旗心；新局面板尺寸切换与插旗绿 / 红框；部署阶段光标 7×7 与 1 键全格；小地图点击 / M 键；专家难度大图第 4 大回合起是否可接受（追加裁决 45）。
 
 ## 段 A 追加裁决（待负责人）
 
@@ -119,3 +127,21 @@ check agent 核对后追加；35–36 需拍板，37 为报备（check 已按下
 - 35 建议（小图 headless 自检日志多一行）：`BoardView.Build` 现在在两档上都打 `[build] 建场景 N ms：小图常驻 / 大图流式…` 一行，小图的 `--auto-demo` / `--pick-check` 日志因此比改前多这一行（其余逐行相同；`link:5:4` / `link:9:3` 固定帧率第 60 帧截图改前 / 改后逐字节相等，pick-check 1366/1366 同）。建议保留（建场景耗时是裁决 9 的验收数据，小图也该有）；若负责人要求"小图日志零改动"，把这一行限定在流式模式下即可（一行改动）。
 - 36 建议（新局界面截图）：`--map-select --map=link:5:4` 固定帧率第 60 帧截图改前 / 改后在面板区域（x 7–380、y 590–868）有 69005 像素差，是新增的"尺寸 小 / 大"一节把人数以下的内容整体下移；面板之外（3D 背景与占位）零像素差。这是裁决 11 的必然结果，建议接受；1600×900 下面板底边距屏幕底约 45 px，再加选项就会出屏。
 - 37 报备（`RefreshViews` 的重复 `Board()`，未做缓存）：大图实测每次 `RefreshViews` 调 `ViewerWorld.Board()` 3 次（`BoardView.Refresh` 内 1、悬停读数 1、小地图 1；结算演出每帧另 1），单次 10–44 ms（22500 格 `DefaultBoardView.From` + `ForSeat` 对 22500 个坐标字符串 `Coord.Parse`），一次 `RefreshViews` 合计 65–180 ms（含重搭场景的那几次 300–470 ms）；区块集变化只触发一次 `RefreshViews`。单次未超过 50 ms 的阈值，按约定只记录、不加缓存。若之后要做性能线，最小改法是在 `ViewerWorld` 实例内记忆一次 `Board()` 的结果（`World` 每次 `Rebuild` 都是新实例，记忆零行为变化），可省约 1/3。
+## 段 C 追加裁决（待负责人，编号续 38）
+
+implement 实施中按下述默认继续；负责人不认可即改。
+
+- 38 报备（大图每小回合的真实瓶颈与两处纯性能改动）：Release Sim 量测（`link:7:4:l` 标准 × 4、种子 3）与追加裁决 34 的归因不同——Sim 路径上 `Publish` 每小回合 3 次共约 1–13 ms、活形分析 2–8 ms，都不是大头；构筑期每步 1.2–1.6 s 里八成以上是**按座位投影的预演**（`MatchFlow.ProjectRehearsal`）每次预演把约 1.5 万格的战场格集合重建成 `ImmutableHashSet`（每步 180–250 次预演 × 5 ms），其余是评价（九维 + 势力计算，每次约 0.5 ms）与预演本身（约 0.25 ms）。已按"纯性能、输出逐字节不变"做两处最小改动：① 可见格集合按战场实例缓存（`VisibleCellsOf`，`Battlefields.Of(Map)` 按地图实例记忆化，改造换图后引用变、缓存自然失效）；② 找"战场外棋子"改为直扫占用表（`GameBoard.OccupiedCoords`，次序同 `AllCoords`）而不是 22500 格逐格构造视图。证据：小图 `link:1:4` 20 小回合与大图 6 / 20 小回合的日志去耗时字段后改前改后逐字节相同；15 份决策基线全绿。构筑期每步 1.2–1.6 s → 0.13–0.2 s。追加裁决 34 量到的 Godot `--auto-demo` 每帧 17–27 s 是 `PublishFor`（22500 格 `SeatCellView` + `Coord.Parse`，追加裁决 37 已描述）叠加 AI 全图阶段无预筛，本段没有碰 `PublishFor`；若 Godot 大图实机仍慢，最小改法仍是 37 说的在 `ViewerWorld` 内记忆一次 `Board()`，属表现层、另派。
+- 39 建议（无子时不并入对手周边）：D8 字面"己方没有棋子时 = 旗心 13×13"没有写"∪ 对手棋子 ≤ 2"，按字面实现（`LargeMapFocus.LocalRange`）：无子时范围恒为旗心 13×13 ∩ 合法范围。无子只出现在被全提或开局未落子的玩家身上，旗心 13×13 已覆盖其出生圈；若希望无子时也能在对手棋子旁 2 格落子（例如被全提后反扑），改一行即可，规格 Scenario「无子时为旗心 13×13」同改。
+- 40 建议（验收口径"每步 ≤ 3 s"的实测与边界）：`run --map link:7:4:l --count 1 --difficulty Standard --turn-limit 20 --seed 3`（Release，本机）每小回合最小 135 / 中位 268 / 最大 2699 ms，总 13.8 s；第 4 大回合起（全图阶段）786–2699 ms。最慢的两步（第 14、18 小回合，2.1 / 2.7 s）都是**手里有匠人**的小回合：候选格上限 K = 24 的完整枚举对每格要试 1 + 4 搭桥 + 16 立栅 + 烧林共约 21 个改造选项（24 格 × 21 ≈ 500 次预演）、再加搭桥候选对局部范围内其余空格（约 300 次）枚举搭桥目标；无匠人的小回合 0.8–1.1 s。局部范围在第 5 大回合已达 900–1000 格（4 名玩家各有十余枚棋子、每枚辐射 17×17），预筛本身占每步约 1.1 s 并会随棋子铺开继续涨——D8 的半径 8 / 2 是裁决值，本段没有动。若后续实测（更多大回合、更多匠人）超过 3 s，候选的处理顺序建议：A 把改造目标的枚举限在"与匠人落点同在局部范围"（现已如此）之外再按大图单独给候选格上限（如 K = 16）——只改大图配置缺省，小图不受影响；B 允许 `ProjectRehearsal` 在"战场 = 全部可落子格"时跳过克隆与剥离（输出相同，但对象身份变、需另证活形缓存计数不变）；C 评价侧（势力计算每次全图覆盖）属 AI 评价优化，按"AI 放最后"不在本段。本段只记录，不选。
+- 41 报备（诊断记录在大图上的口径）：`ReviewArtisanEdits`（`--review-artisan`）的"范围内空格"`LegalCells` 与各类改造的"范围内目标数"在大图上按局部范围计（否则诊断要对 1.5 万格逐格试改造目标）；`ReviewBestMove`（`--review-defeats`）的 `LegalCells` 仍是真实合法空格数、`CandidateCells` 是局部范围内进入完整枚举的格。小图两者都不变。
+- 42 报备（段 B 遗留、与本段无关）：`TerrainSpec.新地表判断唯一Tests.新地表只在允许清单里被直接比较` 在 worktree HEAD（d11cdca9，段 B 已提交）上就红——`src/godot/scripts/Minimap.cs:134–137`（`git log -1 -- src/godot/scripts/Minimap.cs` = d11cdca9 段 B 提交；本段 `git status` 未触及 godot 目录） 直接比较 `Surface.Desert / Marsh / Crag / Shallows`（段 B 小地图地形色），不在源码扫描的允许清单里。同一提交的另两条 Godot 源码扫描也红：`VisualStyleBaseline.棋盘台面的可视表现Tests.Godot障碍造型只经视图模型取用`（在 `BoardView.cs` 里找不到 `_decoration.AddChild(rock)`，段 B 分块重构改了写法）、`BatchPreview.Godot层不含规则计算Tests.坐标映射在Godot侧唯一`（`BoardView.cs` / `Minimap.cs` 出现第二处坐标映射）。本段未动 Godot（`git status` 无 godot 改动）；全量快速测试 2047 项只有这 3 条红、都在段 B 提交 d11cdca9 的文件上。请段 B check 或负责人裁决：改 Godot 实现回到唯一入口，还是更新扫描测试的允许清单 / 锚点。
+- 43 报备（专家难度的耗时只记录）：`--difficulty Expert --turn-limit 8`（种子 3）8 个小回合都在构筑期（专家构筑期不前瞻），每步 171–279 ms、总 1.7 s；全图阶段专家的模拟对手经同一 `Deploy` 入口、以对手自己的棋子为锚预筛（测试「专家前瞻与搭桥候选也在局部范围内」守门：模拟对手预演次数 < 合法空格数），没有另跑专家的全图阶段冒烟。`--difficulty Easy --turn-limit 20`：每步 102–1542 ms、总 12.4 s，跑通。
+## 段 C check 追加（待负责人，编号续 44）
+
+check agent 核对后追加；45 需拍板，44 / 46 / 47 为报备（check 已按下述默认处理，不认可即改）。
+
+- 44 报备（段 B 遗留三条源码扫描红已修，追加裁决 42 的归属）：三条都是段 B 提交 d11cdca9 的 Godot 代码违反既有规范、段 B check 只跑了子集漏掉的。按规范改代码、不放宽测试：① `新地表只在允许清单里被直接比较`——`Minimap.BuildTerrain` 直接比较四种新地表取色，改为调用 `BoardView.SurfaceTileColorOf`（允许清单里 `BoardView.cs` 登记的"地砖色"映射，六种非草地地表一处；草地分片与各自缺省色不变，3D 地砖与小地图像素都不变）；② `坐标映射在Godot侧唯一`——`Minimap` 的像素 ↔ 格纯函数与 `BoardView` 三处 `width - 1` 夹取（流式注视格、光标 7×7、插旗预览框）并入 `BoardGeometry`（`MinimapPixelOf` / `MinimapCellAt` / `ClampToBoard` / `NearestCell`，`TryFromWorld` 与 `NearestCell` 共用同一反算），测试的精确计数 6 → 9 并逐项列明（RoundToInt 仍 2）；③ `Godot障碍造型只经视图模型取用`——**唯一一处改测试**：它守的两条规范断言（`ObstacleArtAt` 分流、`ObstacleArt.BoardRock`）仍绿，红的是实现锚点 `_decoration.AddChild(rock)`，而段 B 规格 visual-style-baseline「大图的分块渲染」明文"装饰按区块各一套"，锚点改为 `sink.Decoration.AddChild(rock)` 并加断言常驻 sink 以 `_decoration` 为装饰节点（小图岩石仍挂装饰层）。修后小图截图逐字节不变、大图自检全过（见实施结果）。
+- 45 建议（专家难度大图全图阶段超 3 s，验收条文只写标准难度）：`run --map link:7:4:l --count 1 --difficulty Expert --turn-limit 16 --seed 3`（Release）构筑期每步 144–223 ms，第 12 小回合（构筑期末、模拟对手已按第 4 大回合全图口径）1702 ms，全图阶段四步 2062 / 2632 / 2635 / **5019** ms 且逐步上升（前瞻宽度 × 模拟对手各自预筛 + 两层扫描）。PRD 段 C 验收只约束标准难度（已满足），D8 半径 8 / 2 是裁决值、本段未动。建议：只记录，不在本段改；若负责人要收专家，按追加裁决 40 的顺序 A 最省（大图专家单独给候选格上限 K = 16 或前瞻宽度减一，只改配置缺省、小图不受影响），B / C 不在本段。
+- 46 报备（追加裁决 38"纯性能、逐字节不变"的证据补强）：check 用主目录 10-31 Release Sim（含岸线合并，不含段 A / B / C）对照 worktree：小图 `link:1:4` 标准 × 4 种子 3 20 小回合（81 行）与专家 × 4 种子 7 12 小回合（52 行）首部相同（地图摘要 `6A0ECAB5…`、AI 评价版本 13）、正文去 `ElapsedMs` / `MajorRoundMs` / `TotalMs` 三个耗时字段后逐字节相同；另把 d11cdca9 导出到临时目录另编 Release，大图 `link:7:4:l` 标准种子 3 构筑期 12 小回合与改后逐字节相同（turn / event 50 / 50 条，首部除 `TurnLimit` 外相同）。缓存键的失效路径核过：`Battlefields.Of` 按 `MapData` 实例 `ConditionalWeakTable` 记忆，改造 `ApplyTerrainEdits` 与落座 `Reseat` 都经 `ReplaceMap` 换新实例 → 新 `Battlefield` 引用 → 缓存自然失效；`OccupiedCoords` 与 `AllCoords` 同为先行后列。
+- 47 报备（段 C 代码审查结论，无改动）：`LargeMapFocus.LocalRange` 切比雪夫方窗、半径 8 / 2、无子分支与 D8 一致；大图返回 `HashSet`、四个消费点（`ScorePoints` / `AppendBridgeSeed` / `ReviewArtisanEdits` / `BestSingleGain`）迭代前都 `.Order()`，与枚举顺序无关；小图返回同一引用，`range.Where(...)` 与原 `context.LegalRange.Where(...)` 同一枚举；专家 `Project` 用 `with` 复制保留 `Tier`，模拟对手 `ForSimulation(context.Player, projected, …)` 经同一 `Deploy` 以自己的棋子 / 旗心为锚；只读公开量（`view.Tier` / `PlayerFlowState.BirthZone` / 盘面占用）、不消费随机；评价维度 / 权重 / AI 评价版本未动。设计文档 §19 第 23 条原句"（已落）…尚未实施"自相矛盾，check 改了措辞。

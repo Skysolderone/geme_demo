@@ -148,6 +148,21 @@ public sealed partial class GameBoard
     }
 
     /// <summary>
+    /// 有棋子的格，次序与 <see cref="AllCoords"/> 相同（先行后列）。与 <c>AllCoords().Where(c =&gt; this[c].Occupant is not null)</c> 逐项相同，只是直接扫占用表、不逐格构造视图——
+    /// 按座位投影每次预演都要找"战场外的棋子"（<c>MatchFlow.ProjectRehearsal</c>），大图 22500 格逐格构造视图占一次预演约三成时间（big-map 段 C，追加裁决 38）。
+    /// </summary>
+    internal IEnumerable<Coord> OccupiedCoords()
+    {
+        for (int i = 0; i < _occupants.Length; i++)
+        {
+            if (_occupants[i] is not null)
+            {
+                yield return CoordAt(i);
+            }
+        }
+    }
+
+    /// <summary>
     /// 全部格的占用者，按格下标（<c>y * 宽 + x</c>，即 <see cref="AllCoords"/> 的次序）只读暴露，供热路径整盘扫描（段 C2：不逐格经坐标枚举器与越界检查）。
     /// 只读视图，与 <see cref="OccupantAt"/> 逐格相同；盘面之后的写入会反映在同一视图上，调用方不得跨写入持有。
     /// </summary>
