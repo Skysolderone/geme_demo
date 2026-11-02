@@ -25,6 +25,8 @@ public sealed partial class Hud
     private Label _mapIntroText = null!;
     private Control? _selectRoot;
     private PanelContainer? _selectPanel;
+    private AspectRatioContainer? _mapThumbnailFrame;
+    private TextureRect? _mapThumbnail;
     private LineEdit _mapSeedInput = null!;
     private Button _mapSeedApply = null!;
     private Button _mapReroll = null!;
@@ -52,13 +54,17 @@ public sealed partial class Hud
     /// <summary>新局面板此刻是否显示。</summary>
     public bool MapSelectOpen => _selectRoot is { Visible: true };
 
+    /// <summary>新局面板的大图整块大陆缩略此刻是否显示（自检探针，large-default 裁决 4：只在选大图时显示；面板撤掉后为 false）。</summary>
+    public bool MapThumbnailVisible => _mapThumbnailFrame is { Visible: true };
+
     /// <summary>新局面板在屏幕上的矩形（截图自检打印用：核对面板靠左、没有盖到地图主体）。</summary>
     public Rect2 MapSelectRect => _selectPanel?.GetGlobalRect() ?? default;
 
     /// <summary>
     /// 显示 / 刷新新局面板，并隐藏对局面板。<paramref name="mapInfo"/> 是当前预览地图的一行说明（尺寸、出生棋盘数等，由主场景读棋盘视图模型给出）。
+    /// <paramref name="thumbnail"/> 是大图整块大陆的像素缩略（large-default 裁决 4，由主场景经 <see cref="Minimap.BuildTerrain"/> 给出，放大居中盖在局部 3D 预览之上）；小图传 null，缩略隐藏、画面与改前相同。
     /// </summary>
-    public void ShowMapSelect(MapSelectModel model, string mapInfo)
+    public void ShowMapSelect(MapSelectModel model, string mapInfo, Texture2D? thumbnail)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (_selectRoot is null)
@@ -68,6 +74,16 @@ public sealed partial class Hud
 
         _root.Visible = false;
         _selectRoot!.Visible = true;
+        if (_mapThumbnail!.Texture != thumbnail)
+        {
+            _mapThumbnail.Texture = thumbnail;
+        }
+
+        _mapThumbnailFrame!.Visible = thumbnail is not null;
+        if (thumbnail is not null && thumbnail.GetHeight() > 0)
+        {
+            _mapThumbnailFrame.Ratio = (float)thumbnail.GetWidth() / thumbnail.GetHeight();
+        }
 
         if (_mapSeedInput.Text != model.SeedText)
         {
@@ -97,10 +113,8 @@ public sealed partial class Hud
             Ui.Selected(button, active);
         }
 
-        // 说明随尺寸切换：小图是座位盲选，大图是全图自由插旗（文案经 Labels 取 Core 常量）。
-        _mapIntroText.Text = model.Tier == MapTier.Large
-            ? Labels.LargeMapIntro
-            : $"{Siege.Presentation.Text.Labels.SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。";
+        // 说明随尺寸切换：大图是全图自由插旗（缺省，large-default 裁决 1 / 3），小图（旧模式）是座位盲选；两句都经 Labels 取 Core 常量。
+        _mapIntroText.Text = model.Tier == MapTier.Large ? Labels.LargeMapIntro : Labels.SmallMapIntro;
 
         for (int i = 0; i < _difficultyButtons.Count; i++)
         {
@@ -121,6 +135,8 @@ public sealed partial class Hud
             _selectRoot.QueueFree();
             _selectRoot = null;
             _selectPanel = null;
+            _mapThumbnailFrame = null;
+            _mapThumbnail = null;
             _difficultyButtons.Clear();
             _playerButtons.Clear();
             _tierButtons.Clear();
@@ -134,6 +150,37 @@ public sealed partial class Hud
         _selectRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Ui.BuildTheme() };
         _selectRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_selectRoot);
+
+        // 大图整块大陆的缩略（large-default 裁决 4）：占面板右侧整片画幅，按位图宽高比取最大的居中矩形，底色与小地图同一份、像素图最近邻放大（每格一个像素，不糊）。
+        // 只搭一次、刷新时换纹理与显隐（自检每帧比对游离节点数，不能重建）；不接鼠标、不做任何像素 ↔ 格换算。面板在它之后加入，盖在上层。
+        _mapThumbnailFrame = new AspectRatioContainer
+        {
+            Name = "MapThumbnail",
+            Ratio = 1f,
+            StretchMode = AspectRatioContainer.StretchModeEnum.Fit,
+            AlignmentHorizontal = AspectRatioContainer.AlignmentMode.Center,
+            AlignmentVertical = AspectRatioContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+        };
+        _mapThumbnailFrame.AnchorLeft = 0f;
+        _mapThumbnailFrame.AnchorTop = 0f;
+        _mapThumbnailFrame.AnchorRight = 1f;
+        _mapThumbnailFrame.AnchorBottom = 1f;
+        _mapThumbnailFrame.OffsetLeft = 388f;
+        _mapThumbnailFrame.OffsetTop = 14f;
+        _mapThumbnailFrame.OffsetRight = -14f;
+        _mapThumbnailFrame.OffsetBottom = -14f;
+        _mapThumbnailFrame.AddChild(new ColorRect { Color = Minimap.Backdrop, MouseFilter = Control.MouseFilterEnum.Ignore });
+        _mapThumbnail = new TextureRect
+        {
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _mapThumbnailFrame.AddChild(_mapThumbnail);
+        _selectRoot.AddChild(_mapThumbnailFrame);
 
         // 面板靠左：背景是当前地图各块出生平台的占位，地图主体在画面中央，不去挡它。
         (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 6);
@@ -193,7 +240,7 @@ public sealed partial class Hud
 
         body.AddChild(playersRow);
         body.AddChild(Ui.Text("你和 AI 一共几名玩家；岛的大小与平台块数随人数变。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
-        // 尺寸（big-map 裁决 11）：小 = 现行浮空岛（三段标识），大 = 150×150 大陆、全图自由插旗（标识带 :l）；缺省小。
+        // 尺寸（big-map 裁决 11 / large-default 裁决 1–2）：大 = 150×150 大陆、全图自由插旗（标识带 :l），小 = 浮空岛旧模式（三段标识）；缺省大，按钮顺序跟随 TierOptions（大在前）。
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("尺寸"));
         var tierRow = new HBoxContainer();

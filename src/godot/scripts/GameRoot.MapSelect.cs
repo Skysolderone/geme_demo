@@ -25,6 +25,8 @@ public sealed partial class GameRoot
 {
     private MapSelectModel? _select;
     private MapData? _previewMap;
+    private ImageTexture? _previewThumbnail;
+    private string _previewThumbnailId = string.Empty;
     private ulong _matchSeed;
     private int _rounds;
     private int? _cellLimit;
@@ -145,7 +147,7 @@ public sealed partial class GameRoot
 
     /// <summary>
     /// 无人值守自检（<c>--map-select --auto-demo</c>，规格 map-selection「强制进入新局界面的自检选项」）：每帧一步，把新局操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 输入非法种子 → 输入合法种子 → 换一张 → 选 2 人 → 选 3 人 → 回到进入时的标识 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
+    /// 输入非法种子 → 输入合法种子 → 换一张 → 选 2 人 → 选 3 人 → 切到另一尺寸 → 切回 → 回到进入时的标识 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
     /// </summary>
     private void SelfCheckMapSelect()
     {
@@ -203,9 +205,25 @@ public sealed partial class GameRoot
                 && _session.Match.Map.Id == model.CurrentId && _session.Match.Map.MaxPlayers == players && _session.Match.Players.Length == players
                 && BackdropOk();
         }
-        else if (step == 5)
+        else if (step is 5 or 6)
         {
-            what = "回到进入时的标识（种子与人数）";
+            // large-default 裁决 2 / 4：尺寸选项经与面板同一组处理函数（SelectTier → OnSelectionChanged）；第 5 步切到另一档、第 6 步切回，缺省大图与 --map= 小图预填两种入口都把两个方向走到。
+            // 标识随档位换成四段 / 三段、种子与人数不变、预览背景按档位口径重搭；面板的整块大陆缩略只在大图显示——面板刷新发生在 RefreshViews，这里显式刷一次再读显隐。
+            MapTier target = model.Tier == MapTier.Large ? MapTier.Small : MapTier.Large;
+            ulong seedBefore = model.MapSeed;
+            int playersBefore = model.Players;
+            what = $"{(step == 5 ? "切到" : "切回")}尺寸「{Labels.TierName(target)}」";
+            OnSelectionChanged(model.SelectTier(target));
+            RefreshViews();
+            ok = model.Tier == target && model.MapSeed == seedBefore && model.Players == playersBefore
+                && model.CurrentId == LinkMapId.Format(seedBefore, playersBefore, target) && _session.Match.Map.Id == model.CurrentId
+                && _session.IsLargeMap == (target == MapTier.Large) && BackdropOk()
+                && _hud.MapThumbnailVisible == _session.IsLargeMap;
+            what += $"，缩略 {(_hud.MapThumbnailVisible ? "显示" : "隐藏")}";
+        }
+        else if (step == 7)
+        {
+            what = "回到进入时的标识（种子、人数与尺寸）";
             ok = model.TrySelectId(_selectEntryId);
             OnSelectionChanged(model.CurrentId != before);
             ok &= model.CurrentId == _selectEntryId && _session.Match.Map.Id == _selectEntryId;
@@ -219,8 +237,8 @@ public sealed partial class GameRoot
             // map-expand-25 D9：建局后保持全局预览（整岛一屏看全）——一屏看不全的图上预览开着，看得全的图上没有预览。
             int themeLabels = _session.World.Board().Placeholders.Count(p => !p.Expanded && p.ThemeName is not null);
             int afterStart = CountNodes(_board);
-            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}，全局预览 {(_board.Rig.IsOverview ? "开" : "关")}";
-            ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && _board.Rig.IsOverview == _board.Rig.OverviewAvailable && !_hud.MapSelectOpen
+            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}，全局预览 {(_board.Rig.IsOverview ? "开" : "关")}，缩略 {(_hud.MapThumbnailVisible ? "残留" : "已撤")}";
+            ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && _board.Rig.IsOverview == _board.Rig.OverviewAvailable && !_hud.MapSelectOpen && !_hud.MapThumbnailVisible
                 && _session.Match.Players.Length == _session.Match.Map.MaxPlayers
                 && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && afterStart == _selectEntryBoardNodes + themeLabels;
         }
@@ -274,6 +292,27 @@ public sealed partial class GameRoot
     private string PreviewInfo() => MapPreviewInfo.Of(_session.World.Board());
 
     /// <summary>
+    /// 新局面板大图的整块大陆缩略（large-default 裁决 4）：复用小地图的那一份地形像素图（<see cref="Minimap.BuildTerrain"/>），按预览会话的地图标识缓存、标识变了才重画；
+    /// 小图返回 null（面板不显示缩略，小图预览与改前逐像素相同）。3D 预览照旧只建注视点附近的区块，缩略盖在其上；点"开始"后面板连同缩略一起撤掉。
+    /// </summary>
+    private Texture2D? PreviewThumbnail()
+    {
+        if (!_session.IsLargeMap)
+        {
+            return null;
+        }
+
+        string id = _session.Match.Map.Id;
+        if (_previewThumbnail is null || _previewThumbnailId != id)
+        {
+            _previewThumbnail = Minimap.BuildTerrain(_session.World.Board());
+            _previewThumbnailId = id;
+        }
+
+        return _previewThumbnail;
+    }
+
+    /// <summary>
     /// 点"开始"：按视图模型确认的标识建真正的对局（人数 = 地图人数），进入插旗；相机保持全局预览（map-expand-25 D9：整座岛一屏看全，锁定后开局对准自己的平台时退出预览）。
     /// </summary>
     private void StartMatch()
@@ -292,6 +331,8 @@ public sealed partial class GameRoot
         _difficulty = _select.Difficulty;
         _session = MatchSession.Create(_previewMap, _matchSeed, _previewMap.MaxPlayers, 1, _difficulty, _cellLimit);
         _select = null;
+        _previewThumbnail = null;   // 面板连同缩略一起撤掉（HideMapSelect 帧末释放节点），主场景不再持有那张纹理
+        _previewThumbnailId = string.Empty;
         BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);
         EnterOverviewForPlanting();

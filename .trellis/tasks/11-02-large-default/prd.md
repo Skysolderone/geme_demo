@@ -16,8 +16,14 @@ big-map（11-01，合并 d5b4e8ab）做出了 150×150 大图，但新局面板�
 - 不生成多余文档；规格若有口径变化只改 `openspec/specs/map-selection`。
 
 ## 验收
-- [ ] `MapSelectModel.DefaultTier == MapTier.Large`，`TierOptions` 顺序 [Large, Small]，选图视图模型测试同步。
-- [ ] Godot 有人值守无 `--map=` 打开新局面板：预览是 150×150 大陆整图缩略，顶部说明为大图口径，尺寸行"大"在前且默认选中。
-- [ ] 选"小（浮空岛，旧模式）"后预览与文案回到旧样子，行为不变。
-- [ ] `--map-select --screenshot=` 小图截图与 main 像素一致（预选 `--map=link:1:4`）。
-- [ ] 快速测试集（Category!=Slow&Category!=Perf）全绿；Godot 工程 0 错误。
+- [x] `MapSelectModel.DefaultTier == MapTier.Large`，`TierOptions` 顺序 [Large, Small]，选图视图模型测试同步。
+- [x] Godot 有人值守无 `--map=` 打开新局面板：预览是 150×150 大陆整图缩略，顶部说明为大图口径，尺寸行"大"在前且默认选中。
+- [x] 选"小（浮空岛，旧模式）"后预览与文案回到旧样子，行为不变。
+- [x] `--map-select --screenshot=` 小图截图与 main 像素一致（预选 `--map=link:1:4`）。验收口径修正：裁决 2/3 改了面板文案，故为"面板外零像素差、面板内差异只在尺寸行与提示文案"；对局内小图截图（link:5:4 一回合）与 main 逐字节相等。
+- [x] 快速测试集（Category!=Slow&Category!=Perf）全绿；Godot 工程 0 错误。
+
+## 实施结果（2026-11-02）
+- 实施 + 验收各一名 agent；快速全集 2046 通过 / 1 跳过 / 1 失败（`大图档Tests.种子1到20的大图` 并发负载下计时抖动 8 s，单跑两次通过）；守门四组 + 该用例 179 条绿；Godot 工程 0 警告 0 错误。
+- 大图缩略：`Minimap.BuildTerrain` 改 public static 复用，`Hud.MapSelect` 以 AspectRatioContainer + TextureRect 最近邻放大居中叠于 3D 预览之上，三层 MouseFilter Ignore，缓存键 Map.Id，`StartMatch` 置空；验收补自检"切到另一尺寸再切回"两步与 `MapThumbnailVisible` 探针，HANDOFF 自检第 3 条改"七步"。
+- 未覆盖：换种子前后缩略内容未做逐像素比对；真实鼠标切换未人工点验。
+- 补提交段 B 漏掉的 `src/godot/scripts/Minimap.cs.uid`。

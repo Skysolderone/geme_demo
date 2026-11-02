@@ -7,7 +7,7 @@ namespace Siege.Presentation.MapSelect;
 
 /// <summary>
 /// 新局界面的视图模型（board-link-mode D8 / 实现裁决 D7，tasks 4.1；零引擎依赖）：整个游戏只剩链接模式一种地图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>，
-/// 界面只有"当前地图种子 + 完整标识、种子输入、换一张、人数（map-expand-25 D1：2 / 3 / 4，缺省 4）、尺寸（big-map 裁决 11：小 / 大，缺省小）、AI 难度、开始"。
+/// 界面只有"当前地图种子 + 完整标识、种子输入、换一张、人数（map-expand-25 D1：2 / 3 / 4，缺省 4）、尺寸（big-map 裁决 11：大 / 小；large-default 裁决 1：缺省大，小图标"旧模式"）、AI 难度、开始"。
 /// 旧地图清单与显示名对照表已删除（规格 map-selection「开局选图界面」）。
 /// </summary>
 /// <remarks>
@@ -26,8 +26,8 @@ public sealed class MapSelectModel
     /// <summary>人数的缺省（map-expand-25 D1：新局界面缺省 4 人）。</summary>
     public const int DefaultPlayers = 4;
 
-    /// <summary>尺寸（档位）的缺省（big-map 裁决 11：缺省小图，三段标识一切照旧）。</summary>
-    public const MapTier DefaultTier = MapTier.Small;
+    /// <summary>尺寸（档位）的缺省（large-default 裁决 1：新局面板缺省大图，标识四段 <c>link:&lt;种子&gt;:&lt;人数&gt;:l</c>；批量 / 终端 / 无人值守的缺省图仍由目录决定，不经本值）。</summary>
+    public const MapTier DefaultTier = MapTier.Large;
 
     private ulong _current;
     private int _players;
@@ -62,8 +62,8 @@ public sealed class MapSelectModel
 
     /// <summary>当前尺寸（档位，big-map 裁决 11）：小图 / 大图。档位是标识的一部分。</summary>
     public MapTier Tier => _tier;
-    /// <summary>尺寸选择的选项：小 / 大（按枚举次序）。</summary>
-    public static IReadOnlyList<MapTier> TierOptions { get; } = Enum.GetValues<MapTier>();
+    /// <summary>尺寸选择的选项：大在前、小（旧模式）在后（large-default 裁决 2；不取枚举次序）。</summary>
+    public static IReadOnlyList<MapTier> TierOptions { get; } = [MapTier.Large, MapTier.Small];
 
     /// <summary>当前地图的完整标识 <c>link:&lt;种子&gt;:&lt;人数&gt;[:&lt;档&gt;]</c>（下次可用命令行 <c>--map=</c> 复现），经链接图标识的唯一实现拼出：小图三段、大图四段。</summary>
     public string CurrentId => LinkMapId.Format(_current, _players, _tier);
