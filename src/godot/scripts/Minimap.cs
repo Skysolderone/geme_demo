@@ -102,8 +102,14 @@ public sealed partial class Minimap : Control
 
     private Coord? CellAt(Vector2 pixel) => _board is null ? null : BoardGeometry.MinimapCellAt(pixel, _board.Width, _board.Height, Size);
 
-    /// <summary>地形色底图：每格一个像素，岛面按地表取地砖色（与 3D 地砖同一份 <see cref="BoardView.SurfaceTileColorOf"/>）、深水取水色、岛内障碍取障碍色、虚空透明（岛面判定与 3D 场景同一份 <see cref="BoardView.IslandCells"/>）。</summary>
-    private static ImageTexture BuildTerrain(DefaultBoardView board)
+    /// <summary>小地图与新局面板大图缩略共用的底色（large-default 裁决 4：缩略复用本类的像素图与底色）。</summary>
+    public static readonly Color Backdrop = new(0.08f, 0.07f, 0.11f, 0.72f);
+
+    /// <summary>
+    /// 地形色底图：每格一个像素，岛面按地表取地砖色（与 3D 地砖同一份 <see cref="BoardView.SurfaceTileColorOf"/>）、深水取水色、岛内障碍取障碍色、虚空透明（岛面判定与 3D 场景同一份 <see cref="BoardView.IslandCells"/>）。
+    /// 新局面板选大图时把同一张位图放大居中当整块大陆的缩略（large-default 裁决 4），不另写第二份绘制。
+    /// </summary>
+    public static ImageTexture BuildTerrain(DefaultBoardView board)
     {
         var image = Image.CreateEmpty(board.Width, board.Height, false, Image.Format.Rgba8);
         image.Fill(Colors.Transparent);
@@ -133,7 +139,7 @@ public sealed partial class Minimap : Control
     public override void _Draw()
     {
         var full = new Rect2(Vector2.Zero, Size);
-        DrawRect(full, new Color(0.08f, 0.07f, 0.11f, 0.72f));
+        DrawRect(full, Backdrop);
         if (_terrain is not null)
         {
             DrawTextureRect(_terrain, full, false);

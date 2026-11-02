@@ -3,6 +3,7 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Presentation.MapSelect;
+using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
 using static Siege.Core.Tests.PresentationFixtures;
 
@@ -35,12 +36,13 @@ public class 选图视图模型Tests
     public void 缺省进入新局界面_已取好种子并显示完整标识()
     {
         // 规格 Scenario「缺省进入新局界面」：已取好一个地图种子（由入口注入）并显示 link:<种子>；没有任何其他地图可选。
+        // large-default 裁决 1：缺省大图，标识四段 link:<种子>:<人数>:l。
         var model = new MapSelectModel(InitialSeed);
 
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal("424242", model.SeedText);
-        Assert.Equal("link:424242:4", model.CurrentId);
-        Assert.Equal(LinkMapId.Format(InitialSeed, 4), model.CurrentId);
+        Assert.Equal("link:424242:4:l", model.CurrentId);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Large), model.CurrentId);
         Assert.Equal(string.Empty, model.Notice);
         Assert.False(model.IsConfirmed);
         Assert.Equal(AiDifficulty.Standard, model.Difficulty);
@@ -61,13 +63,13 @@ public class 选图视图模型Tests
 
         Assert.Equal(987654321UL, model.MapSeed);
         Assert.Equal("987654321", model.SeedText);
-        Assert.Equal("link:987654321:4", model.CurrentId);
+        Assert.Equal("link:987654321:4:l", model.CurrentId);
         Assert.NotEqual(before, model.CurrentId);
 
         // 注入值恰好与当前种子相同：仍然要"换"。
         model.Accept();
         Assert.True(model.Reroll(987654321UL));
-        Assert.Equal("link:987654322:4", model.CurrentId);
+        Assert.Equal("link:987654322:4:l", model.CurrentId);
     }
 
     [Theory]
@@ -92,14 +94,14 @@ public class 选图视图模型Tests
         Assert.False(model.SubmitSeed(text));
 
         Assert.Contains("非负整数", model.Notice, StringComparison.Ordinal);
-        Assert.Equal("link:424242:4", model.CurrentId);
+        Assert.Equal("link:424242:4:l", model.CurrentId);
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal(text, model.SeedText);
 
         // 随后一次合法输入清掉提示；上界 2^64 − 1 可用。
         Assert.True(model.SubmitSeed("18446744073709551615"));
         Assert.Equal(string.Empty, model.Notice);
-        Assert.Equal("link:18446744073709551615:4", model.CurrentId);
+        Assert.Equal("link:18446744073709551615:4:l", model.CurrentId);
     }
 
     [Fact]
@@ -112,7 +114,7 @@ public class 选图视图模型Tests
 
         Assert.True(first.SubmitSeed("12345"));
         Assert.True(second.SubmitSeed(" 12345 "));
-        Assert.Equal("link:12345:4", first.CurrentId);
+        Assert.Equal("link:12345:4:l", first.CurrentId);
         Assert.Equal(first.CurrentId, second.CurrentId);
         Assert.Equal(MapFile.ToJson(MapCatalog.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Resolve(second.CurrentId)));
         Assert.Equal("12345", second.SeedText);
@@ -120,7 +122,7 @@ public class 选图视图模型Tests
         Assert.False(first.SubmitSeed("12345"));
         Assert.Equal(string.Empty, first.Notice);
         Assert.True(first.SubmitSeed("007"));
-        Assert.Equal("link:7:4", first.CurrentId);
+        Assert.Equal("link:7:4:l", first.CurrentId);
         Assert.Equal("7", first.SeedText);
     }
 
@@ -152,31 +154,31 @@ public class 选图视图模型Tests
         // 变异（实跑，只跑本类）：MB-7 RollBack 只退种子、不退人数 → 本测试红 1；MB-8 CurrentId 的人数写死 4 → 本测试红 1。
         var model = new MapSelectModel(InitialSeed);
         Assert.Equal([2, 3, 4], MapSelectModel.PlayerOptions);
-        Assert.Equal((4, "link:424242:4"), (model.Players, model.CurrentId));
+        Assert.Equal((4, "link:424242:4:l"), (model.Players, model.CurrentId));
         model.Accept();
 
         Assert.True(model.SelectPlayers(2));
-        Assert.Equal((2, InitialSeed, "link:424242:2"), (model.Players, model.MapSeed, model.CurrentId));
+        Assert.Equal((2, InitialSeed, "link:424242:2:l"), (model.Players, model.MapSeed, model.CurrentId));
         Assert.False(model.SelectPlayers(2));   // 同一人数：标识没变
         Assert.Throws<ArgumentOutOfRangeException>(() => model.SelectPlayers(5));
         Assert.Throws<ArgumentOutOfRangeException>(() => model.SelectPlayers(1));
 
         Assert.True(model.Reroll(77UL));
-        Assert.Equal("link:77:2", model.CurrentId);
+        Assert.Equal("link:77:2:l", model.CurrentId);
         Assert.True(model.SubmitSeed("12"));
-        Assert.Equal("link:12:2", model.CurrentId);
-        Assert.True(model.TrySelectId("link:9:3"));
+        Assert.Equal("link:12:2:l", model.CurrentId);
+        Assert.True(model.TrySelectId("link:9:3"));   // 三段标识预填：尺寸随标识回到小图
         Assert.Equal((3, "link:9:3"), (model.Players, model.CurrentId));
 
-        // 预览失败回退：种子与人数都回到上一次接受的 link:424242:4。
+        // 预览失败回退：种子、人数与尺寸都回到上一次接受的 link:424242:4:l。
         model.RollBack("这张图没有生成出来。");
-        Assert.Equal((4, "link:424242:4"), (model.Players, model.CurrentId));
+        Assert.Equal((4, "link:424242:4:l"), (model.Players, model.CurrentId));
 
         // 按所选人数解析出的地图人数即开局人数。
         Assert.True(model.SelectPlayers(3));
         model.Accept();
         string confirmed = model.Confirm();
-        Assert.Equal("link:424242:3", confirmed);
+        Assert.Equal("link:424242:3:l", confirmed);
         Assert.Equal(3, MapCatalog.Resolve(confirmed).MaxPlayers);
         Assert.Throws<InvalidOperationException>(() => model.SelectPlayers(2));
     }
@@ -192,7 +194,7 @@ public class 选图视图模型Tests
         Assert.True(model.Reroll(6UL));
         model.RollBack("地图生成失败：尝试次数耗尽。");
 
-        Assert.Equal("link:5:4", model.CurrentId);
+        Assert.Equal("link:5:4:l", model.CurrentId);
         Assert.Equal(5UL, model.MapSeed);
         Assert.Equal("5", model.SeedText);
         Assert.Equal("地图生成失败：尝试次数耗尽。", model.Notice);
@@ -202,7 +204,9 @@ public class 选图视图模型Tests
     public void 确认开局_给出已接受的标识_与按它解析出的地图标识一致()
     {
         // 规格 Scenario「确认后开局」：以当前种子建局，对局日志首部记录的地图标识（MapData.Id）与界面显示的一致。确认后不再接受操作。
+        // 下面的座位 / 棋盘清单断言是小图（旧模式）口径：large-default 之后缺省大图，这里显式选回小图。
         var model = new MapSelectModel(12345UL);
+        Assert.True(model.SelectTier(MapTier.Small));
         model.Accept();
         string shown = model.CurrentId;
 
@@ -224,8 +228,8 @@ public class 选图视图模型Tests
         var pending = new MapSelectModel(InitialSeed);
         pending.Accept();
         Assert.True(pending.Reroll(99UL));
-        Assert.Equal("link:424242:4", pending.Confirm());
-        Assert.Equal("link:424242:4", pending.CurrentId);
+        Assert.Equal("link:424242:4:l", pending.Confirm());
+        Assert.Equal("link:424242:4:l", pending.CurrentId);
     }
 
     [Fact]
@@ -299,49 +303,68 @@ public class 选图视图模型Tests
     private static readonly ulong[] Golden = [0UL, 969246250UL, 774983618UL, 268246356UL, 102909540UL, 97086102UL, 142409162UL];
 
     [Fact]
-    public void 尺寸选项_缺省小图三段_选大图四段_回退与确认带尺寸()
+    public void 尺寸选项_缺省大图四段_选小图三段_回退与确认带尺寸()
     {
-        // 规格 map-selection「开局选图界面」尺寸：小 / 大，缺省小（big-map 裁决 11）；选大即标识带 :l，由链接图标识的唯一实现拼出；换一张 / 输入种子不改尺寸。
+        // 规格 map-selection「开局选图界面」尺寸：大 / 小（旧模式），缺省大（large-default 裁决 1 / 2，原 big-map 裁决 11 缺省小）；大即标识带 :l、选小回到三段，
+        // 由链接图标识的唯一实现拼出；换一张 / 输入种子不改尺寸。选项顺序固定大在前（不取枚举次序）。
         var model = new MapSelectModel(InitialSeed);
-        Assert.Equal(MapTier.Small, model.Tier);
-        Assert.Equal(MapSelectModel.DefaultTier, model.Tier);
-        Assert.Equal([MapTier.Small, MapTier.Large], MapSelectModel.TierOptions);
-        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Small), model.CurrentId);
-        model.Accept();
-
-        Assert.False(model.SelectTier(MapTier.Small));   // 没变
-        Assert.True(model.SelectTier(MapTier.Large));
         Assert.Equal(MapTier.Large, model.Tier);
+        Assert.Equal(MapSelectModel.DefaultTier, model.Tier);
+        Assert.Equal([MapTier.Large, MapTier.Small], MapSelectModel.TierOptions);
         Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Large), model.CurrentId);
         Assert.EndsWith(":l", model.CurrentId, StringComparison.Ordinal);
         Assert.Equal((InitialSeed, 4, MapTier.Large), LinkMapId.Parse(model.CurrentId));
+        model.Accept();
+
+        Assert.False(model.SelectTier(MapTier.Large));   // 没变
+        Assert.True(model.SelectTier(MapTier.Small));
+        Assert.Equal(MapTier.Small, model.Tier);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Small), model.CurrentId);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4), model.CurrentId);   // 小图恒为三段
+        Assert.Equal((InitialSeed, 4, MapTier.Small), LinkMapId.Parse(model.CurrentId));
 
         // 换一张与输入种子都保留尺寸；人数同样。
         Assert.True(model.Reroll(777UL));
-        Assert.Equal(LinkMapId.Format(777UL, 4, MapTier.Large), model.CurrentId);
+        Assert.Equal(LinkMapId.Format(777UL, 4, MapTier.Small), model.CurrentId);
         Assert.True(model.SubmitSeed("12345"));
-        Assert.Equal(LinkMapId.Format(12345UL, 4, MapTier.Large), model.CurrentId);
+        Assert.Equal(LinkMapId.Format(12345UL, 4, MapTier.Small), model.CurrentId);
         Assert.True(model.SelectPlayers(2));
-        Assert.Equal(LinkMapId.Format(12345UL, 2, MapTier.Large), model.CurrentId);
+        Assert.Equal(LinkMapId.Format(12345UL, 2, MapTier.Small), model.CurrentId);
 
-        // 生成失败回到上一张成功的图：种子、人数、尺寸一起退回。
+        // 生成失败回到上一张成功的图：种子、人数、尺寸一起退回（退回缺省的大图）。
         model.RollBack("x");
-        Assert.Equal(MapTier.Small, model.Tier);
-        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Small), model.CurrentId);
+        Assert.Equal(MapTier.Large, model.Tier);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4, MapTier.Large), model.CurrentId);
 
-        // 按四段标识预填带上尺寸；小图四段写法规范化回三段。
-        Assert.True(model.TrySelectId(LinkMapId.Format(9UL, 3, MapTier.Large)));
-        Assert.Equal((9UL, 3, MapTier.Large), (model.MapSeed, model.Players, model.Tier));
+        // 按三段标识预填即小图；四段 :s 写法规范化回三段；四段 :l 带上大图。
+        Assert.True(model.TrySelectId(LinkMapId.Format(9UL, 3)));
+        Assert.Equal((9UL, 3, MapTier.Small), (model.MapSeed, model.Players, model.Tier));
         Assert.True(model.TrySelectId("link:9:3:s"));
         Assert.Equal(MapTier.Small, model.Tier);
         Assert.Equal(LinkMapId.Format(9UL, 3), model.CurrentId);
+        Assert.True(model.TrySelectId(LinkMapId.Format(9UL, 3, MapTier.Large)));
+        Assert.Equal((9UL, 3, MapTier.Large), (model.MapSeed, model.Players, model.Tier));
         Assert.False(model.TrySelectId("link:9:3:x"));
 
         // 确认开局给出的是已接受的尺寸。
-        Assert.True(model.SelectTier(MapTier.Large));
+        Assert.True(model.SelectTier(MapTier.Small));
         model.Accept();
-        Assert.Equal(LinkMapId.Format(9UL, 3, MapTier.Large), model.Confirm());
-        Assert.Throws<InvalidOperationException>(() => model.SelectTier(MapTier.Small));
+        Assert.Equal(LinkMapId.Format(9UL, 3), model.Confirm());
+        Assert.Throws<InvalidOperationException>(() => model.SelectTier(MapTier.Large));
         Assert.Throws<ArgumentOutOfRangeException>(() => new MapSelectModel(1UL).SelectTier((MapTier)7));
+    }
+
+    [Fact]
+    public void 尺寸文案_大图在前_小图标旧模式()
+    {
+        // large-default 裁决 2 / 3：小图显示名带"旧模式"、大图显示名不变；尺寸提示先大后小；小图开头说明从 Hud 内联文案搬入 Labels、原文不变（座位盲选口径）。
+        Assert.Equal("小（浮空岛，旧模式）", Labels.TierName(MapTier.Small));
+        Assert.StartsWith("大（", Labels.TierName(MapTier.Large), StringComparison.Ordinal);
+        Assert.Equal(["大（150×150）", "小（浮空岛，旧模式）"], MapSelectModel.TierOptions.Select(Labels.TierName));
+        Assert.StartsWith("大：", Labels.TierHint, StringComparison.Ordinal);
+        Assert.True(Labels.TierHint.IndexOf("大：", StringComparison.Ordinal) < Labels.TierHint.IndexOf("小：", StringComparison.Ordinal));
+        Assert.Contains("旧模式", Labels.TierHint, StringComparison.Ordinal);
+        Assert.StartsWith("大图：", Labels.LargeMapIntro, StringComparison.Ordinal);
+        Assert.Equal($"{Labels.SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。", Labels.SmallMapIntro);
     }
 }

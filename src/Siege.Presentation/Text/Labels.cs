@@ -126,13 +126,17 @@ public static class Labels
     public static string FlagLayout =>
         $"全图任一合规格都可插旗，旗与旗之间至少隔 {Core.Match.FlagRules.FlagGap} 格；锁定后旗帜周围 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 是构筑范围、{Core.Match.FlagRules.BirthRingSide}×{Core.Match.FlagRules.BirthRingSide} 是出生圈";
 
-    /// <summary>新局界面尺寸选项的显示名（big-map 裁决 11）：小 = 浮空岛、大 = 150×150 大陆；边长只取生成器常量。</summary>
+    /// <summary>新局界面尺寸选项的显示名（big-map 裁决 11 / large-default 裁决 2）：大 = 150×150 大陆、小 = 浮空岛（标"旧模式"）；边长只取生成器常量。</summary>
     public static string TierName(Core.Board.MapTier tier) =>
-        tier == Core.Board.MapTier.Large ? $"大（{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}）" : "小（浮空岛）";
+        tier == Core.Board.MapTier.Large ? $"大（{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}）" : "小（浮空岛，旧模式）";
 
-    /// <summary>新局界面的尺寸说明一行（选图界面不直接引用生成器与规则常量，经这里取）。</summary>
+    /// <summary>新局界面的尺寸说明一行（选图界面不直接引用生成器与规则常量，经这里取）；先写大图、后写小图（large-default 裁决 3）。</summary>
     public static string TierHint =>
-        $"小：浮空岛、座位盲选；大：{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide} 大陆、全图自由插旗、第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合到点按势力结算。";
+        $"大：{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide} 大陆、全图自由插旗、第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合到点按势力结算；小：浮空岛、座位盲选（旧模式）。";
+
+    /// <summary>新局界面选小图（旧模式）时的开头说明：座位盲选口径（原 Hud 内联文案逐字搬入，large-default 裁决 3）。</summary>
+    public static string SmallMapIntro =>
+        $"{SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。";
 
     /// <summary>新局界面选大图时的开头说明。</summary>
     public static string LargeMapIntro =>
