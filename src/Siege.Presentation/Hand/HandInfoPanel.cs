@@ -54,8 +54,14 @@ public sealed record StructureView(ParameterView RevealCount, ParameterView Free
     }
 }
 
-/// <summary>自己区域的一行：类型、准确数量、其中本轮新征募尚未提交的数量。</summary>
-public sealed record OwnHandRowView(PieceType Type, string Name, int Count, int PendingGained, string Text);
+/// <summary>
+/// 自己区域的一行：类型、准确数量、其中本轮新征募尚未提交的数量，以及该类棋子的效果一句（<see cref="EffectText"/>，
+/// 与征募面板候选行第二行同一份 <see cref="Labels.PieceEffect"/>——hand-effects：手牌处也能看到每类棋子有什么用）。
+/// </summary>
+public sealed record OwnHandRowView(PieceType Type, string Name, int Count, int PendingGained, string Text, string EffectText);
+
+/// <summary>敌方区域的一行：<b>只有类型</b>（类型、名称与该类棋子的效果一句），没有数量——效果文案对全体公开，不泄露任何私有信息。</summary>
+public sealed record OpponentHandRowView(PieceType Type, string Name, string EffectText);
 
 /// <summary>
 /// 自己的区域（§14.3）：类型、准确数量、槽位占用、本轮新征募未提交数量、公开结构参数。数据来自本人的 <see cref="HandPrivateView"/>。
@@ -80,6 +86,7 @@ public sealed record OpponentHandAreaView(
     PlayerId Player,
     ImmutableArray<PieceType> Types,
     ImmutableArray<string> TypeNames,
+    ImmutableArray<OpponentHandRowView> Rows,
     StructureView? Structure,
     PlayerStatus Status,
     bool IsActing,
@@ -107,6 +114,7 @@ public sealed record HandInfoPanelView(OwnHandAreaView Own, ImmutableArray<Oppon
             player,
             [.. hand.Types],
             [.. hand.Types.Select(Labels.Piece)],
+            [.. hand.Types.Select(t => new OpponentHandRowView(t, Labels.Piece(t), Labels.PieceEffect(t)))],
             StructureView.From(world.Supplement.Structures.FirstOrDefault(s => s.Player == player)),
             state.Status,
             hand.IsActing && state.IsActive,
@@ -124,7 +132,8 @@ public sealed record HandInfoPanelView(OwnHandAreaView Own, ImmutableArray<Oppon
             [.. hand.Entries.Select(kv => new OwnHandRowView(kv.Key, Labels.Piece(kv.Key), kv.Value.Total, kv.Value.Gained,
                 kv.Value.Gained > 0
                     ? $"{Labels.Piece(kv.Key)} ×{kv.Value.Total}（其中 {kv.Value.Gained} 枚为本轮新征募）"
-                    : $"{Labels.Piece(kv.Key)} ×{kv.Value.Total}"))],
+                    : $"{Labels.Piece(kv.Key)} ×{kv.Value.Total}",
+                Labels.PieceEffect(kv.Key)))],
             hand.OccupiedSlots,
             slots,
             slots is int s ? Math.Max(0, s - hand.OccupiedSlots) : null,
