@@ -165,3 +165,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 - **WHEN** 给一张手写测试夹具地图补上与出生区一致的棋盘清单，前后两次在相同种子下执行同一组批次
 - **THEN** 每一步的盘面、提子与势力值逐项相同
 
+#### Scenario: 信物遗址清单读写往返
+- **WHEN** 把一张大图导出为文件再读入；把一张小图导出为文件
+- **THEN** 大图文件含遗址清单字段（每项格 + 档位 `Rare` / `Common`），读回后清单逐项相同、摘要相同，档位写成别的取值拒绝加载并指出该项；小图文件没有该字段，读回后清单为空（relic-sites 裁决 6；清单的数量 / 位置 / 距离规则在 `link-map-generation`「大图信物遗址」）
+

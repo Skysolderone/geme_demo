@@ -178,6 +178,12 @@ public sealed record DefaultBoardView(
     public MapTier Tier { get; init; } = MapTier.Small;
 
     /// <summary>
+    /// 信物遗址清单（relic-sites 裁决 6 / 10）：原样取自地图数据的 <see cref="MapData.RelicSites"/>（格 + 档位），静态、开局固定，不随对局变化、不进 <see cref="LayoutKey"/>。
+    /// 渲染层据此在缩略 / 小地图上画稀有星 / 普通点、在 3D 场景放石碑；小图恒为空。Godot 不直接读地图，只读这里。
+    /// </summary>
+    public ImmutableArray<RelicSite> RelicSites { get; init; } = [];
+
+    /// <summary>
     /// 当前预告批次的落位大回合（relic-redesign R11 / R25：预告格标记写"种类 + 落位大回合"）；没有预告时为 <c>null</c>。
     /// 全部 <see cref="RelicMarker.Forecast"/> 格同属这一批（Core 一次只有一批预告），所以放在棋盘上而不是逐格重复。原样取自公开快照的 <c>RelicForecast.LandingRound</c>。
     /// </summary>
@@ -360,6 +366,7 @@ public sealed record DefaultBoardView(
         {
             RelicForecastRound = world.View.RelicForecast?.LandingRound,
             Tier = world.View.Tier,
+            RelicSites = board.Map.RelicSites.IsDefault ? [] : board.Map.RelicSites,
         };
     }
 }

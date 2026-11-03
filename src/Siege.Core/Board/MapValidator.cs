@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Board;
 
@@ -206,6 +207,7 @@ public static class MapValidator
             return new MapValidationResult(f.ToImmutable());
         }
 
+        ValidateRelicSites(map, tier, f);
         ValidateTerrainBounds(map, f);
         ValidatePlayableCount(map, budget, f);
         ValidateBudgets(map, rules, budget, f);
@@ -660,6 +662,78 @@ public static class MapValidator
                 "NEUTRAL_PLATE_COUNT",
                 $"{map.MaxPlayers} 人地图的中立平台为 {neutral} 块，超出 {budget.NeutralPlates.Min}–{budget.NeutralPlates.Max} 区间。",
                 ImmutableArray<Coord>.Empty));
+        }
+    }
+
+    /// <summary>
+    /// 信物遗址清单（relic-sites 裁决 6 / 7 / 9）：小图 MUST 为空（<c>RELIC_SITES_FORBIDDEN</c>）；大图稀有恰 ⌈n/2⌉、普通恰 n+2（<c>RELIC_SITE_COUNT</c>），
+    /// 每处都满足 <see cref="RelicSites.IsSiteGround"/>（可落子、高度 0 且八邻可落子，追加裁决 13）且不重复（<c>RELIC_SITE_GROUND</c>），两两切比雪夫距离 ≥ 20（<c>RELIC_SITE_GAP</c>），
+    /// 不在任何出生棋盘内（<c>RELIC_SITE_IN_BIRTH</c>——落座图也过这条校验；合规旗格与遗址 ≥ 7 保证 13×13 盖不住遗址，这里是兜底）。
+    /// </summary>
+    private static void ValidateRelicSites(MapData map, MapTier tier, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        ImmutableArray<RelicSite> sites = map.RelicSites.IsDefault ? [] : map.RelicSites;
+        if (tier != MapTier.Large)
+        {
+            if (!sites.IsEmpty)
+            {
+                f.Add(new MapValidationFailure(
+                    "RELIC_SITES_FORBIDDEN",
+                    $"小图带了 {sites.Length} 处信物遗址：只有大图有信物遗址，小图的清单必须为空。",
+                    [.. sites.Select(s => s.Cell)]));
+            }
+
+            return;
+        }
+
+        int rare = RelicSites.CountOf(sites, RelicTier.Rare);
+        int common = RelicSites.CountOf(sites, RelicTier.Common);
+        if (rare != RelicSites.RareCount(map.MaxPlayers) || common != RelicSites.CommonCount(map.MaxPlayers))
+        {
+            f.Add(new MapValidationFailure(
+                "RELIC_SITE_COUNT",
+                $"{map.MaxPlayers} 人大图的信物遗址为稀有 {rare} / 普通 {common} 处，应为稀有 {RelicSites.RareCount(map.MaxPlayers)} / 普通 {RelicSites.CommonCount(map.MaxPlayers)} 处。",
+                [.. sites.Select(s => s.Cell)]));
+        }
+
+        var seen = new HashSet<Coord>();
+        ImmutableArray<Coord> bad = [.. sites.Where(s => !seen.Add(s.Cell) || !RelicSites.IsSiteGround(map, s.Cell)).Select(s => s.Cell)];
+        if (!bad.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "RELIC_SITE_GROUND",
+                $"信物遗址 {string.Join(" ", bad.Select(c => c.ToNotation()))} 不合位置规则：每处须是高度 0 的可落子格（低地）、八邻都可落子（不贴岸线、岩石与深水），且不重复。",
+                bad));
+        }
+
+        var close = new List<Coord>();
+        for (int i = 0; i < sites.Length; i++)
+        {
+            for (int j = i + 1; j < sites.Length; j++)
+            {
+                if (RelicSites.Distance(sites[i].Cell, sites[j].Cell) < RelicSites.UncalibratedSiteGap)
+                {
+                    close.Add(sites[i].Cell);
+                    close.Add(sites[j].Cell);
+                }
+            }
+        }
+
+        if (close.Count > 0)
+        {
+            f.Add(new MapValidationFailure(
+                "RELIC_SITE_GAP",
+                $"信物遗址 {string.Join(" ", close.Distinct().Order().Select(c => c.ToNotation()))} 两两切比雪夫距离不足 {RelicSites.UncalibratedSiteGap}。",
+                [.. close.Distinct().Order()]));
+        }
+
+        ImmutableArray<Coord> covered = [.. sites.Where(s => map.BirthBoardAt(s.Cell) is not null).Select(s => s.Cell)];
+        if (!covered.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "RELIC_SITE_IN_BIRTH",
+                $"信物遗址 {string.Join(" ", covered.Select(c => c.ToNotation()))} 落在出生棋盘内：旗心与任一遗址须相距 ≥ {RelicSites.FlagClearance}。",
+                covered));
         }
     }
 

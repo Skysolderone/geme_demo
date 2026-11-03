@@ -29,14 +29,37 @@ large-default（11-02，合并 74387c02）后新局面板默认大图并显示�
 
 ## 验收
 ### 段 A
-- [ ] `MapData` 有遗址清单（格 + 档位），`MapFile` 读写往返一致；小图清单为空且文件字节不变。
-- [ ] 大图 4 人生成稀有 2 / 普通 6，两两距离 ≥ 20，全在可落子格；`MapValidator` 校验遗址规则（数量、距离、位置）。
-- [ ] 大图刷新只落遗址，档位对应，每批稀有 ≤ 1；小图刷新序列与改前逐位相同。
-- [ ] `FlagRules.IsLegalFlagCell` 大图拒绝与遗址距离 < 7 的旗心；AI 盲抽结果合规。
-- [ ] Sim `map --map link:7:4:l` 输出遗址清单；`run` 大图日志含遗址；回放通过。
-- [ ] 快速测试集全绿；小图导出 / 日志与 main 字节一致。
+- [x] `MapData` 有遗址清单（格 + 档位），`MapFile` 读写往返一致；小图清单为空且文件字节不变。
+- [x] 大图 4 人生成稀有 2 / 普通 6，两两距离 ≥ 20，全在可落子格；`MapValidator` 校验遗址规则（数量、距离、位置）。
+- [x] 大图刷新只落遗址，档位对应，每批稀有 ≤ 1；小图刷新序列与改前逐位相同。
+- [x] `FlagRules.IsLegalFlagCell` 大图拒绝与遗址距离 < 7 的旗心；AI 盲抽结果合规。
+- [x] Sim `map --map link:7:4:l` 输出遗址清单；`run` 大图日志含遗址；回放通过。
+- [x] 快速测试集全绿；小图导出 / 日志与 main 字节一致。
 ### 段 B
-- [ ] 新局面板大图：缩略可点格插旗、悬停 13×13 绿 / 红框 + 坐标、开始按钮禁用 / 启用逻辑、换种子清空。
-- [ ] 点"插旗并开始"直接进构筑期，本机旗在所点格；小图与 `--map=` 直接开局路径不变。
-- [ ] 缩略 / 小地图 / 3D 场景遗址标记按裁决 10；小图截图像素一致。
-- [ ] Godot 自检覆盖面板插旗；Godot 工程 0 错误。
+- [x] 新局面板大图：缩略可点格插旗、悬停 13×13 绿 / 红框 + 坐标、开始按钮禁用 / 启用逻辑、换种子清空。
+- [x] 点"插旗并开始"直接进构筑期，本机旗在所点格；小图与 `--map=` 直接开局路径不变。
+- [x] 缩略 / 小地图 / 3D 场景遗址标记按裁决 10；小图截图像素一致。
+- [x] Godot 自检覆盖面板插旗；Godot 工程 0 错误。
+
+## 实施结果 段 A（2026-11-03）
+- 实施 + 验收各一名 agent。新 `Board/RelicSite.cs`（口径唯一：稀有 ⌈n/2⌉、普通 n+2、间距 20、旗距 7）、`Maps/LinkMapGenerator.Sites.cs`（子流 `map-link-relic-sites`，仅大图派生）、`MapValidator.ValidateRelicSites` 5 种失败码；`RelicSpawner.ForecastOnSites` / `Drop` 大图只落空遗址，小图 `Candidates` / `DrawKind` 序列逐位不变；`FlagRules.FlagCellProblem` 返回中文原因供面板提示。
+- 小图零变化实证：`link:1:4` 导出 cmp 相同、60 小回合日志除计时键外逐字节相同、15 条决策基线绿；黄金值用主目录改前程序集复算一致。
+- 快速全集 2055 过 / 1 败 / 10 跳，唯一失败 `大图档Tests.种子1到20的大图` 1 s 计时断言并行负载抖动（单跑 0.2–0.9 s）；`[Collection]` 串行实验无效已回退。
+- 开放：遗址落在 h≥1 平台顶 / 坡道 33/400（8.25%），见追加裁决 13；计时断言处理见追加裁决 14。
+
+## 追加裁决（负责人 2026-11-03 全按建议通过）
+13. 遗址只落低地（高度 0）：`RelicSites.IsSiteGround` 加高度 0 条件；大图遗址清单随之变，小图不受影响。
+14. `大图档Tests.种子1到20的大图` 的 1 s 计时断言改为 Perf 门控（与现有 `Category=Perf` 同机制），快速全集不跑；预算不放宽。
+
+## 实施结果 段 B（2026-11-03）
+- 实施 + 验收各一名 agent（实施 agent 曾因主进程退出中断一次，从头重做）。新 `Presentation/MapSelect/FlagPickModel.cs`（面板插旗状态，只走 `FlagRules.FlagCellProblem`）、`DefaultBoardView.RelicSites`、`Labels.RelicSite/PickFlagHint/PlantAndStart`；Godot 新 `MapThumbnail.cs` 叠层（遗址金星 / 白点、悬停 13×13 绿红框、选中常显框，换算只经 `BoardGeometry`），`Hud.MapSelect` 读数行 + 按钮禁用 / "插旗并开始"，`GameRoot.MapSelect.PlantPendingFlag`（建局后 `ChooseCell` → 直接进构筑期，Supplying 时留到 `FinishSupply`，Core 拒绝退回 3D 插旗），`Minimap.DrawRelicSites` 缩略与小地图共用，`TerrainParts.Stele` 两档 + `parts/terrain_full_art/stele_0/1.tscn`，`BoardView` 遗址格挂区块节点随分块加载卸载。自检大图 12 步。
+- 追加裁决 13：`IsSiteGround` 加高度 0；14：1 s 断言改 `[PerfFact]`（SIEGE_PERF=1 三跑 1557 失败 / 812 / 644 通过）。
+- 验收修：`stele_*.tscn` 材质引用由 scratchpad 绝对路径改为 `res://`；`PreviewThumbnail` 大→小→大同标识命中缓存导致 `_previewBoard` 为 null 的死面板（重建条件补 `_previewBoard is null`，自检补断言，红证已做）；boundaries.md 口径。
+- 验证：快速全集 2062 过 / 0 败 / 11 跳；守门计数 9/2 不变；小图对局截图与新局面板小图截图均与主目录 cmp 相同；`--map=...:l` 直接开局仍走 3D 插旗；pick-check 2000/2000。
+- 未覆盖：带入带出开启时的面板插旗（FinishSupply）只代码走查；石碑跨分块卸载对账未实机；信息层开启下石碑常显未截图。
+- 待裁决：Perf 用例偶发 >1 s；石碑在开局距离下不显眼；石碑与格角点缀同角叠放。
+
+## 追加裁决（负责人 2026-11-03 全按建议通过）
+15. Perf 计时用例偶发 >1 s：接受偶发，用例加"最慢种子"记录行（标识 + 毫秒），预算不放宽。已做。
+16. 石碑在开局距离下不显眼：不改尺寸；下次画面任务给遗址加随距离缩放的悬浮标识，本次只记录。
+17. 石碑与格角点缀同角叠放：接受。

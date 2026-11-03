@@ -44,6 +44,12 @@ internal static class MapRandom
     internal static RandomStream ForLinkCoast(ulong mapSeed, int players, MapTier tier) => Create("map-link-coast", mapSeed, players, tier, LinkCoastDomain);
 
     /// <summary>
+    /// 信物遗址落位（relic-sites 裁决 6）的随机源：同一 (种子, 人数, 档位) 一侧、第四个域常量。只在大图生成末尾派生并消费（小图不派生、不消费），
+    /// 布局 / 岸线 / 新地表三条流的消费顺序与取值一步不动——大图同种子的地形与引入遗址之前逐格相同，只多出遗址清单。
+    /// </summary>
+    internal static RandomStream ForLinkRelicSites(ulong mapSeed, int players, MapTier tier) => Create("map-link-relic-sites", mapSeed, players, tier, LinkRelicSitesDomain);
+
+    /// <summary>
     /// (种子, 人数) 一侧先混合，再与该流的域常量异或；人数经一次独立混合进入，与种子的任何取值都不在同一位置上相消。
     /// big-map D1：只有大图在 (种子, 人数) 一侧之后再混一次档位常量——小图的 <c>side</c> 与引入档位之前逐位相同。
     /// </summary>
@@ -63,11 +69,12 @@ internal static class MapRandom
         return new RandomStream(name, s0, s1, s2, s3);
     }
 
-    /// <summary>域分隔常量：链接档的地图种子一侧一个，布局一侧、新地表叠加一侧与岸线一侧（map-coastline）各一个。</summary>
+    /// <summary>域分隔常量：链接档的地图种子一侧一个，布局一侧、新地表叠加一侧、岸线一侧（map-coastline）与信物遗址一侧（relic-sites）各一个。</summary>
     private const ulong LinkDomain = 0x17E3_B9A4_6C2D_F581UL;
     private const ulong LinkLayoutDomain = 0x8C4F_2A97_D5E6_031BUL;
     private const ulong LinkSurfacesDomain = 0x3B6D_E1F0_92A7_C458UL;
     private const ulong LinkCoastDomain = 0x6D91_4C2E_A7B3_58F0UL;
+    private const ulong LinkRelicSitesDomain = 0x4A27_9E58_C1B6_D3F2UL;
     private const ulong PlayersDomain = 0x5A1C_7E93_B04D_26F7UL;
 
     /// <summary>大图档位常量（big-map D1）：只在 <see cref="MapTier.Large"/> 混入，小图不读它。</summary>

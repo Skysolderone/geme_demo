@@ -6,6 +6,7 @@ using Siege.Core.Board;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Style;
 using Siege.Presentation.Text;
+using Siege.Presentation.Visibility;
 
 namespace Siege.Godot;
 
@@ -27,6 +28,10 @@ public sealed partial class Hud
     private PanelContainer? _selectPanel;
     private AspectRatioContainer? _mapThumbnailFrame;
     private TextureRect? _mapThumbnail;
+    private MapThumbnail? _mapThumbnailOverlay;
+    private Label? _mapHoverText;
+    private Label _mapStartHint = null!;
+    private Button _mapStart = null!;
     private LineEdit _mapSeedInput = null!;
     private Button _mapSeedApply = null!;
     private Button _mapReroll = null!;
@@ -51,6 +56,24 @@ public sealed partial class Hud
     /// <summary>点"开始"。</summary>
     public event Action? MapStartPressed;
 
+    /// <summary>指针悬停到大图缩略的某格（relic-sites 裁决 2）；离开缩略为 <c>null</c>。格由叠层经 <see cref="BoardGeometry.MinimapCellAt"/> 换算。</summary>
+    public event Action<Coord?>? MapThumbnailHovered;
+
+    /// <summary>在大图缩略上点了某格（relic-sites 裁决 1）。</summary>
+    public event Action<Coord>? MapThumbnailClicked;
+
+    /// <summary>"开始"按钮此刻是否可按（自检探针，relic-sites 裁决 3：大图未选格时禁用）。</summary>
+    public bool MapStartEnabled => _selectRoot is not null && !_mapStart.Disabled;
+
+    /// <summary>"开始"按钮此刻的文案（自检探针：选中格后为"插旗并开始"）。</summary>
+    public string MapStartText => _selectRoot is null ? string.Empty : _mapStart.Text;
+
+    /// <summary>某格格心在缩略叠层上的像素（自检用：反算已知合规格的像素，再经 <see cref="ClickThumbnail"/> 按点击路径送回）。</summary>
+    public Vector2 ThumbnailPixelOf(Coord cell) => _mapThumbnailOverlay?.PixelOfCell(cell) ?? default;
+
+    /// <summary>按像素点一下缩略（与鼠标左键同一条路径：叠层 → 唯一映射 → <see cref="MapThumbnailClicked"/>）。</summary>
+    public void ClickThumbnail(Vector2 pixel) => _mapThumbnailOverlay?.Click(pixel);
+
     /// <summary>新局面板此刻是否显示。</summary>
     public bool MapSelectOpen => _selectRoot is { Visible: true };
 
@@ -63,10 +86,12 @@ public sealed partial class Hud
     /// <summary>
     /// 显示 / 刷新新局面板，并隐藏对局面板。<paramref name="mapInfo"/> 是当前预览地图的一行说明（尺寸、出生棋盘数等，由主场景读棋盘视图模型给出）。
     /// <paramref name="thumbnail"/> 是大图整块大陆的像素缩略（large-default 裁决 4，由主场景经 <see cref="Minimap.BuildTerrain"/> 给出，放大居中盖在局部 3D 预览之上）；小图传 null，缩略隐藏、画面与改前相同。
+    /// <paramref name="thumbnailBoard"/> 是缩略对应的棋盘视图模型（尺寸与信物遗址清单，relic-sites 裁决 10），<paramref name="pick"/> 是面板插旗的状态（裁决 1–4：悬停 / 选中格、"开始"的可用性与文案）。
     /// </summary>
-    public void ShowMapSelect(MapSelectModel model, string mapInfo, Texture2D? thumbnail)
+    public void ShowMapSelect(MapSelectModel model, string mapInfo, Texture2D? thumbnail, DefaultBoardView? thumbnailBoard, FlagPickModel pick)
     {
         ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(pick);
         if (_selectRoot is null)
         {
             BuildMapSelect();
@@ -84,6 +109,16 @@ public sealed partial class Hud
         {
             _mapThumbnailFrame.Ratio = (float)thumbnail.GetWidth() / thumbnail.GetHeight();
         }
+
+        // 缩略叠层（relic-sites 裁决 1 / 2 / 10）：遗址标记、悬停框（合规绿 / 不合规红）、选中框；合规与否只问视图模型。小图不启用（thumbnail 为 null 时整块隐藏）。
+        _mapThumbnailOverlay!.Refresh(thumbnail is null ? null : thumbnailBoard, pick.Enabled, pick.Hover, pick.Hover is { } hover && pick.IsLegal(hover), pick.Picked, FlagPickModel.PlateReach);
+        _mapHoverText!.Text = pick.HoverReadout;
+        _mapHoverText.Visible = thumbnail is not null && pick.Enabled;
+        // "开始"（裁决 3）：大图未选格时禁用并提示"先在地图上点一格插旗"，选中后文案"插旗并开始"；小图照旧。
+        _mapStart.Disabled = !pick.CanStart;
+        _mapStart.Text = pick.StartText;
+        _mapStartHint.Text = pick.StartHint;
+        _mapStartHint.Visible = pick.StartHint.Length > 0;
 
         if (_mapSeedInput.Text != model.SeedText)
         {
@@ -137,6 +172,8 @@ public sealed partial class Hud
             _selectPanel = null;
             _mapThumbnailFrame = null;
             _mapThumbnail = null;
+            _mapThumbnailOverlay = null;
+            _mapHoverText = null;
             _difficultyButtons.Clear();
             _playerButtons.Clear();
             _tierButtons.Clear();
@@ -151,8 +188,8 @@ public sealed partial class Hud
         _selectRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_selectRoot);
 
-        // 大图整块大陆的缩略（large-default 裁决 4）：占面板右侧整片画幅，按位图宽高比取最大的居中矩形，底色与小地图同一份、像素图最近邻放大（每格一个像素，不糊）。
-        // 只搭一次、刷新时换纹理与显隐（自检每帧比对游离节点数，不能重建）；不接鼠标、不做任何像素 ↔ 格换算。面板在它之后加入，盖在上层。
+        // 大图整块大陆的缩略（large-default 裁决 4）：占面板右侧整片画幅（底部留一行给悬停读数），按位图宽高比取最大的居中矩形，底色与小地图同一份、像素图最近邻放大（每格一个像素，不糊）。
+        // 只搭一次、刷新时换纹理与显隐（自检每帧比对游离节点数，不能重建）。鼠标与像素 ↔ 格换算只在叠层 MapThumbnail（relic-sites 裁决 1，经 BoardGeometry 那一份映射）。面板在它之后加入，盖在上层。
         _mapThumbnailFrame = new AspectRatioContainer
         {
             Name = "MapThumbnail",
@@ -170,7 +207,7 @@ public sealed partial class Hud
         _mapThumbnailFrame.OffsetLeft = 388f;
         _mapThumbnailFrame.OffsetTop = 14f;
         _mapThumbnailFrame.OffsetRight = -14f;
-        _mapThumbnailFrame.OffsetBottom = -14f;
+        _mapThumbnailFrame.OffsetBottom = -48f;
         _mapThumbnailFrame.AddChild(new ColorRect { Color = Minimap.Backdrop, MouseFilter = Control.MouseFilterEnum.Ignore });
         _mapThumbnail = new TextureRect
         {
@@ -180,7 +217,26 @@ public sealed partial class Hud
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         _mapThumbnailFrame.AddChild(_mapThumbnail);
+        _mapThumbnailOverlay = new MapThumbnail { Name = "MapThumbnailOverlay" };
+        _mapThumbnailOverlay.CellHovered += cell => MapThumbnailHovered?.Invoke(cell);
+        _mapThumbnailOverlay.CellClicked += cell => MapThumbnailClicked?.Invoke(cell);
+        _mapThumbnailFrame.AddChild(_mapThumbnailOverlay);
         _selectRoot.AddChild(_mapThumbnailFrame);
+
+        // 缩略下方一行：悬停格的坐标与合规 / 不合规原因（或"先在地图上点一格插旗"），文案全部来自视图模型（relic-sites 裁决 2）。
+        _mapHoverText = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx, wrap: true);
+        _mapHoverText.HorizontalAlignment = HorizontalAlignment.Center;
+        _mapHoverText.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _mapHoverText.AnchorLeft = 0f;
+        _mapHoverText.AnchorTop = 1f;
+        _mapHoverText.AnchorRight = 1f;
+        _mapHoverText.AnchorBottom = 1f;
+        _mapHoverText.OffsetLeft = 388f;
+        _mapHoverText.OffsetTop = -44f;
+        _mapHoverText.OffsetRight = -14f;
+        _mapHoverText.OffsetBottom = -10f;
+        _mapHoverText.Visible = false;
+        _selectRoot.AddChild(_mapHoverText);
 
         // 面板靠左：背景是当前地图各块出生平台的占位，地图主体在画面中央，不去挡它。
         (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 6);
@@ -271,9 +327,12 @@ public sealed partial class Hud
         body.AddChild(Ui.Text($"命令行加 --difficulty=<{AiDifficultyNames.Usage}> 可预选难度。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
-        Button start = Ui.Action("开始");
-        Ui.Primary(start);
-        start.Pressed += () => MapStartPressed?.Invoke();
-        body.AddChild(start);
+        _mapStartHint = Ui.Text(string.Empty, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true);
+        _mapStartHint.Visible = false;
+        body.AddChild(_mapStartHint);
+        _mapStart = Ui.Action("开始");
+        Ui.Primary(_mapStart);
+        _mapStart.Pressed += () => MapStartPressed?.Invoke();
+        body.AddChild(_mapStart);
     }
 }

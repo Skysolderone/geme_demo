@@ -5,6 +5,7 @@ namespace Siege.Core.Board;
 /// <summary>
 /// 地图静态数据。地形、障碍与出生区由地图固定，MUST NOT 参与对局随机；地图上没有静态信物格
 /// （relic-redesign D4：信物改由对局中途按对局种子刷新，见 <c>PieceRelics.RelicSpawner</c>）。
+/// relic-sites 裁决 6 起大图另带<b>信物遗址</b>清单（<see cref="RelicSites"/>：固定的格 + 档位，不是信物本身）——信物仍由对局中途刷新，只是大图上只落在空着的遗址格。
 /// </summary>
 /// <remarks>规格：openspec/changes/add-board-core/specs/map-definition；地形字段见 openspec/changes/terrain-model/specs/terrain</remarks>
 public sealed record MapData
@@ -50,6 +51,13 @@ public sealed record MapData
     /// 只用于静态校验与呈现，对局规则不读它；标准档与边疆档地图的清单必须为空。
     /// </summary>
     public ImmutableArray<BoardPlate> Boards { get; init; } = [];
+
+    /// <summary>
+    /// 信物遗址清单（relic-sites 裁决 6 / 7），缺省为空。大图由生成器用独立子流 <c>map-link-relic-sites</c> 写入稀有 ⌈n/2⌉ + 普通 n+2 处（两两切比雪夫距离 ≥ 20，只在可落子格、不贴岸线与障碍）；
+    /// 小图 MUST 为空（导出文件不写该段，逐字节不变）。消费方：大图信物刷新 / 掉落只落空着的遗址格（<c>PieceRelics.RelicSpawner</c>）、旗心与任一遗址 ≥ 7（<c>Match.FlagRules</c>）、
+    /// 校验器查数量 / 档位 / 距离 / 位置；气、提子、覆盖、势力与 AI 不读它（裁决 11）。落座图经 <c>with</c> 原样保留。
+    /// </summary>
+    public ImmutableArray<RelicSite> RelicSites { get; init; } = [];
 
     /// <summary>
     /// 地图版本号：恒为 0（open-map 裁决 O3：地图在对局中不再变化；对局中增长的路径已随拼接规则删除）。

@@ -138,8 +138,22 @@ public static class RelicSpawner
     }
 
     /// <summary>
+    /// 大图（relic-sites 裁决 8）刷新 / 掉落的候选：<b>空着的遗址</b>——格上无棋子、无信物、不在出生区域内的 <see cref="MapData.RelicSites"/>，按坐标字典序。
+    /// 不查"离棋子 ≥ 2"（遗址是固定地标，被占即跳过）。小图不经这里。
+    /// </summary>
+    public static ImmutableArray<RelicSite> SiteCandidates(GameBoard board, IBirthArea birth)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(birth);
+        return [.. board.Map.RelicSites
+            .Where(s => board[s.Cell].IsPlayableEmpty && board.RelicAt(s.Cell) is null && !birth.IsBirthArea(s.Cell))
+            .OrderBy(s => s.Cell)];
+    }
+
+    /// <summary>
     /// 预告（R11）：<paramref name="majorRound"/> 不是预告轮时返回 <c>null</c>；否则用子流 <c>relic-spawn:&lt;落位大回合&gt;</c> 一次抽完本批——
     /// 件数见 <see cref="BatchSize"/>，逐件先不放回抽格、再抽种类。候选格不足时本批只有候选格那么多件。
+    /// 大图（<see cref="MapTier.Large"/>，relic-sites 裁决 8）按 <see cref="ForecastOnSites"/>：只落空着的遗址、档位随遗址、每批稀有至多 1 处；小图路径逐位不变。
     /// </summary>
     /// <param name="board">预告时（该大回合开始时）的盘面。</param>
     /// <param name="birth">出生区域。</param>
@@ -163,6 +177,11 @@ public static class RelicSpawner
             return new RelicForecast(landing, []);
         }
 
+        if (board.Map.Tier == MapTier.Large)
+        {
+            return ForecastOnSites(board, birth, seed, landing, count);
+        }
+
         List<Coord> pool = [.. Candidates(board, birth)];
         RandomStream stream = seed.Stream(GameSeed.RelicSpawn(landing));
         ImmutableArray<RelicSpawnSlot>.Builder slots = ImmutableArray.CreateBuilder<RelicSpawnSlot>(count);
@@ -172,6 +191,31 @@ public static class RelicSpawner
             Coord cell = pool[pick];
             pool.RemoveAt(pick);
             slots.Add(new RelicSpawnSlot(cell, DrawKind(stream)));
+        }
+
+        return new RelicForecast(landing, slots.ToImmutable());
+    }
+
+    /// <summary>
+    /// 大图的一批（relic-sites 裁决 8）：候选 = <see cref="SiteCandidates"/>；同一条子流 <c>relic-spawn:&lt;落位大回合&gt;</c>，逐件 <c>NextInt(剩余候选数)</c> 不放回抽遗址，
+    /// 种类按该遗址的档位抽（稀有遗址只出稀有件、普通遗址只出普通件，档内等权——与小图 <see cref="DrawKind"/> 抽中档位之后的那一步相同；大图不做 85 / 15 抽档）；
+    /// 抽中一处稀有遗址后把其余稀有遗址移出本批候选（每批稀有至多 1 处）。空遗址不足时本批只有那么多件。
+    /// </summary>
+    private static RelicForecast ForecastOnSites(GameBoard board, IBirthArea birth, GameSeed seed, int landing, int count)
+    {
+        List<RelicSite> pool = [.. SiteCandidates(board, birth)];
+        RandomStream stream = seed.Stream(GameSeed.RelicSpawn(landing));
+        ImmutableArray<RelicSpawnSlot>.Builder slots = ImmutableArray.CreateBuilder<RelicSpawnSlot>(count);
+        for (int k = 0; k < count && pool.Count > 0; k++)
+        {
+            int pick = stream.NextInt(pool.Count);
+            RelicSite site = pool[pick];
+            pool.RemoveAt(pick);
+            slots.Add(new RelicSpawnSlot(site.Cell, DrawKindOf(stream, site.Tier)));
+            if (site.Tier == RelicTier.Rare)
+            {
+                pool.RemoveAll(s => s.Tier == RelicTier.Rare);
+            }
         }
 
         return new RelicForecast(landing, slots.ToImmutable());
@@ -204,6 +248,7 @@ public static class RelicSpawner
     /// <summary>
     /// R17 掉落：出局 / 弃赛者 <paramref name="player"/> 手里未挂出的非保险带入件，按与刷新相同的候选规则、用子流 <c>relic-drop:&lt;玩家编号&gt;</c>
     /// 逐件（按编号升序）不放回抽格，立即落位；不占刷新上限。候选格不足时多出的件不落位（视为消失）。不改盘面。
+    /// 大图（relic-sites 裁决 8）候选同样只有空着的遗址（<see cref="SiteCandidates"/>，不分档位——掉的是带入件，种类已定）；没有空遗址即消失。
     /// 传入保险件或别人带入的件即抛 <see cref="ArgumentException"/>——保险件归还原主，不掉落（R6 / D6）。
     /// </summary>
     public static ImmutableArray<BoardRelic> Drop(GameBoard board, IBirthArea birth, GameSeed seed, PlayerId player, IEnumerable<RelicToken> items)
@@ -225,7 +270,9 @@ public static class RelicSpawner
             return ImmutableArray<BoardRelic>.Empty;
         }
 
-        List<Coord> pool = [.. Candidates(board, birth)];
+        List<Coord> pool = board.Map.Tier == MapTier.Large
+            ? [.. SiteCandidates(board, birth).Select(s => s.Cell)]
+            : [.. Candidates(board, birth)];
         RandomStream stream = seed.Stream(GameSeed.RelicDrop(player.Value));
         ImmutableArray<BoardRelic>.Builder dropped = ImmutableArray.CreateBuilder<BoardRelic>();
         foreach (RelicToken token in ordered)
@@ -243,12 +290,18 @@ public static class RelicSpawner
         return dropped.ToImmutable();
     }
 
-    /// <summary>抽一件的种类：先按 85 / 15 加权抽档位，普通再从四种里等权抽一种（R12，未校准）。</summary>
+    /// <summary>抽一件的种类（小图）：先按 85 / 15 加权抽档位，普通再从四种里等权抽一种（R12，未校准）。</summary>
     private static RelicKind DrawKind(RandomStream stream)
     {
         ReadOnlySpan<int> weights = [RelicKinds.UncalibratedCommonWeight, RelicKinds.UncalibratedRareWeight];
-        ImmutableArray<RelicKind> tier = stream.WeightedPick(weights) == 0 ? RelicKinds.Common : RelicKinds.Rare;
-        return tier.Length == 1 ? tier[0] : tier[stream.NextInt(tier.Length)];
+        return DrawKindOf(stream, stream.WeightedPick(weights) == 0 ? RelicTier.Common : RelicTier.Rare);
+    }
+
+    /// <summary>档位已定时抽一件的种类：档内只有一种即不消费，否则等权 <c>NextInt(种数)</c>（小图抽中档位后的那一步、大图按遗址档位，同一实现）。</summary>
+    private static RelicKind DrawKindOf(RandomStream stream, RelicTier tier)
+    {
+        ImmutableArray<RelicKind> kinds = tier == RelicTier.Common ? RelicKinds.Common : RelicKinds.Rare;
+        return kinds.Length == 1 ? kinds[0] : kinds[stream.NextInt(kinds.Length)];
     }
 
     private static void RequirePlayerCount(int playerCount)

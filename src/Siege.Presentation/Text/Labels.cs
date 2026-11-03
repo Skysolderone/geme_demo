@@ -142,6 +142,15 @@ public static class Labels
     public static string LargeMapIntro =>
         $"大图：{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide} 大陆，{FlagLayout}；第 4 大回合起全图开战，第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合到点按势力结算。地图由地图种子、人数与尺寸决定。";
 
+    /// <summary>信物遗址的档位名（relic-sites 裁决 10）：缩略 / 小地图悬停与 3D 标注共用。</summary>
+    public static string RelicSite(RelicTier tier) => tier == RelicTier.Rare ? "稀有信物遗址" : "普通信物遗址";
+
+    /// <summary>新局面板大图未选格时"开始"旁的提示（relic-sites 裁决 3）。</summary>
+    public static string PickFlagHint => "先在地图上点一格插旗";
+
+    /// <summary>新局面板大图选中格之后"开始"按钮的文案（relic-sites 裁决 3）。</summary>
+    public static string PlantAndStart => "插旗并开始";
+
     /// <summary>大图插旗阶段的构筑期说明（big-map 裁决 5）：前三个大回合限在旗帜周围 13×13 落子、改造。</summary>
     public static string FlagBuildHint =>
         $"前三个大回合限在旗帜周围 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 落子、改造；\n第四回合起可在全图行动（含中立平台）。\n全员整轮 Pass、只剩一人，\n或到第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合按势力结算时终局。";

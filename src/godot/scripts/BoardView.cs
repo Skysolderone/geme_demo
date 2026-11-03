@@ -5,6 +5,7 @@ using System.Linq;
 using Godot;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Layers;
@@ -327,6 +328,8 @@ public sealed partial class BoardView : Node3D
             return kind;
         }
 
+        // 信物遗址（relic-sites 裁决 10）：格 → 档位，只读视图模型的清单；小图清单为空。
+        Dictionary<Coord, RelicTier> siteTier = board.RelicSites.IsDefaultOrEmpty ? [] : board.RelicSites.ToDictionary(s => s.Cell, s => s.Tier);
         int variant = 0;
         int boardRocks = 0;
         int[] patchCells = new int[3];
@@ -527,6 +530,15 @@ public sealed partial class BoardView : Node3D
 
                     sink.Parts.Add(Decor(TerrainParts.Flower, cell.Coord), flower, center, sink.Decoration);
                 }
+            }
+
+            if (playable && siteTier.TryGetValue(cell.Coord, out RelicTier tier))
+            {
+                // 信物遗址石碑（relic-sites 裁决 10）：常显、不随信息层压暗——挂在地砖容器（流式下即区块节点，随区块加载 / 卸载）而不是装饰层 / 合批集；稀有档带金顶。
+                // 小图没有遗址，一个节点都不多。
+                Node3D stele = TerrainParts.Create(Decor(TerrainParts.Stele, cell.Coord), tier == RelicTier.Rare ? 1 : 0);
+                stele.Position = center;
+                sink.Tiles.AddChild(stele);
             }
 
             // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。

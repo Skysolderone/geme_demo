@@ -10,7 +10,8 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 /// <summary>
 /// 规格：openspec/specs/link-map-generation —— Requirement: 档位 / 大图档布局（big-map 裁决 3 / 11 / 12，D1 / D2）。
 /// 种子 1–20 × 2 / 3 / 4 人的大图：外接矩形 150×150（画布 154×154）、可落子格在校验器大图行的区间内、非可落子占外接矩形 25%–35%、出生座位 0、中立平台 14–18、
-/// 全图可落子格沿气边连通（校验通过）、合规旗格 ≥ 可落子格的 50%、单张生成 ≤ 1 s（Release）；三段标识 = <c>:s</c>；大图与小图不同构。
+/// 全图可落子格沿气边连通（校验通过）、合规旗格 ≥ 可落子格的 50%；三段标识 = <c>:s</c>；大图与小图不同构。
+/// 单张生成 ≤ 1 s（Release）的计时断言在 <see cref="种子1到20的大图单张生成在预算内"/>（relic-sites 追加裁决 14：Perf 门控，与 <c>Category=Perf</c> 同机制，快速全集不跑、预算不放宽）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 A 实跑，mutate.py，备份 → 改 → 跑 → 逐字节还原 → 刷新时间戳）：
@@ -76,10 +77,45 @@ public class 大图档Tests(ITestOutputHelper output)
 
         playable.Sort();
         elapsed.Sort();
+        // 耗时只记录（追加裁决 14：并行负载下的计时抖动不进快速集），断言见 种子1到20的大图单张生成在预算内。
         output.WriteLine($"可落子 最小 {playable[0]} 中位 {playable[playable.Count / 2]} 最大 {playable[^1]}；非可落子占比 {shares.Min()}–{shares.Max()}%；合规旗格占比 {flagShares.Min()}–{flagShares.Max()}%；耗时 最小 {elapsed[0]} 中位 {elapsed[elapsed.Count / 2]} 最大 {elapsed[^1]} ms");
+    }
+
+    [Siege.Core.Tests.LifeShape.PerfFact]
+    [Trait("Category", "Perf")]
+    public void 种子1到20的大图单张生成在预算内()
+    {
+        // 预算：单张 ≤ 1 s（Release，裁决 12）；追加裁决 14 从快速集搬出（并行跑时单跑 0.2–0.9 s 的生成会被负载抖到 1 s 以上），设 SIEGE_PERF=1 按 Category=Perf 单独跑，预算不放宽。
+        // 按人数各预热一张（JIT 与每种人数首张的一次性开销：追加裁决 15 的记录行抓到只预热 4 人时最慢恒为 link:1:2:l），计时只看之后的 60 张；每张绕过缓存重新生成。
+        foreach (int players in new[] { 2, 3, 4 })
+        {
+            _ = LinkMapGenerator.GenerateDetailed(999, players, MapTier.Large);
+        }
+
+        var elapsed = new List<long>();
+        // 追加裁决 15：记录最慢的那张（标识 + 毫秒），偶发超预算时能直接复现，不放宽预算。
+        (string Id, long Ms) slowest = (string.Empty, -1);
+        foreach (int players in new[] { 2, 3, 4 })
+        {
+            for (ulong seed = 1; seed <= 20; seed++)
+            {
+                var sw = Stopwatch.StartNew();
+                _ = LinkMapGenerator.GenerateDetailed(seed, players, MapTier.Large);
+                sw.Stop();
+                elapsed.Add(sw.ElapsedMilliseconds);
+                if (sw.ElapsedMilliseconds > slowest.Ms)
+                {
+                    slowest = (LinkMapId.Format(seed, players, MapTier.Large), sw.ElapsedMilliseconds);
+                }
+            }
+        }
+
+        elapsed.Sort();
+        output.WriteLine($"耗时 最小 {elapsed[0]} 中位 {elapsed[elapsed.Count / 2]} 最大 {elapsed[^1]} ms；最慢 {slowest.Id} {slowest.Ms} ms");
 #if !DEBUG
-        // 预算：单张 ≤ 1 s（Release，裁决 12）。Debug 下只记录。
-        Assert.True(elapsed[^1] <= 1000, $"大图单张生成最慢 {elapsed[^1]} ms，超出 1 s 预算。");
+        Assert.True(elapsed[^1] <= 1000, $"大图单张生成最慢 {slowest.Id} {slowest.Ms} ms，超出 1 s 预算。");
+#else
+        output.WriteLine("Debug 构建只记录，不断言。");
 #endif
     }
 

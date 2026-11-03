@@ -938,7 +938,8 @@ public sealed partial class GameRoot : Node3D
 
         if (Selecting)
         {
-            _hud.ShowMapSelect(_select!, PreviewInfo(), PreviewThumbnail());
+            // PreviewThumbnail 先于 _previewBoard 求值（参数自左向右）：两者按标识一起缓存。
+            _hud.ShowMapSelect(_select!, PreviewInfo(), PreviewThumbnail(), _previewBoard, _pick);
             return;
         }
 
