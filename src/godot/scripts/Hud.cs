@@ -230,6 +230,8 @@ public sealed partial class Hud : CanvasLayer
         _handBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_handBody);
         Ui.Anchor(panel, 0f, 1f, 14f, -186f, 378f, -58f);
+        // 贴左下角：每类一个双行按钮（hand-effects），类型多时比锚定的高度高，向上长（缺省 End 会向下压进底部的信息层按钮条）。
+        panel.GrowVertical = Control.GrowDirection.Begin;
         _root.AddChild(panel);
     }
 
@@ -539,6 +541,9 @@ public sealed partial class Hud : CanvasLayer
         return UiTheme.BodyFontPx + (UiTheme.BodyFontPx * extraPercent * (1000 - display.StagePermille) / 100000);
     }
 
+    /// <summary>手牌面板一个双行按钮的高度：类型名（小字号）+ 效果一句（注释字号）+ 按钮上下内边距。</summary>
+    private const float HandRowHeightPx = 44f;
+
     private void RefreshHand(MatchSession session, ViewerWorld world)
     {
         Ui.Clear(_handBody);
@@ -553,23 +558,32 @@ public sealed partial class Hud : CanvasLayer
             return;
         }
 
-        // 每类一个按钮，按钮里左右两列（hud-panels D4）：类型名靠左、数量靠右，文字取自 HudPanelRows.HandRow。
-        // 选中仍由按钮主题画金色底边；子 Label 不随按钮状态变色，字色按"语义 + 是否选中"取按钮常态的字色。
+        // 每类一个双行按钮（hud-panels D4 + hand-effects）：首行类型名靠左、数量靠右，次行是该类棋子的效果一句（注释字号、超宽省略，悬停看全文），
+        // 文字全取自 HudPanelRows.HandRow。选中仍由按钮主题画金色底边；子 Label 不随按钮状态变色，字色按"语义 + 是否选中"取按钮常态的字色。
         foreach (OwnHandRowView row in own.Rows)
         {
             HandRowView view = HudPanelRows.HandRow(row, mustDiscard);
             bool selected = !mustDiscard && session.SelectedType == view.Type;
             Button button = view.Kind == ButtonKind.Default ? Ui.Toggle(string.Empty, selected) : Ui.Action(string.Empty, view.Kind);
+            button.CustomMinimumSize = new Vector2(0f, HandRowHeightPx);
+            button.TooltipText = view.EffectText;
             Color color = Ui.ButtonTextColor(view.Kind, selected);
+            var lines = new VBoxContainer();
+            lines.AddThemeConstantOverride("separation", UiTheme.Space0);
+            lines.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
             var columns = new HBoxContainer();
             columns.AddThemeConstantOverride("separation", UiTheme.Space3);
-            Label name = Centered(Ui.Text(view.NameText, color, UiTheme.Small));
+            Label name = Ui.Text(view.NameText, color, UiTheme.Small);
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             columns.AddChild(name);
-            Label count = Centered(Ui.Text(view.CountText, color, UiTheme.Small));
+            Label count = Ui.Text(view.CountText, color, UiTheme.Small);
             count.HorizontalAlignment = HorizontalAlignment.Right;
             columns.AddChild(count);
-            Ui.FillButton(button, columns);
+            lines.AddChild(columns);
+            Label effect = Ui.Text(view.EffectText, Ui.MutedText, UiTheme.Caption);
+            effect.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            lines.AddChild(effect);
+            Ui.FillButton(button, lines);
 
             PieceType type = view.Type;
             if (mustDiscard)
@@ -836,8 +850,9 @@ public sealed partial class Hud : CanvasLayer
 
         if (handPanel.IsOpen)
         {
-            CenterBox(0.5f, 760f, 470f);
-            BuildHandInfo(world.HandPanel());
+            HandInfoPanelView handInfo = world.HandPanel();
+            CenterBox(0.5f, HandInfoWidthPx, HandInfoHeightOf(handInfo));
+            BuildHandInfo(handInfo);
             _centerPanel.Visible = true;
             return;
         }
@@ -966,6 +981,20 @@ public sealed partial class Hud : CanvasLayer
         return button;
     }
 
+    // ---------- 全玩家手牌信息面板（H 键；hand-effects：每类棋子带效果一句）----------
+
+    private const float HandInfoWidthPx = 760f;
+    private const float HandInfoLeadWidthPx = 230f;
+    private const float HandInfoRowHeightPx = 26f;
+    private const float HandInfoChromeHeightPx = 150f;
+    private const float HandInfoOpponentChromeHeightPx = 52f;
+
+    /// <summary>面板高度按行数定：标题 / 我方头行与结构参数 / 分隔线 / 尾注是固定开销，每个对手一行头 + 一行结构参数，我方与对手每类棋子各一行。</summary>
+    private static float HandInfoHeightOf(HandInfoPanelView panel) =>
+        HandInfoChromeHeightPx
+        + (panel.Opponents.Length * HandInfoOpponentChromeHeightPx)
+        + ((panel.Own.Rows.Length + panel.Opponents.Sum(o => o.Rows.Length)) * HandInfoRowHeightPx);
+
     private void BuildHandInfo(HandInfoPanelView panel)
     {
         _centerBody.AddChild(Ui.Heading("全玩家手牌信息面板（再点一次「手牌」或按 H / Esc 关闭）"));
@@ -973,7 +1002,7 @@ public sealed partial class Hud : CanvasLayer
         _centerBody.AddChild(Ui.Text($"■ 我方 {Labels.Player(own.Player)}　类型槽 {own.OccupiedSlots} / {own.TypeSlots?.ToString() ?? "—"}　余 {own.FreeSlots?.ToString() ?? "—"}", Ui.InfoText));
         foreach (OwnHandRowView row in own.Rows)
         {
-            _centerBody.AddChild(Ui.Text("　" + row.Text, Ui.InfoText, UiTheme.BodyFontPx - 1));
+            _centerBody.AddChild(HandInfoRow(row.Text, row.EffectText, Ui.InfoText));
         }
 
         AddStructure(own.Structure);
@@ -981,14 +1010,34 @@ public sealed partial class Hud : CanvasLayer
 
         foreach (OpponentHandAreaView opponent in panel.Opponents)
         {
-            string types = opponent.TypeNames.IsDefaultOrEmpty ? "（无）" : string.Join("、", opponent.TypeNames);
+            string types = opponent.Rows.IsDefaultOrEmpty ? "持有类型：（无）" : $"持有类型 {opponent.Rows.Length} 种";
             string status = opponent.StatusText is null ? (opponent.IsActing ? "　行动中" : string.Empty) : $"　{opponent.StatusText}";
-            _centerBody.AddChild(Ui.Text($"□ {Labels.Player(opponent.Player)}　持有类型：{types}{status}",
-                opponent.StatusText is null ? Ui.InfoText : Ui.MutedText));
+            Color ink = opponent.StatusText is null ? Ui.InfoText : Ui.MutedText;
+            _centerBody.AddChild(Ui.Text($"□ {Labels.Player(opponent.Player)}　{types}{status}", ink));
+            foreach (OpponentHandRowView row in opponent.Rows)
+            {
+                _centerBody.AddChild(HandInfoRow(row.Name, row.EffectText, ink));
+            }
+
             AddStructure(opponent.Structure);
         }
 
         _centerBody.AddChild(Ui.Text("对手只公开手牌「类型」，不含数量、征募候选与暂放批次。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+    }
+
+    /// <summary>手牌信息面板里的一类棋子：左列类型（我方带数量）定宽，右列该类棋子的效果一句（注释字号、可折行）。文字来自视图模型，这里只摆放。</summary>
+    private static HBoxContainer HandInfoRow(string leadText, string effectText, Color ink)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", UiTheme.Space4);
+        Label lead = Ui.Text("　" + leadText, ink, UiTheme.BodyFontPx - 1);
+        lead.CustomMinimumSize = new Vector2(HandInfoLeadWidthPx, 0f);
+        row.AddChild(lead);
+        Label effect = Ui.Text(effectText, Ui.MutedText, UiTheme.Caption, wrap: true);
+        effect.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        effect.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(effect);
+        return row;
     }
 
     private void AddStructure(StructureView? structure)

@@ -58,8 +58,9 @@ public sealed record OrderBarView(ImmutableArray<OrderBarEntry> Entries, string?
 /// <param name="Type">棋子类型（引擎层据此回调选中 / 弃牌）。</param>
 /// <param name="NameText">类型名列："普通子"；弃牌阶段为 "弃掉整类：普通子"。</param>
 /// <param name="CountText">数量列："×5"；有本轮新征募未提交时 "×5（新 1）"。</param>
+/// <param name="EffectText">第二行：该类棋子的效果一句，透传自 <see cref="OwnHandRowView.EffectText"/>（与征募面板同一份文案）。</param>
 /// <param name="Kind">按钮语义。</param>
-public sealed record HandRowView(PieceType Type, string NameText, string CountText, ButtonKind Kind);
+public sealed record HandRowView(PieceType Type, string NameText, string CountText, string EffectText, ButtonKind Kind);
 
 /// <summary>征募候选行的状态（recruit-panel-redesign 裁决 2 / 3）：可选、已选（确认态，选了不能退回）、不可选（引擎给出原因）。</summary>
 public enum RecruitRowState
@@ -206,6 +207,7 @@ public static class HudPanelRows
             row.Type,
             discard ? $"弃掉整类：{row.Name}" : row.Name,
             count,
+            row.EffectText,
             discard ? ButtonKind.Danger : ButtonKind.Default);
     }
 

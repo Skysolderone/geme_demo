@@ -102,6 +102,7 @@ public sealed partial class GameRoot : Node3D
     private double _perfSampleSeconds;
     private bool _shotRecruitCollapsed;
     private bool _shotForbidden;
+    private bool _shotHandInfo;
     private Coord? _shotCell;
     private bool _shotNear;
 
@@ -167,6 +168,10 @@ public sealed partial class GameRoot : Node3D
             // 相机对准其中第一个禁手格（缩放不变）。演示跑完仍没等到即以退出码 1 结束。
             _shotForbidden = args.Flag("shot-forbidden");
 
+            // --shot-hand-info：截图那一帧把全玩家手牌信息面板（H 键）打开（hand-effects 实机点验用，仅截图用）。须与 --screenshot= 同用；
+            // 经与 H 键同一入口打开，取景自证行照常打印"手牌信息面板 开"。
+            _shotHandInfo = args.Flag("shot-hand-info");
+
             // --shot-cell=<记法坐标>：截图前把相机注视点移到该格（缩放不变；仅截图用，如截底边的列标）。须与 --screenshot= 同用。
             string? shotCell = args.Text("shot-cell", "围棋记法坐标（如 AB1）");
 
@@ -218,6 +223,11 @@ public sealed partial class GameRoot : Node3D
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
             {
                 throw new System.FormatException("--shot-recruit-collapsed 须与 --auto-demo 和 --screenshot= 同用。");
+            }
+
+            if (_shotHandInfo && (_screenshotFrame < 0 || _shotRecruitCollapsed))
+            {
+                throw new System.FormatException("--shot-hand-info 须与 --screenshot= 同用，且不与 --shot-recruit-collapsed 同用。");
             }
 
             if (_shotForbidden && (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed))
@@ -878,6 +888,11 @@ public sealed partial class GameRoot : Node3D
         _shotPending = true;
         _layers.Back();
         _handPanel.Back();
+        if (_shotHandInfo)
+        {
+            _handPanel.ClickButton();
+        }
+
         if (_shotPower)
         {
             _layers.Toggle(TacticalLayer.Power);

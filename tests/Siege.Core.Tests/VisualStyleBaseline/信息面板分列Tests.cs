@@ -157,8 +157,8 @@ public class 信息面板分列Tests
     [Fact]
     public void 手牌分列()
     {
-        var gained = new OwnHandRowView(PieceType.Basic, "普通子", 5, 1, "普通子 ×5（其中 1 枚为本轮新征募）");
-        var plain = new OwnHandRowView(PieceType.Fortress, "堡垒子", 2, 0, "堡垒子 ×2");
+        var gained = new OwnHandRowView(PieceType.Basic, "普通子", 5, 1, "普通子 ×5（其中 1 枚为本轮新征募）", "军势 1，没有特殊效果；最省槽位的填充");
+        var plain = new OwnHandRowView(PieceType.Fortress, "堡垒子", 2, 0, "堡垒子 ×2", "军势 4，单枚最硬");
 
         HandRowView row = HudPanelRows.HandRow(gained, discard: false);
         Assert.Equal(PieceType.Basic, row.Type);
@@ -502,7 +502,7 @@ public class 信息面板分列Tests
         // "尚未产生势力快照"是排名为空时的整面板占位（重排前就有，不属于按列文字）。
         AssertOnly("RefreshRank", rankArgs, ["\"尚未产生势力快照\"", "view.RankText", "view.NameText", "view.PowerText", "status", "view.DetailRestText", "rankHint"]);
         AssertOnly("RefreshOrderBar", orderArgs, ["HudPanelRows.OrderTitleText", "empty", "\"›\"", "entry.NameText", "bar.HintText"]);
-        AssertOnly("RefreshHand", handArgs, ["view.NameText", "view.CountText", "string.Empty"]);
+        AssertOnly("RefreshHand", handArgs, ["view.NameText", "view.CountText", "view.EffectText", "string.Empty"]);
 
         // 解构出的局部量确实来自视图字段。
         Assert.Matches(@"view\.DetailStatusText is \{ \} status\b", rank);
