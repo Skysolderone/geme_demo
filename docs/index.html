@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>围杀 Siege — 围棋式围杀 × 地块争夺的回合制策略构筑</title>
-<meta name="description" content="《围杀 Siege》：2–4 人回合制策略构筑游戏原型。各占浮空岛上一块出生座位，先在自己的座位里筑阵，第 4 大回合起全岛交战。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 Windows 下载。">
+<meta name="description" content="《围杀 Siege》：2–4 人回合制策略构筑游戏原型。在一块 150×150 的大陆上自己选点插旗，先在旗帜周围筑阵，第 4 大回合起全图交战，信物只在固定遗址刷出。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 Windows 下载。">
 <meta property="og:title" content="围杀 Siege">
 <meta property="og:description" content="开放地图版：先筑阵、再全图交战的围棋式回合制策略构筑原型。">
 <meta property="og:image" content="assets/hero-v050.jpg">
@@ -156,13 +156,13 @@
         <i style="background:var(--red)"></i><i style="background:var(--blue)"></i><i style="background:var(--amber)"></i><i style="background:var(--purple)"></i>
       </div>
       <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
-      <p class="lead">2–4 方各占浮空岛上一块出生座位，座位之间隔着至少 25 格战场。前三个大回合只在自己的座位里筑阵，第四个大回合起全岛开放：像围棋一样围住对手的棋串把它提走，抢地块、夺信物，把“加值 × 倍率”滚成势力。</p>
+      <p class="lead">2–4 方在一块 150×150 的大陆上各自选点插旗，旗与旗之间至少隔 60 格。前三个大回合只在旗帜周围 13×13 里筑阵，第四个大回合起全图开放：像围棋一样围住对手的棋串把它提走，抢地块、夺信物，把“加值 × 倍率”滚成势力。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.7.0/Siege-windows-x64-v0.7.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.7.0</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.8.0/Siege-windows-x64-v0.8.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.8.0</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.7.0 浮空岛版（2026-10-31）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
-      <div class="shot"><img src="assets/hero-v070.jpg" width="1600" height="900" alt="第 7 大回合的浮空岛全景：淡紫石面与草地、亮青河道和湖泊铺满不规则的岛面，四角是四方的出生座位，中间散着中立平台与信物预告，远处是浮岛与云海"></div>
+      <p class="note">当前版本 v0.8.0 大图版（2026-11-03）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <div class="shot"><img src="assets/hero-v080.jpg" width="1600" height="900" alt="v0.8.0 新局面板：左侧是开始新局的设置，右侧是 150×150 大陆的整图缩略，金星与白点标出信物遗址，已选的旗位画着 13×13 的构筑范围框"></div>
     </div>
   </div>
 
@@ -172,8 +172,8 @@
       <p class="sub">一局 2–4 人：你和 1–3 个 AI。没有固定轮数，整轮所有人都 Pass、棋盘填满或只剩一人时按势力排名；最迟第 100 大回合强制结算。胜负应当能用落点、排布和取舍来解释，而不是刷新运气。</p>
 
       <ol class="loop">
-        <li><strong>盲选座位</strong>每人一块 8×8 出生座位，座位之间至少隔 25 格战场，战场里有中立平台、河道与桥。插旗即锁定；撞了座位时后选者改派到空座位。</li>
-        <li><strong>筑阵三回合</strong>第 1–3 大回合只能在自己的座位里落子与改造，全岛都看得见。</li>
+        <li><strong>选点插旗</strong>新局面板右侧是整块大陆的缩略，直接在上面点一格插旗：悬停显示 13×13 构筑范围（合规绿、不合规红），旗与旗之间至少隔 60 格，不能贴着信物遗址。点"插旗并开始"即锁定。</li>
+        <li><strong>筑阵三回合</strong>第 1–3 大回合只能在旗帜周围 13×13 里落子与改造；第 4 大回合起全图开放，第 60 大回合到点按势力结算。信物只在缩略上标出的遗址（金星稀有、白点普通）刷出。</li>
         <li><strong>全岛交战</strong>第 4 大回合起任何空格都能落，抢中立平台、过桥去围别人。</li>
         <li><strong>征募与批次</strong>每回合从展示的候选里挑棋子；一次暂放多枚，看完预演再整批确认。</li>
         <li><strong>势力与先手</strong>独占空格算领地，加上棋串军势就是势力；排名高的下一大回合先行动。</li>
@@ -203,7 +203,7 @@
   <section id="shots">
     <div class="wrap">
       <h2>截图</h2>
-      <p class="sub">主图是 v0.7.0 游戏内实拍；下面几张是 v0.5.0 实拍，那时的地图还是五块主题棋盘、美术是砂岩苔绿，v0.7.0 的浮空岛、出生座位与粉彩画面以主图为准。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
+      <p class="sub">主图是 v0.8.0 新局面板实拍（大陆缩略与信物遗址）；下面几张是 v0.5.0 实拍，那时的地图还是五块主题棋盘、美术是砂岩苔绿，现在的大陆、自由插旗与粉彩画面以主图为准。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
       <div class="gallery">
         <figure class="wide"><img src="assets/open-board-v050.jpg" width="1600" height="900" loading="lazy" alt="第 10 大回合的全图：四方棋子已经越过接缝混在一起">
           <figcaption><b>全图交战。</b>第 4 大回合起棋盘之间的接缝不再是界线，四方在同一张图上争地块、互相围杀。</figcaption></figure>
@@ -226,17 +226,17 @@
       <div class="dl">
         <div class="card" style="--c:var(--ink)">
           <h3>Windows</h3>
-          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.7.0/Siege-windows-x64-v0.7.0.zip">Siege-windows-x64-v0.7.0.zip<span>Windows 10 / 11，64 位 · v0.7.0</span></a>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.8.0/Siege-windows-x64-v0.8.0.zip">Siege-windows-x64-v0.8.0.zip<span>Windows 10 / 11，64 位 · v0.8.0</span></a>
           <ol>
             <li>解压整个文件夹（<code>Siege.exe</code>、<code>Siege.pck</code> 和 <code>data_Siege.Godot_windows_x86_64</code> 要放在一起，别只拿出 exe）。</li>
             <li>运行 <code>Siege.exe</code>。</li>
             <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
           </ol>
-          <p class="note" style="word-break:break-all">SHA256：<code>9EDB39569E3634CAC194C353E0480DDC267E4422BA4A87F7422DF4E9662DC2FF</code></p>
+          <p class="note" style="word-break:break-all">SHA256：<code>0FF8F9C2F5CA7F504A238A1C368F96C7D6F2EE6FBCFD595D31233ECAA26D58F0</code></p>
         </div>
         <div class="card" style="--c:var(--line)">
           <h3>macOS</h3>
-          <p>v0.7.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
+          <p>v0.8.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
         </div>
       </div>
       <p class="note">显卡需要支持 Vulkan。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
@@ -281,6 +281,16 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.8.0 大图版 <time datetime="2026-11-03">2026-11-03</time></h3>
+        <ul>
+          <li><b>150×150 大陆</b>：标识 <code>link:&lt;种子&gt;:&lt;人数&gt;:l</code>，约 1.5 万格、14–18 块中立平台，不规则岸线与内陆湖泊、岩区；新局面板默认大图并显示整图缩略，浮空岛保留为"旧模式"。</li>
+          <li><b>在地图上插旗</b>：缩略上点格插旗，悬停显示 13×13 构筑范围；旗与旗至少隔 60 格；"插旗并开始"直接进构筑期。前 3 大回合限旗帜周围，第 60 大回合到点按势力结算。</li>
+          <li><b>信物遗址</b>：每张大图固定稀有 / 普通遗址（4 人图 2 + 6），缩略与小地图用金星 / 白点标出，游戏里立石碑；信物只在遗址刷出，每批稀有至多 1 件；旗不能插在遗址 7 格内。</li>
+          <li><b>大图画面与操作</b>：分块流式渲染、右下小地图（点击跳转，<kbd>M</kbd> 显隐）、部署光标 7×7 格网（<kbd>1</kbd> 全格）；AI 只在自己棋子附近挑候选，标准难度每步不超过 3 秒。</li>
+          <li>已知：石碑在开局距离下偏小；专家难度大图每步 2–5 秒；AI 不考虑遗址；稀有信物出现率未校准。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.7.0 浮空岛版 <time datetime="2026-10-31">2026-10-31</time></h3>
         <ul>
           <li><b>浮空岛与出生座位</b>：开局可选 2 / 3 / 4 人；每人一块 8×8 出生座位，座位之间至少隔 25 格战场，战场里有中立平台、河道与桥。前 3 个大回合只能落在自己的座位里，第 4 个大回合起全岛开放。</li>
