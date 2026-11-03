@@ -854,8 +854,8 @@ public sealed partial class Hud : CanvasLayer
                 return;
             }
 
-            CenterBox(0.5f, 520f, 330f);
-            BuildRecruit(view.Panel);
+            CenterBox(0.5f, RecruitPanelWidthPx, RecruitPanelHeightOf(view.Panel));
+            BuildRecruit(view.Panel, world.OwnHand);
             _centerPanel.Visible = true;
             return;
         }
@@ -863,32 +863,107 @@ public sealed partial class Hud : CanvasLayer
         _centerPanel.Visible = false;
     }
 
-    private void BuildRecruit(RecruitPanelView panel)
+    // ---------- 征募面板（recruit-panel-redesign 裁决 1–7）----------
+
+    private const float RecruitPanelWidthPx = 600f;
+    private const float RecruitRowHeightPx = 56f;
+    private const float RecruitBlockedRowHeightPx = 74f;
+    private const float RecruitChromeHeightPx = 126f;
+
+    /// <summary>面板高度按行数与行高定：不可选行第二行是引擎原因原文，会折成两行，给它更高的行。</summary>
+    private static float RecruitPanelHeightOf(RecruitPanelView panel) =>
+        RecruitChromeHeightPx + panel.Candidates.Sum(c => c.IsPicked || c.IsSelectable ? RecruitRowHeightPx : RecruitBlockedRowHeightPx) + (panel.Candidates.Length * UiTheme.Space2);
+
+    /// <summary>
+    /// 征募面板：头部三行（标题 / 剩余免费选取数单独放大 / 结构参数小字），每个候选一个双行按钮（序号 + 名字 | 手牌情况；效果一句话），
+    /// 已选为确认态（金字 + 金底边，不接鼠标），不可选为禁用态并把引擎原因原文放在第二行。文字全来自 <see cref="HudPanelRows"/>，本方法只摆放。
+    /// </summary>
+    private void BuildRecruit(RecruitPanelView panel, HandPrivateView ownHand)
     {
-        _centerBody.AddChild(Ui.Heading($"征募　展示 {panel.ShowCount}　还可免费选取 {panel.PicksRemaining} 枚　类型槽 {panel.OccupiedSlots} / {panel.TypeSlots}"));
+        RecruitHeaderView header = HudPanelRows.RecruitHeader(panel);
+        var head = new HBoxContainer();
+        head.AddThemeConstantOverride("separation", UiTheme.Space4);
+        Label title = Ui.Heading(header.TitleText);
+        title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        head.AddChild(title);
+        head.AddChild(Ui.Text(header.MetaText, Ui.MutedText, UiTheme.Caption));
+        _centerBody.AddChild(head);
+        _centerBody.AddChild(Ui.Text(header.PicksText, header.PicksExhausted ? Ui.MutedText : Ui.Accent, UiTheme.Title));
+        _centerBody.AddChild(Ui.Separator());
+
         foreach (RecruitCandidateView candidate in panel.Candidates)
         {
-            string suffix = candidate.IsPicked ? "（已选）" : candidate.IsSelectable ? string.Empty : $"（不可选：{candidate.Reason}）";
-            Button button = Ui.Action($"[{candidate.Index + 1}] {Labels.Piece(candidate.Type)}{suffix}", 300);
-            button.Alignment = HorizontalAlignment.Left;
-            button.Disabled = candidate.IsPicked || !candidate.IsSelectable;
-            PieceIcon.Attach(button, candidate.Type, disabled: button.Disabled);
-            int index = candidate.Index;
-            button.Pressed += () => RecruitPicked?.Invoke(index);
-            _centerBody.AddChild(button);
+            RecruitRowView row = HudPanelRows.RecruitRow(candidate, ownHand);
+            _centerBody.AddChild(RecruitRowButton(row));
         }
 
         _centerBody.AddChild(Ui.Separator());
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
+        var actions = new HBoxContainer();
+        actions.AddThemeConstantOverride("separation", UiTheme.Space4);
         Button done = Ui.Action("完成征募，进入部署", 300);
         Ui.Primary(done);
+        done.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         done.Pressed += () => RecruitFinished?.Invoke();
-        row.AddChild(done);
+        actions.AddChild(done);
         Button collapse = Ui.Action("收起 [V]", 120);
         collapse.Pressed += () => RecruitCollapsePressed?.Invoke();
-        row.AddChild(collapse);
-        _centerBody.AddChild(row);
+        actions.AddChild(collapse);
+        _centerBody.AddChild(actions);
+    }
+
+    /// <summary>一个候选行按钮：图标 | 两行文字（名字 + 手牌情况 / 效果或原因） | 状态角标。</summary>
+    private Button RecruitRowButton(RecruitRowView row)
+    {
+        bool picked = row.State == RecruitRowState.Picked;
+        bool blocked = row.State == RecruitRowState.Blocked;
+        Button button = Ui.Toggle(string.Empty, picked);
+        button.CustomMinimumSize = new Vector2(0f, blocked ? RecruitBlockedRowHeightPx : RecruitRowHeightPx);
+        button.Disabled = blocked;
+        if (picked)
+        {
+            // 选了不能退回：已选行是确认态，不再接鼠标（没有悬停反馈），但保留选中变体的金字与金底边。
+            button.MouseFilter = Control.MouseFilterEnum.Ignore;
+        }
+
+        Color ink = blocked ? Ui.MutedText : Ui.ButtonTextColor(ButtonKind.Default, picked);
+        Color detail = Ui.MutedText;
+
+        var columns = new HBoxContainer();
+        columns.AddThemeConstantOverride("separation", UiTheme.Space4);
+        columns.AddChild(PieceIcon.Create(row.Type, ink));
+
+        var lines = new VBoxContainer();
+        lines.AddThemeConstantOverride("separation", UiTheme.Space1);
+        lines.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        lines.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var first = new HBoxContainer();
+        first.AddThemeConstantOverride("separation", UiTheme.Space4);
+        Label name = Ui.Text(row.NameText, ink, UiTheme.Body);
+        name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        first.AddChild(name);
+        Label hand = Ui.Text(row.HandText, blocked ? Ui.MutedText : Ui.InfoText, UiTheme.Caption);
+        hand.VerticalAlignment = VerticalAlignment.Bottom;
+        first.AddChild(hand);
+        lines.AddChild(first);
+        lines.AddChild(Ui.Text(row.DetailText, detail, UiTheme.Caption, wrap: true));
+        columns.AddChild(lines);
+
+        if (row.StateText is { } stateText)
+        {
+            Label state = Centered(Ui.Text(stateText, ink, UiTheme.Small));
+            state.CustomMinimumSize = new Vector2(64f, 0f);
+            state.HorizontalAlignment = HorizontalAlignment.Right;
+            columns.AddChild(state);
+        }
+
+        Ui.FillButton(button, columns);
+        if (row.State == RecruitRowState.Pickable)
+        {
+            int index = row.Index;
+            button.Pressed += () => RecruitPicked?.Invoke(index);
+        }
+
+        return button;
     }
 
     private void BuildHandInfo(HandInfoPanelView panel)

@@ -5,7 +5,7 @@ using Siege.Presentation.Style;
 namespace Siege.Godot;
 
 /// <summary>
-/// 20 像素的棋子轮廓铭牌。业务类型只经 <see cref="PieceStyleTable"/> 映到轮廓；
+/// 棋子轮廓铭牌（默认 22 像素）。业务类型只经 <see cref="PieceStyleTable"/> 映到轮廓；
 /// 与 3D 棋子使用同一组十种轮廓语言，图元适配紧凑的 HUD 尺寸。
 /// </summary>
 public sealed partial class PieceIcon : Control
@@ -13,27 +13,17 @@ public sealed partial class PieceIcon : Control
     private PieceSilhouette _silhouette;
     private Color _ink = Ui.InfoText;
 
-    /// <summary>把图标叠在已有按钮的左侧；图标不接收鼠标，整行仍由原按钮处理点击。</summary>
-    public static void Attach(Button button, PieceType type, bool selected = false, bool disabled = false)
+    /// <summary>
+    /// 独立的图标控件（征募面板的双行候选行，recruit-panel-redesign）：放进容器里排版，不接鼠标；<paramref name="ink"/> 由调用方按行状态给。
+    /// </summary>
+    public static PieceIcon Create(PieceType type, Color ink, float sizePx = 22f) => new()
     {
-        // 两个全角空格只预留图标的绘制位置；名称、序号、数量及原按钮事件保持原样。
-        button.Text = "　　" + button.Text;
-        var icon = new PieceIcon
-        {
-            _silhouette = PieceStyleTable.For(type).Silhouette,
-            _ink = disabled ? Ui.MutedText : selected ? Ui.PanelBorder : Ui.InfoText,
-            MouseFilter = MouseFilterEnum.Ignore,
-            AnchorLeft = 0f,
-            AnchorRight = 0f,
-            AnchorTop = 0.5f,
-            AnchorBottom = 0.5f,
-            OffsetLeft = 9f,
-            OffsetRight = 29f,
-            OffsetTop = -10f,
-            OffsetBottom = 10f,
-        };
-        button.AddChild(icon);
-    }
+        _silhouette = PieceStyleTable.For(type).Silhouette,
+        _ink = ink,
+        MouseFilter = MouseFilterEnum.Ignore,
+        CustomMinimumSize = new Vector2(sizePx, sizePx),
+        SizeFlagsVertical = SizeFlags.ShrinkCenter,
+    };
 
     public override void _Draw()
     {

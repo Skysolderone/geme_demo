@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Recruit;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Show;
@@ -59,6 +60,43 @@ public sealed record OrderBarView(ImmutableArray<OrderBarEntry> Entries, string?
 /// <param name="CountText">数量列："×5"；有本轮新征募未提交时 "×5（新 1）"。</param>
 /// <param name="Kind">按钮语义。</param>
 public sealed record HandRowView(PieceType Type, string NameText, string CountText, ButtonKind Kind);
+
+/// <summary>征募候选行的状态（recruit-panel-redesign 裁决 2 / 3）：可选、已选（确认态，选了不能退回）、不可选（引擎给出原因）。</summary>
+public enum RecruitRowState
+{
+    Pickable,
+    Picked,
+    Blocked,
+}
+
+/// <summary>
+/// 征募面板的一个候选行（recruit-panel-redesign 裁决 1–4）：第一行"序号 + 类型名"靠左、手牌情况靠右，第二行是效果一句话；
+/// 不可选时第二行换成引擎给的原因原文（<see cref="RecruitCandidateView.Reason"/>，本层不改写）。
+/// </summary>
+/// <param name="Index">候选位序号（0 起；引擎层据此回调选取）。</param>
+/// <param name="Type">棋子类型（引擎层据此取轮廓）。</param>
+/// <param name="NameText">"[1] 连珠子"。</param>
+/// <param name="DetailText">可选 / 已选：效果一句话；不可选：引擎原因原文。</param>
+/// <param name="HandText">手牌情况："已有 ×2"；手牌里没有这一类时 "新类型 · 占 1 槽"。</param>
+/// <param name="State">行状态。</param>
+/// <param name="StateText">状态角标："✓ 已选" / "不可选"；可选为 <c>null</c>。</param>
+public sealed record RecruitRowView(
+    int Index,
+    PieceType Type,
+    string NameText,
+    string DetailText,
+    string HandText,
+    RecruitRowState State,
+    string? StateText);
+
+/// <summary>
+/// 征募面板头部（recruit-panel-redesign 裁决 5）：标题、单独成行的剩余免费选取数、一行小字的结构参数。
+/// </summary>
+/// <param name="TitleText">"征募"。</param>
+/// <param name="PicksText">"还可免费选取 2 枚"；用完为 "免费选取已用完"。</param>
+/// <param name="PicksExhausted">免费选取是否已用完（引擎层据此把 <see cref="PicksText"/> 画成次要色）。</param>
+/// <param name="MetaText">"展示 5 枚候选 · 类型槽 4 / 5 · 选了就不能退回"。</param>
+public sealed record RecruitHeaderView(string TitleText, string PicksText, bool PicksExhausted, string MetaText);
 
 /// <summary>
 /// 势力排名、行动顺序、手牌三处面板的按列文字（visual-style-baseline「信息面板的分列排版」）。纯函数，只读视图模型，零 Godot 依赖。
@@ -169,5 +207,44 @@ public static class HudPanelRows
             discard ? $"弃掉整类：{row.Name}" : row.Name,
             count,
             discard ? ButtonKind.Danger : ButtonKind.Default);
+    }
+
+    /// <summary>征募面板的头部文字。</summary>
+    public static RecruitHeaderView RecruitHeader(RecruitPanelView panel)
+    {
+        ArgumentNullException.ThrowIfNull(panel);
+        bool exhausted = panel.PicksRemaining <= 0;
+        return new RecruitHeaderView(
+            "征募",
+            exhausted ? "免费选取已用完" : $"还可免费选取 {panel.PicksRemaining} 枚",
+            exhausted,
+            $"展示 {panel.ShowCount} 枚候选 · 类型槽 {panel.OccupiedSlots} / {panel.TypeSlots} · 选了就不能退回");
+    }
+
+    /// <summary>
+    /// 征募面板的一个候选行。<paramref name="ownHand"/> MUST 是本机玩家自己的私有手牌（只用来标"已有 ×N / 新类型"）。
+    /// 已选优先于不可选：已选的候选在 Core 里 <c>IsSelectable</c> 也为假，但它是确认态，不是被挡住。
+    /// </summary>
+    public static RecruitRowView RecruitRow(RecruitCandidateView candidate, HandPrivateView ownHand)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(ownHand);
+        RecruitRowState state = candidate.IsPicked ? RecruitRowState.Picked
+            : candidate.IsSelectable ? RecruitRowState.Pickable
+            : RecruitRowState.Blocked;
+        int have = ownHand.CountOf(candidate.Type);
+        return new RecruitRowView(
+            candidate.Index,
+            candidate.Type,
+            $"[{candidate.Index + 1}] {Labels.Piece(candidate.Type)}",
+            state == RecruitRowState.Blocked && candidate.Reason is { } reason ? reason : Labels.PieceEffect(candidate.Type),
+            have > 0 ? $"已有 ×{have}" : "新类型 · 占 1 槽",
+            state,
+            state switch
+            {
+                RecruitRowState.Picked => "✓ 已选",
+                RecruitRowState.Blocked => "不可选",
+                _ => null,
+            });
     }
 }

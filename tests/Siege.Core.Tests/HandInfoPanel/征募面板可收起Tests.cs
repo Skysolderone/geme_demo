@@ -292,7 +292,8 @@ public class 征募面板可收起Tests
         Assert.Contains(".BarText", hud, StringComparison.Ordinal);
         string[] buildCalls = [.. Regex.Matches(hud, @"(?<!void )BuildRecruit\(([^)]*)\)").Select(m => m.Groups[1].Value)];
         Assert.NotEmpty(buildCalls);
-        Assert.All(buildCalls, arg => Assert.EndsWith(".Panel", arg, StringComparison.Ordinal));
+        // 面板内容必须是状态模型 Present 透传的那一份（第一个实参 ".Panel"）；recruit-panel-redesign 起第二个实参是本机私有手牌（只用来标"已有 ×N"）。
+        Assert.All(buildCalls, arg => Assert.EndsWith(".Panel", arg.Split(',')[0].Trim(), StringComparison.Ordinal));
 
         // D4：RefreshCenter 里手牌信息面板的判断在征募面板之前（优先级不变）。
         int refresh = hud.IndexOf("private void RefreshCenter(", StringComparison.Ordinal);

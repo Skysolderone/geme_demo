@@ -56,6 +56,27 @@ public static class Labels
     };
 
     /// <summary>
+    /// 棋子效果的一句话（征募面板每行第二行、recruit-panel-redesign 裁决 1 / 7）：口径与 <see cref="PieceEffects"/> 的实现逐条对应，
+    /// 每项加值取 Core 的 <c>const</c>（编译期内联，不是对规则入口的调用）；倍率与连珠公式按 <see cref="PowerCalculator"/> 的注释口径写。
+    /// 基础军势的 1 / 4 写死在文案里：<c>PieceEffects.BasePower</c> 是规则计算入口，表现层不得调用（守门：<c>UI层不含规则计算Tests</c>），
+    /// 数字与 Core 一致由 <c>征募面板行文案Tests</c> 断言。这里只写"选它有什么用"，不复述计分全貌。
+    /// </summary>
+    public static string PieceEffect(PieceType type) => type switch
+    {
+        PieceType.Basic => "军势 1，没有特殊效果；最省槽位的填充",
+        PieceType.Fortress => "军势 4，单枚最硬",
+        PieceType.Line => "横或纵连成 L 枚（L≥2）的线 +L×(L−1)；隔崖、深水、栅栏不成线",
+        PieceType.Multiplier => "所在棋串军势整体 ×1.5，每枚叠乘、不封顶，向下取整",
+        PieceType.Synergy => $"每枚 +{PieceEffects.SynergyPerType} × 本串其他类型的种数",
+        PieceType.Artisan => $"军势 1；落下时可改造一次地形（{Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Bridge)} / {Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Fence)} / {Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Burn)}），之后同普通子",
+        PieceType.Bannerman => $"本串每挂 1 件信物 +{PieceEffects.BannerPerRelic}",
+        PieceType.Chain => "每枚 +（本串棋子数 − 1），串越大越值",
+        PieceType.Sentry => $"每个有气边相邻的非己方棋子 +{PieceEffects.SentryPerForeignStone}，贴着敌人放",
+        PieceType.Boundary => $"每个有气边相邻的己方独占空格 +{PieceEffects.BoundaryPerExclusiveCell}，守自家地块",
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
+    };
+
+    /// <summary>
     /// 一次地形改造的文案，如「搭桥 D4」「立栅 E5–E6」「烧林 F4」。动作名取 <see cref="Core.Board.TerrainEdit.DisplayName"/>（唯一一份），
     /// 目标用围棋记法；本方法不判断该改造是否合法。
     /// </summary>
