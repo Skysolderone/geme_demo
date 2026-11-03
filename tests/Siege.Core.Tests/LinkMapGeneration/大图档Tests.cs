@@ -89,6 +89,8 @@ public class 大图档Tests(ITestOutputHelper output)
         // 预热一次（JIT 与缓存），计时只看之后的 60 张；每张绕过缓存重新生成。
         _ = LinkMapGenerator.GenerateDetailed(1, 4, MapTier.Large);
         var elapsed = new List<long>();
+        // 追加裁决 15：记录最慢的那张（标识 + 毫秒），偶发超预算时能直接复现，不放宽预算。
+        (string Id, long Ms) slowest = (string.Empty, -1);
         foreach (int players in new[] { 2, 3, 4 })
         {
             for (ulong seed = 1; seed <= 20; seed++)
@@ -97,13 +99,17 @@ public class 大图档Tests(ITestOutputHelper output)
                 _ = LinkMapGenerator.GenerateDetailed(seed, players, MapTier.Large);
                 sw.Stop();
                 elapsed.Add(sw.ElapsedMilliseconds);
+                if (sw.ElapsedMilliseconds > slowest.Ms)
+                {
+                    slowest = (LinkMapId.Format(seed, players, MapTier.Large), sw.ElapsedMilliseconds);
+                }
             }
         }
 
         elapsed.Sort();
-        output.WriteLine($"耗时 最小 {elapsed[0]} 中位 {elapsed[elapsed.Count / 2]} 最大 {elapsed[^1]} ms");
+        output.WriteLine($"耗时 最小 {elapsed[0]} 中位 {elapsed[elapsed.Count / 2]} 最大 {elapsed[^1]} ms；最慢 {slowest.Id} {slowest.Ms} ms");
 #if !DEBUG
-        Assert.True(elapsed[^1] <= 1000, $"大图单张生成最慢 {elapsed[^1]} ms，超出 1 s 预算。");
+        Assert.True(elapsed[^1] <= 1000, $"大图单张生成最慢 {slowest.Id} {slowest.Ms} ms，超出 1 s 预算。");
 #else
         output.WriteLine("Debug 构建只记录，不断言。");
 #endif
