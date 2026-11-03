@@ -667,7 +667,7 @@ public static class MapValidator
 
     /// <summary>
     /// 信物遗址清单（relic-sites 裁决 6 / 7 / 9）：小图 MUST 为空（<c>RELIC_SITES_FORBIDDEN</c>）；大图稀有恰 ⌈n/2⌉、普通恰 n+2（<c>RELIC_SITE_COUNT</c>），
-    /// 每处都满足 <see cref="RelicSites.IsSiteGround"/>（可落子且八邻可落子）且不重复（<c>RELIC_SITE_GROUND</c>），两两切比雪夫距离 ≥ 20（<c>RELIC_SITE_GAP</c>），
+    /// 每处都满足 <see cref="RelicSites.IsSiteGround"/>（可落子、高度 0 且八邻可落子，追加裁决 13）且不重复（<c>RELIC_SITE_GROUND</c>），两两切比雪夫距离 ≥ 20（<c>RELIC_SITE_GAP</c>），
     /// 不在任何出生棋盘内（<c>RELIC_SITE_IN_BIRTH</c>——落座图也过这条校验；合规旗格与遗址 ≥ 7 保证 13×13 盖不住遗址，这里是兜底）。
     /// </summary>
     private static void ValidateRelicSites(MapData map, MapTier tier, ImmutableArray<MapValidationFailure>.Builder f)
@@ -702,7 +702,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "RELIC_SITE_GROUND",
-                $"信物遗址 {string.Join(" ", bad.Select(c => c.ToNotation()))} 不合位置规则：每处须是可落子格、八邻都可落子（不贴岸线、岩石与深水），且不重复。",
+                $"信物遗址 {string.Join(" ", bad.Select(c => c.ToNotation()))} 不合位置规则：每处须是高度 0 的可落子格（低地）、八邻都可落子（不贴岸线、岩石与深水），且不重复。",
                 bad));
         }
 

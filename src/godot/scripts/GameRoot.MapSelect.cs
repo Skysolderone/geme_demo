@@ -18,8 +18,11 @@ namespace Siege.Godot;
 /// <para>预览不另写渲染：用候选地图建一个<b>尚未插旗</b>的会话，只为取它的默认棋盘视图模型交给 <see cref="BoardView.Build"/>（与开局插旗前的盘面同构）；
 /// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览（map-expand-25 D9：浮空岛一屏看不全，初始取景即整岛）。背景是各块出生平台的占位轮廓（规格「界面背景 SHALL 显示出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）：
 /// 预览会话尚未插旗，按座位过滤后的默认棋盘没有任何格、只有各块占位，渲染层据此只画边框与编号（段 D-b，D18）。</para>
-/// <para>该阶段不接受落子、插旗、推屏与缩放：<c>_Process</c> 不走 <c>Drive</c> / 悬停 / 平移，<c>_UnhandledInput</c> 整体不处理，
+/// <para>该阶段不接受落子、推屏与缩放：<c>_Process</c> 不走 <c>Drive</c> / 悬停 / 平移，<c>_UnhandledInput</c> 整体不处理，
 /// <c>_Input</c> 不认领相机键——否则 W A S D、空格、方向键进不了种子输入框。</para>
+/// <para>大图经面板进来时在右侧大陆缩略上点格插旗（relic-sites 裁决 1–4）：像素 → 格由叠层经 <c>BoardGeometry.MinimapCellAt</c> 换算，合规与原因只问表现层的 <see cref="FlagPickModel"/>
+/// （Core 唯一实现 <c>FlagRules.FlagCellProblem</c>）；点"插旗并开始"即建局、本机 <see cref="MatchSession.ChooseCell"/>、AI 盲抽、锁定、直接进构筑期。
+/// 小图与 <c>--map=</c> 直接开局仍走原 3D 插旗阶段（裁决 5）。</para>
 /// </remarks>
 public sealed partial class GameRoot
 {
@@ -27,6 +30,10 @@ public sealed partial class GameRoot
     private MapData? _previewMap;
     private ImageTexture? _previewThumbnail;
     private string _previewThumbnailId = string.Empty;
+    private DefaultBoardView? _previewBoard;
+    private readonly FlagPickModel _pick = new();
+    private Coord? _pendingFlag;
+    private Coord? _selfCheckFlag;
     private ulong _matchSeed;
     private int _rounds;
     private int? _cellLimit;
@@ -65,6 +72,7 @@ public sealed partial class GameRoot
         MapData map = MapCatalog.Resolve(_select!.CurrentId);
         MatchSession preview = MatchSession.Create(map, _matchSeed, map.MaxPlayers, 1, AiDifficulty.Standard, _cellLimit);
         _previewMap = map;
+        _pick.Bind(map);   // relic-sites 裁决 4：标识变了（换种子 / 人数 / 尺寸）即清空面板上已选的旗格
         return preview;
     }
 
@@ -75,6 +83,17 @@ public sealed partial class GameRoot
         _hud.MapStartPressed += StartMatch;
         _hud.MapPlayersPicked += players => OnSelectionChanged(_select?.SelectPlayers(players));   // 人数是标识的一部分：变了即重解析、重搭预览
         _hud.MapTierPicked += tier => OnSelectionChanged(_select?.SelectTier(tier));   // 尺寸同理（big-map 裁决 11）：选大即四段标识、预览换成 150×150 大陆
+        // 大图缩略上的插旗（relic-sites 裁决 1 / 2）：悬停只换读数与框，点格经视图模型判合规（不合规只提示）；都只刷面板。
+        _hud.MapThumbnailHovered += cell =>
+        {
+            _pick.SetHover(cell);
+            _dirty = true;
+        };
+        _hud.MapThumbnailClicked += cell =>
+        {
+            _pick.Pick(cell);
+            _dirty = true;
+        };
         _hud.MapDifficultyPicked += difficulty =>
         {
             _select?.SelectDifficulty(difficulty);
@@ -146,8 +165,45 @@ public sealed partial class GameRoot
     }
 
     /// <summary>
+    /// 面板上选的旗格（relic-sites 裁决 3）：建局后（带入带出开启时是补给阶段重建会话之后）本机 <see cref="MatchSession.ChooseCell"/> → Core 盲抽其余玩家、锁定，
+    /// 随后与 3D 插旗阶段锁定后同一条路（<see cref="AfterFlagsLocked"/>：重搭落座图、相机对准本机旗），直接进构筑期；无人值守时补记 <c>[flow]</c> 的"插旗锁定"审计。
+    /// 没有待插的格、还在补给阶段、或 Core 拒绝（原因在 <see cref="MatchSession.Notice"/>）时返回 <c>false</c>，调用方照常建局进 3D 插旗阶段。
+    /// </summary>
+    private bool PlantPendingFlag()
+    {
+        if (_pendingFlag is not { } cell || Supplying)
+        {
+            return false;
+        }
+
+        _pendingFlag = null;
+        if (!_session.AwaitingZone || !_session.IsLargeMap)
+        {
+            return false;
+        }
+
+        _session.ChooseCell(cell);
+        if (_session.AwaitingZone)
+        {
+            GD.PrintErr($"[flag] 面板上选的旗格 {cell.ToNotation()} 被规则拒绝：{_session.Notice}；退回 3D 插旗阶段。");
+            return false;
+        }
+
+        AfterFlagsLocked();
+        if (_autoDemo)
+        {
+            DefaultBoardView locked = _session.World.Board();
+            Flow(_audit.FlagsLocked(locked, _session.World.OwnZone ?? -1, _session.MyBattlefieldCells));
+        }
+
+        GD.Print($"[flag] 面板插旗：本机旗锁定在 {_session.Match.Flags.FlagCellOf(_session.Me)!.Value.ToNotation()}（面板上点的 {cell.ToNotation()}），直接进构筑期。{_session.Notice}");
+        return true;
+    }
+
+    /// <summary>
     /// 无人值守自检（<c>--map-select --auto-demo</c>，规格 map-selection「强制进入新局界面的自检选项」）：每帧一步，把新局操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 输入非法种子 → 输入合法种子 → 换一张 → 选 2 人 → 选 3 人 → 切到另一尺寸 → 切回 → 回到进入时的标识 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
+    /// 输入非法种子 → 输入合法种子 → 换一张 → 选 2 人 → 选 3 人 → 切到另一尺寸 → 切回 → 回到进入时的标识 →（大图：未选格开始禁用 + 点不合规格 → 点合规格 → 换人数清空再回来 → 再点合规格）→ 开始；
+    /// 随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。大图的"开始"即面板插旗并直接进构筑期（relic-sites 裁决 1–4）；小图入口（<c>--map=link:12345:4</c> 预填）步骤不变。
     /// </summary>
     private void SelfCheckMapSelect()
     {
@@ -218,7 +274,8 @@ public sealed partial class GameRoot
             ok = model.Tier == target && model.MapSeed == seedBefore && model.Players == playersBefore
                 && model.CurrentId == LinkMapId.Format(seedBefore, playersBefore, target) && _session.Match.Map.Id == model.CurrentId
                 && _session.IsLargeMap == (target == MapTier.Large) && BackdropOk()
-                && _hud.MapThumbnailVisible == _session.IsLargeMap;
+                && _hud.MapThumbnailVisible == _session.IsLargeMap
+                && (!_session.IsLargeMap || _previewBoard is not null);   // relic-sites：切回大图时缩略叠层的视图模型（遗址清单、尺寸）须与纹理一起就位
             what += $"，缩略 {(_hud.MapThumbnailVisible ? "显示" : "隐藏")}";
         }
         else if (step == 7)
@@ -228,19 +285,67 @@ public sealed partial class GameRoot
             OnSelectionChanged(model.CurrentId != before);
             ok &= model.CurrentId == _selectEntryId && _session.Match.Map.Id == _selectEntryId;
         }
+        else if (step == 8 && model.Tier == MapTier.Large)
+        {
+            // relic-sites 裁决 3：大图未选格时"开始"禁用并提示；在缩略上点不合规格（A1：画布角，通常是留白格、不可落子；判据次序在前的那条先给原因）只给 Core 的原因、不选中、按钮仍禁用。
+            // 点击经 Hud → 叠层像素 → BoardGeometry.MinimapCellAt → 视图模型，与鼠标同一条路径。
+            var illegal = new Coord(0, 0);
+            bool disabled = !_hud.MapStartEnabled && !_pick.CanStart && _pick.Picked is null && _hud.MapThumbnailVisible;
+            what = $"大图未选格：开始{(disabled ? "禁用" : "竟然可用")}；在缩略上点不合规格 {illegal.ToNotation()}";
+            _hud.ClickThumbnail(_hud.ThumbnailPixelOf(illegal));
+            RefreshViews();
+            ok = disabled && _pick.Picked is null && !_hud.MapStartEnabled && _pick.Notice.Length > 0;
+            what += $" → 提示「{_pick.Notice}」";
+        }
+        else if (step is 9 or 11 && model.Tier == MapTier.Large)
+        {
+            // 裁决 1 / 2：点一个合规格（合规旗格集合的正中一格，经像素反算再按点击路径送回）→ 选中、按钮启用、文案"插旗并开始"。第 11 步是换人数清空之后再选一次。
+            Coord legal = _session.DemoFlagCell();
+            _selfCheckFlag = legal;
+            what = $"{(step == 11 ? "重新" : string.Empty)}在缩略上点合规格 {legal.ToNotation()}";
+            _hud.ClickThumbnail(_hud.ThumbnailPixelOf(legal));
+            RefreshViews();
+            ok = _pick.Picked == legal && _pick.IsLegal(legal) && _hud.MapStartEnabled && _hud.MapStartText == Labels.PlantAndStart;
+        }
+        else if (step == 10 && model.Tier == MapTier.Large)
+        {
+            // 裁决 4：换人数后选中格清空、按钮回禁用；再回到进入时的标识（仍是清空的）。
+            what = "选 2 人后选中格清空、开始回禁用，再回到进入时的标识";
+            OnSelectionChanged(model.SelectPlayers(2));
+            RefreshViews();
+            ok = _pick.Picked is null && !_hud.MapStartEnabled && model.Players == 2;
+            ok &= model.TrySelectId(_selectEntryId);
+            OnSelectionChanged(true);
+            RefreshViews();
+            ok &= model.CurrentId == _selectEntryId && _session.Match.Map.Id == _selectEntryId && _pick.Picked is null && !_hud.MapStartEnabled;
+        }
         else
         {
+            bool large = model.Tier == MapTier.Large;
             what = $"开始（棋盘节点 {boardNodes} / 进入时 {_selectEntryBoardNodes}，游离节点 {orphans} / 进入时 {_selectEntryOrphans}）";
             StartMatch();
             RefreshViews();
-            // 插旗阶段的占位比新局界面的背景多一行主题名（link-map-terrain 6.1 / Q5：背景不带主题名）：建局后的节点数 = 进入时 + 主题名标注数，多出别的即是重搭泄漏。
-            // map-expand-25 D9：建局后保持全局预览（整岛一屏看全）——一屏看不全的图上预览开着，看得全的图上没有预览。
-            int themeLabels = _session.World.Board().Placeholders.Count(p => !p.Expanded && p.ThemeName is not null);
-            int afterStart = CountNodes(_board);
-            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}，全局预览 {(_board.Rig.IsOverview ? "开" : "关")}，缩略 {(_hud.MapThumbnailVisible ? "残留" : "已撤")}";
-            ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && _board.Rig.IsOverview == _board.Rig.OverviewAvailable && !_hud.MapSelectOpen && !_hud.MapThumbnailVisible
-                && _session.Match.Players.Length == _session.Match.Map.MaxPlayers
-                && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && afterStart == _selectEntryBoardNodes + themeLabels;
+            if (large)
+            {
+                // relic-sites 裁决 3：点"插旗并开始"即建局、本机旗锁定在所点格、AI 盲抽、直接进构筑期；面板连同缩略一起撤掉。
+                // 锁定后的盘面是落座图 + 旗心附近的区块，不再与进入时的预览比节点数（进入时的节点数与游离数仍在开始前核对）。
+                Coord? mine = _session.Match.Flags.FlagCellOf(_session.Me);
+                what += $"，面板插旗：本机旗 {mine?.ToNotation() ?? "无"}（所点 {_selfCheckFlag?.ToNotation()}），{(_session.AwaitingZone ? "仍在插旗阶段" : "已进构筑期")}，区块已加载 {_board.ChunkCounts.Loaded}，缩略 {(_hud.MapThumbnailVisible ? "残留" : "已撤")}";
+                ok = !Selecting && !_session.AwaitingZone && mine is not null && mine == _selfCheckFlag && _session.Match.Map.Id == _selectEntryId && !_hud.MapSelectOpen && !_hud.MapThumbnailVisible
+                    && _session.Match.Players.Length == _session.Match.Map.MaxPlayers
+                    && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && _board.ChunkCounts.Loaded > 0;
+            }
+            else
+            {
+                // 插旗阶段的占位比新局界面的背景多一行主题名（link-map-terrain 6.1 / Q5：背景不带主题名）：建局后的节点数 = 进入时 + 主题名标注数，多出别的即是重搭泄漏。
+                // map-expand-25 D9：建局后保持全局预览（整岛一屏看全）——一屏看不全的图上预览开着，看得全的图上没有预览。
+                int themeLabels = _session.World.Board().Placeholders.Count(p => !p.Expanded && p.ThemeName is not null);
+                int afterStart = CountNodes(_board);
+                what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}，全局预览 {(_board.Rig.IsOverview ? "开" : "关")}，缩略 {(_hud.MapThumbnailVisible ? "残留" : "已撤")}";
+                ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && _board.Rig.IsOverview == _board.Rig.OverviewAvailable && !_hud.MapSelectOpen && !_hud.MapThumbnailVisible
+                    && _session.Match.Players.Length == _session.Match.Map.MaxPlayers
+                    && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && afterStart == _selectEntryBoardNodes + themeLabels;
+            }
         }
 
         string shown = Selecting ? $"{model.CurrentId}（{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关")}）" : $"已建局 {_session.Match.Map.Id}";
@@ -299,13 +404,17 @@ public sealed partial class GameRoot
     {
         if (!_session.IsLargeMap)
         {
+            _previewBoard = null;
             return null;
         }
 
         string id = _session.Match.Map.Id;
-        if (_previewThumbnail is null || _previewThumbnailId != id)
+        if (_previewThumbnail is null || _previewBoard is null || _previewThumbnailId != id)
         {
-            _previewThumbnail = Minimap.BuildTerrain(_session.World.Board());
+            // 视图模型与纹理一起按标识缓存：缩略叠层（遗址标记、框）每次悬停都要读尺寸与遗址清单，不逐次重取 150×150 的视图。
+            // 切到小图会把视图模型清掉而纹理留着（同标识切回时纹理可复用）：三者任一缺就整组重取，缩略叠层不能拿到 null 的视图模型（否则不画遗址、点不了格）。
+            _previewBoard = _session.World.Board();
+            _previewThumbnail = Minimap.BuildTerrain(_previewBoard);
             _previewThumbnailId = id;
         }
 
@@ -322,6 +431,13 @@ public sealed partial class GameRoot
             return;
         }
 
+        if (!_pick.CanStart)
+        {
+            // relic-sites 裁决 3：大图未选格时"开始"本就禁用；这里再守一道（回车 / 自检路径），只刷面板提示。
+            _dirty = true;
+            return;
+        }
+
         string id = _select.Confirm();
         if (_previewMap.Id != id)
         {
@@ -329,13 +445,20 @@ public sealed partial class GameRoot
         }
 
         _difficulty = _select.Difficulty;
+        _pendingFlag = _pick.Enabled ? _pick.Picked : null;   // 面板上选的旗格（裁决 3）：建局后立即插；带入带出开启时等补给阶段重建会话之后再插
+        _pick.Bind(null);
         _session = MatchSession.Create(_previewMap, _matchSeed, _previewMap.MaxPlayers, 1, _difficulty, _cellLimit);
         _select = null;
         _previewThumbnail = null;   // 面板连同缩略一起撤掉（HideMapSelect 帧末释放节点），主场景不再持有那张纹理
         _previewThumbnailId = string.Empty;
+        _previewBoard = null;
         BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
-        _board.Build(_session.World.Board(), _session.ZoneOwners);
-        EnterOverviewForPlanting();
+        if (!PlantPendingFlag())
+        {
+            _board.Build(_session.World.Board(), _session.ZoneOwners);
+            EnterOverviewForPlanting();
+        }
+
         ApplyCamera("新局确认");
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;

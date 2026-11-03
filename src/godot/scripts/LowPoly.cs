@@ -341,6 +341,9 @@ public static class LowPoly
     /// <summary>宝箱档数。</summary>
     public const int ChestVariants = 2;
 
+    /// <summary>信物遗址石碑的档数（relic-sites 裁决 10）：0 普通、1 稀有（金顶）。</summary>
+    public const int SteleVariants = 2;
+
     /// <summary>小石块档数（map-surface 裁决 4；档 v 在格角 v，只用前三个角）。</summary>
     public const int PebbleVariants = 3;
 
@@ -685,6 +688,37 @@ public static class LowPoly
         root.AddChild(Merged("Lid", lid, Visuals.Timber));
         root.AddChild(Merged("Band", band, Visuals.Timber));
         root.AddChild(Merged("Shade", shade, Visuals.Rock.Darkened(0.14f)));
+        return root;
+    }
+
+    /// <summary>
+    /// 信物遗址石碑（relic-sites 裁决 10）：细高的碑身立在西北格角内侧（格心偏 (−0.30, −0.30)，朝相机远侧），不占格心的棋子底座（半径 0.36）；
+    /// 底座 0.18×0.04×0.13、碑身 0.12×0.30×0.06、稀有档（v = 1）顶上一枚 0.14×0.03×0.08 的金顶。整体不出本格（离格边 ≥ 0.11）、高 ≤ 0.37。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Stele(int variant)
+    {
+        int v = Wrap(variant, SteleVariants);
+        var at = new Vector3(-0.30f, 0f, -0.30f);
+        var body = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(0.12f, 0.30f, 0.06f), 0.012f, 0.98f, top: 0.34f, sideShade: 0.90f), new Transform3D(Basis.Identity, at)),
+        };
+        var shade = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(0.18f, 0.04f, 0.13f), 0.008f, 1f, top: 0.04f, sideShade: 0.92f), new Transform3D(Basis.Identity, at)),
+        };
+        var root = new Node3D { Name = "Stele" };
+        root.AddChild(Merged("Body", body, Visuals.Rock));
+        root.AddChild(Merged("Shade", shade, Visuals.Rock.Darkened(0.14f)));
+        if (v == 1)
+        {
+            var cap = new List<(ArrayMesh, Transform3D)>
+            {
+                (LowPolyMesh.BeveledSlab(new Vector3(0.14f, 0.03f, 0.08f), 0.006f, 1f, top: 0.37f, sideShade: 0.94f), new Transform3D(Basis.Identity, at)),
+            };
+            root.AddChild(Merged("Cap", cap, Visuals.RelicForecast));
+        }
+
         return root;
     }
 

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Godot;
 using Siege.Core.Board;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Visibility;
 
@@ -24,6 +26,7 @@ public sealed partial class Minimap : Control
     private ImageTexture? _terrain;
     private readonly List<(Vector2 At, Color Color)> _pieces = [];
     private readonly List<(Rect2 Rect, Color Color)> _zones = [];
+    private ImmutableArray<RelicSite> _sites;
     private Rect2 _view;
 
     /// <summary>点了小地图上的某格。</summary>
@@ -49,6 +52,7 @@ public sealed partial class Minimap : Control
             _terrain = BuildTerrain(board);
         }
 
+        _sites = board.RelicSites;
         _pieces.Clear();
         var zoneCells = new Dictionary<int, (int MinX, int MinY, int MaxX, int MaxY)>();
         foreach (BoardCellView cell in board.Cells)
@@ -145,6 +149,8 @@ public sealed partial class Minimap : Control
             DrawTextureRect(_terrain, full, false);
         }
 
+        DrawRelicSites(this, _sites, PixelOf, _board is null ? 1f : Size.X / Math.Max(1, _board.Width));
+
         foreach ((Rect2 rect, Color color) in _zones)
         {
             DrawRect(rect, color, false, 1.5f);
@@ -161,6 +167,45 @@ public sealed partial class Minimap : Control
         }
 
         DrawRect(full, Ui.PanelBorder, false, 1f);
+    }
+
+    /// <summary>
+    /// 信物遗址标记（relic-sites 裁决 10）：稀有金色五角星（外径 ≥ 7 px）、普通白色点（带墨色描边，浅色地砖上才看得见），小地图与新局面板缩略共用这一份画法，在叠层画、不进底图。
+    /// 只按视图模型的遗址清单画；格 → 像素经调用方给的那一份映射（<see cref="BoardGeometry.MinimapPixelOf"/>），这里不另算。
+    /// </summary>
+    public static void DrawRelicSites(CanvasItem canvas, ImmutableArray<RelicSite> sites, Func<float, float, Vector2> pixelOf, float pixelsPerCell)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(pixelOf);
+        if (sites.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        float star = Math.Max(3.5f, pixelsPerCell * 1.4f);
+        float dot = Math.Max(1.6f, pixelsPerCell * 0.55f);
+        foreach (RelicSite site in sites)
+        {
+            Vector2 at = pixelOf(site.Cell.X + 0.5f, site.Cell.Y + 0.5f);
+            if (site.Tier == RelicTier.Rare)
+            {
+                var points = new Vector2[10];
+                for (int i = 0; i < points.Length; i++)
+                {
+                    float r = (i & 1) == 0 ? star : star * 0.45f;
+                    float a = (-MathF.PI / 2f) + (i * MathF.PI / 5f);
+                    points[i] = at + new Vector2(MathF.Cos(a) * r, MathF.Sin(a) * r);
+                }
+
+                canvas.DrawColoredPolygon(points, Visuals.RelicForecast);
+                canvas.DrawPolyline([.. points, points[0]], Visuals.GridInk, 1f);
+            }
+            else
+            {
+                canvas.DrawCircle(at, dot + 1f, Visuals.GridInk);
+                canvas.DrawCircle(at, dot, Colors.White);
+            }
+        }
     }
 
     /// <inheritdoc/>

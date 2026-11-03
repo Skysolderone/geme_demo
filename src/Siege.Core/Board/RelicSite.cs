@@ -8,7 +8,7 @@ namespace Siege.Core.Board;
 /// 信物遗址（relic-sites 裁决 6 / 7）：大图生成时固定下来的一格，带档位（稀有 / 普通）。大图上每批地图信物只落在空着的遗址格上（裁决 8，<c>PieceRelics.RelicSpawner</c>），
 /// 旗心与任一遗址切比雪夫距离 ≥ <see cref="RelicSites.FlagClearance"/>（裁决 9，<c>Match.FlagRules</c>）。小图没有遗址。
 /// </summary>
-/// <param name="Cell">遗址格（可落子，且八邻都是可落子格——不贴岸线、不贴障碍与深水）。</param>
+/// <param name="Cell">遗址格（可落子、高度 0 的低地，且八邻都是可落子格——不贴岸线、不贴障碍与深水；追加裁决 13）。</param>
 /// <param name="Tier">档位：稀有遗址只出稀有件，普通遗址只出普通件。</param>
 public readonly record struct RelicSite(Coord Cell, RelicTier Tier)
 {
@@ -45,13 +45,13 @@ public static class RelicSites
     public static int Distance(Coord a, Coord b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     /// <summary>
-    /// 该格能否放遗址（裁决 6「只在可落子格、避开岸线与障碍」的唯一判定）：本格可落子，且八邻都在画布内且可落子——
-    /// 岛缘、岩石、湖泊、未架桥河道的旁边一圈都不放。平台顶与坡道是可落子格，不排除。
+    /// 该格能否放遗址（裁决 6「只在可落子格、避开岸线与障碍」+ 追加裁决 13「只落低地」的唯一判定）：本格可落子且高度 0，且八邻都在画布内且可落子——
+    /// 岛缘、岩石、湖泊、未架桥河道的旁边一圈都不放；平台顶（h ≥ 1）与坡道不放，八邻的高度不限。
     /// </summary>
     public static bool IsSiteGround(MapData map, Coord c)
     {
         ArgumentNullException.ThrowIfNull(map);
-        if (!map.IsPlayable(c))
+        if (!map.IsPlayable(c) || map.HeightAt(c) != 0)
         {
             return false;
         }

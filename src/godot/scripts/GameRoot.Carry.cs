@@ -228,7 +228,12 @@ public sealed partial class GameRoot
         _supplyMap = null;
         _supplyData = null;
         _hud.HideSupply();
-        _board.Build(_session.World.Board(), _session.ZoneOwners);
+        if (!PlantPendingFlag())
+        {
+            // 没有面板上选的旗格（小图 / --map= 直接开局）或 Core 拒绝：照常进 3D 插旗阶段。有的话（relic-sites 裁决 3）已按锁定后的盘面重搭并对准本机旗。
+            _board.Build(_session.World.Board(), _session.ZoneOwners);
+        }
+
         _dirty = true;
         GD.Print(_session.CarryStore is null ? "[carry] 本局关闭带入带出。" : $"[carry] 开局{CarryTexts.Loadout(_session.MyCarry)}；{CarryTexts.Stock(_carryStore.Current)}");
     }

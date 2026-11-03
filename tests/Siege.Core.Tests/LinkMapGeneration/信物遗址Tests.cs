@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/specs/link-map-generation —— Requirement: 大图信物遗址（relic-sites 裁决 6 / 7）；map-definition —— Scenario: 信物遗址清单读写往返。
-/// 种子 1–20 × 2 / 3 / 4 人的大图：稀有 ⌈n/2⌉ + 普通 n+2 处、两两切比雪夫距离 ≥ 20、每处可落子且八邻可落子、不重复、同标识同清单、独立子流；
+/// 种子 1–20 × 2 / 3 / 4 人的大图：稀有 ⌈n/2⌉ + 普通 n+2 处、两两切比雪夫距离 ≥ 20、每处高度 0（低地，追加裁决 13）、可落子且八邻可落子、不重复、同标识同清单、独立子流；
 /// 地图文件往返含遗址；小图清单为空、导出文件没有该段且与引入遗址之前逐字节相同（<c>link:1:4</c> 导出文件的 SHA-256 钉在本类）；校验器守数量 / 位置 / 距离 / 小图为空。
 /// </summary>
 public class 信物遗址Tests(ITestOutputHelper output)
@@ -52,6 +52,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
                 foreach (RelicSite site in sites)
                 {
                     Assert.True(map.IsPlayable(site.Cell), $"{map.Id} 遗址 {site} 不可落子。");
+                    Assert.Equal(0, map.HeightAt(site.Cell));   // 追加裁决 13：遗址只落低地，平台顶 / 坡道不放
                     Assert.True(Inland(map, site.Cell), $"{map.Id} 遗址 {site} 贴着岸线 / 障碍 / 深水。");
                 }
 
@@ -145,6 +146,9 @@ public class 信物遗址Tests(ITestOutputHelper output)
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = shore }) }));
         Coord rock = large.Obstacles.First(c => c.X > 10 && c.Y > 10);
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = rock }) }));
+        // 追加裁决 13：挪到 h ≥ 1 的可落子格（平台顶 / 坡道，八邻都可落子）也不合位置规则。
+        Coord high = large.AllCoords().First(c => Inland(large, c) && large.HeightAt(c) > 0);
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = high }) }));
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = sites[6].Cell }) }));
 
         // 距离：把一处挪到另一处旁边（挪到的格本身合位置规则）。

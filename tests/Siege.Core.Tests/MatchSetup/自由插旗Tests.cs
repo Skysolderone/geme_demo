@@ -175,7 +175,13 @@ public class 自由插旗Tests
         Assert.Equal(a.ActionOrder, b.ActionOrder);
         Assert.Equal(legal[0], a.Flags.FlagCellOf(P0));
         Assert.Equal(legal[^1], b.Flags.FlagCellOf(P0));
-        Assert.Equal(a.Flags.FlagCellOf(P1), b.Flags.FlagCellOf(P1));   // 其余 AI 的抽样不随人工选择变（只经改派才可能变）
+        // 其余 AI 的抽样不随人工选择变：比 flag-pick 的原始抽样（锁定前，不经改派）；锁定后的旗格只在原抽样离人工旗 < 60 时才经改派而变。
+        ImmutableArray<(PlayerId Player, Coord Cell)> rawA = PrototypeZoneAssignment.AssignBlindCells(Large, TestMaps.Seed, All, (P0, legal[0]));
+        ImmutableArray<(PlayerId Player, Coord Cell)> rawB = PrototypeZoneAssignment.AssignBlindCells(Large, TestMaps.Seed, All, (P0, legal[^1]));
+        Assert.Equal(rawA.Where(c => c.Player != P0), rawB.Where(c => c.Player != P0));
+        Coord drawn = rawA.Single(c => c.Player == P1).Cell;
+        Assert.True(a.Flags.FlagCellOf(P1) == drawn || FlagRules.Distance(drawn, legal[0]) < FlagRules.FlagGap);
+        Assert.True(b.Flags.FlagCellOf(P1) == drawn || FlagRules.Distance(drawn, legal[^1]) < FlagRules.FlagGap);
 
         MatchFlow two = MatchFlow.Create(MapCatalog.Resolve("link:3:2:l"), TestMaps.Seed, [P0, P1], Options);
         two.PlantPrototype();
@@ -242,7 +248,8 @@ public class 自由插旗Tests
 
         // 插旗入口：报文含"不是合规旗格"与原因（遗址点名）；其他原因的报文可分辨（平台格说平台，不说遗址）。
         MatchFlow match = CreateLarge();
-        Coord onSite = Large.RelicSites[0].Cell;
+        // 取一处"被拒的第一条判据就是遗址"的格（判据次序在前的平台 / 画布边缘会先挡下；遗址位置随生成口径变，不钉第 0 处）。
+        Coord onSite = Large.RelicSites.Select(s => s.Cell).First(c => FlagRules.FlagCellProblem(Large, c)!.Contains("遗址", StringComparison.Ordinal));
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Flags.PlantAt(P0, onSite));
         Assert.Contains($"{onSite.ToNotation()} 不是合规旗格", ex.Message, StringComparison.Ordinal);
         Assert.Contains("遗址", ex.Message, StringComparison.Ordinal);

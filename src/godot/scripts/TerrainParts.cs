@@ -79,6 +79,9 @@ public static class TerrainParts
     public static readonly Kind Pebble = new("pebble", LowPoly.PebbleVariants, v => Themed("pebble", LowPoly.Pebble(v), v), "所在格的地砖上表面（石堆在第 v 个格角内侧）");
     public static readonly Kind Flower = new("flower", LowPoly.FlowerVariants, v => Themed("flower", LowPoly.Flower(v), v), "所在格的地砖上表面（花簇在第 v + 1 个格角内侧）");
 
+    /// <summary>信物遗址石碑（relic-sites 裁决 10）：档 0 普通（石碑）、档 1 稀有（带金顶）；立在格角内侧，不占格心的棋子底座。</summary>
+    public static readonly Kind Stele = new("stele", LowPoly.SteleVariants, v => Themed("stele", LowPoly.Stele(v), v), "所在格的地砖上表面（碑身在西北格角内侧）");
+
     // —— 地块部件（map-elements-v2 段 A，design D2 / D3）：每件只有一个 MeshInstance3D、一个 surface，棋盘逐格只取它的网格（见 PieceOf）。
 
     /// <summary>衬底厚度：面砖之下垫的那块铺满整格的薄板（BoardView 与 <see cref="Liner"/> 共用这一个值）。</summary>
@@ -170,7 +173,7 @@ public static class TerrainParts
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
-        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower,
+        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower, Stele,
     ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
@@ -375,6 +378,7 @@ public static class TerrainParts
         // map-surface 裁决 4：小石块的浅石比 ArtStone 再压一档——淡紫石地砖（188,180,198）上 ArtStone 几乎看不见；花色只按瓣的部件名分。
         "pebble" => part == "Shade" ? ArtDarkStone : ArtStone.Darkened(0.12f),
         "flower" => part switch { "Stem" => ArtTeal, "Heart" => ArtGold, "PetalPink" => ArtBlossom, "PetalYellow" => ArtButter, _ => ArtIvory },
+        "stele" => part switch { "Cap" => ArtGold, "Shade" => ArtDarkStone, _ => ArtStone },   // relic-sites 裁决 10：石材碑身，稀有档金顶
         _ => original,
     };
 
