@@ -251,7 +251,12 @@ public static class Program
         if (map.Tier == MapTier.Large)
         {
             int legal = Core.Match.FlagRules.LegalFlagCells(map).Length;
-            Console.WriteLine($"合规旗格 {legal}（占可落子格 {(map.PlayableCount == 0 ? 0 : legal * 100 / map.PlayableCount)}%；任意两旗切比雪夫距离 ≥ {Core.Match.FlagRules.FlagGap}，锁定时物化 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 出生平台与 {Core.Match.FlagRules.BirthRingSide}×{Core.Match.FlagRules.BirthRingSide} 出生圈）");
+            Console.WriteLine($"合规旗格 {legal}（占可落子格 {(map.PlayableCount == 0 ? 0 : legal * 100 / map.PlayableCount)}%；任意两旗切比雪夫距离 ≥ {Core.Match.FlagRules.FlagGap}，锁定时物化 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 出生平台与 {Core.Match.FlagRules.BirthRingSide}×{Core.Match.FlagRules.BirthRingSide} 出生圈，旗心与任一信物遗址相距 ≥ {Core.Match.FlagRules.SiteClearance}）");
+            // relic-sites 裁决 6 / 7：大图的信物遗址清单（稀有 ⌈n/2⌉ + 普通 n+2，两两切比雪夫距离 ≥ 20；大图信物只落在空着的遗址上）。小图没有遗址，不打印这一行。
+            Console.WriteLine(
+                $"信物遗址 {map.RelicSites.Length} 处（稀有 {RelicSites.CountOf(map.RelicSites, Core.PieceRelics.RelicTier.Rare)} / 普通 {RelicSites.CountOf(map.RelicSites, Core.PieceRelics.RelicTier.Common)}，两两切比雪夫距离 ≥ {RelicSites.UncalibratedSiteGap}；大图信物只落在空着的遗址上）："
+                + $"  稀有 {string.Join(" ", map.RelicSites.Where(s => s.Tier == Core.PieceRelics.RelicTier.Rare).Select(s => s.Cell.ToNotation()))}"
+                + $"  普通 {string.Join(" ", map.RelicSites.Where(s => s.Tier == Core.PieceRelics.RelicTier.Common).Select(s => s.Cell.ToNotation()))}");
         }
 
         Console.WriteLine(
@@ -369,6 +374,7 @@ public static class Program
         char mark = c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'
+            : RelicSiteMark(map, c) is char site ? site
             : SurfaceMark(map.SurfaceAt(c)) is char s ? s
             : map.BirthZoneOf(c) is { } z ? (char)('0' + BirthZoneLabel.Number(z))
             : Siege.Sim.Play.BoardRenderer.IsNeutralPlate(map, c) ? NeutralGlyph
@@ -378,6 +384,20 @@ public static class Program
 
     /// <summary>文本图里中立平台（公共棋盘）格的标记（seat-gap-25 E6）：与出生区编号区分；地表标记优先（同出生区编号）。</summary>
     private const char NeutralGlyph = 'n';
+
+    /// <summary>文本图里信物遗址格的标记（relic-sites 裁决 6）：稀有 <c>*</c>、普通 <c>+</c>；不是遗址为 <c>null</c>。只有大图有遗址，小图的文本图逐字节不变。</summary>
+    private static char? RelicSiteMark(MapData map, Coord c)
+    {
+        foreach (RelicSite site in map.RelicSites)
+        {
+            if (site.Cell == c)
+            {
+                return site.Tier == Core.PieceRelics.RelicTier.Rare ? '*' : '+';
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>棋盘清单一行的公共部分：主题 · 宽×高、左下角与棋盘内的新地表格数（座位与中立平台同一格式）。</summary>
     private static string PlateLine(MapData map, BoardPlate plate)

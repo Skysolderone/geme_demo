@@ -8,7 +8,8 @@ using static Siege.Core.Tests.LinkModeFixtures;
 namespace Siege.Core.Tests.MatchSetup;
 
 /// <summary>
-/// 规格：openspec/specs/match-setup —— Requirement: 大图自由插旗（big-map 裁决 2 / 4，D3）：合规旗格、锁定时按插旗先后的间距改派、AI 盲选、两档入口互斥、锁定前旗格不可见。
+/// 规格：openspec/specs/match-setup —— Requirement: 大图自由插旗（big-map 裁决 2 / 4，D3）：合规旗格、锁定时按插旗先后的间距改派、AI 盲选、两档入口互斥、锁定前旗格不可见；
+/// relic-sites 裁决 9：旗心与任一信物遗址切比雪夫距离 ≥ 7（「合规旗格的判定」的独立算式随之加上遗址项；「旗心距遗址不足7被拒_AI盲选合规」）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 A 实跑，mutate.py，备份 → 改 → 跑本类 → 逐字节还原 → 刷新时间戳）：
@@ -29,7 +30,7 @@ public class 自由插旗Tests
     [Fact]
     public void 合规旗格的判定()
     {
-        // D3 / 追加裁决 19：可落子、高度 0、非桥、不在平台内；旗心 13×13 在画布内且不压中立平台；9×9 出生圈内可落子 ≥ 40。
+        // D3 / 追加裁决 19：可落子、高度 0、非桥、不在平台内；旗心 13×13 在画布内且不压中立平台；9×9 出生圈内可落子 ≥ 40；relic-sites 裁决 9：与任一信物遗址切比雪夫距离 ≥ 7。
         ImmutableArray<Coord> legal = FlagRules.LegalFlagCells(Large);
         Assert.True(legal.Length * 2 >= Large.PlayableCount, $"合规旗格 {legal.Length} 不足可落子 {Large.PlayableCount} 的一半。");
         Assert.Equal(legal, legal.OrderBy(c => c.Y).ThenBy(c => c.X));   // 先行后列
@@ -42,6 +43,8 @@ public class 自由插旗Tests
             bool inside = c.X >= 6 && c.Y >= 6 && c.X + 6 < Large.Width && c.Y + 6 < Large.Height;
             // 13×13 与任何中立平台外接矩形至少隔 1 格（追加裁决 19）。
             bool clear = Large.Boards.All(p => c.X + 7 < p.Origin.X || p.Origin.X + p.Width < c.X - 6 || c.Y + 7 < p.Origin.Y || p.Origin.Y + p.Height < c.Y - 6);
+            // 与任一遗址切比雪夫距离 ≥ 7（relic-sites 裁决 9）。
+            bool apart = Large.RelicSites.All(s => Math.Max(Math.Abs(c.X - s.Cell.X), Math.Abs(c.Y - s.Cell.Y)) >= 7);
             int ring = 0;
             for (int dy = -4; dy <= 4; dy++)
             {
@@ -52,15 +55,17 @@ public class 自由插旗Tests
                 }
             }
 
-            bool expected = ground && inside && clear && ring >= 40;
+            bool expected = ground && inside && clear && apart && ring >= 40;
             Assert.True(expected == set.Contains(c), $"{c.ToNotation()}：独立算式 {expected}，LegalFlagCells {set.Contains(c)}。");
             Assert.Equal(expected, FlagRules.IsLegalFlagCell(Large, c));
         }
 
-        // 反面样本口径：平台格、桥格、画布边缘各至少有一个被排除。
+        // 反面样本口径：平台格、桥格、画布边缘、遗址格各至少有一个被排除。
         Assert.Contains(Large.Boards[0].Cells(), c => !set.Contains(c));
         Assert.Contains(Large.TerrainData.Bridges, c => !set.Contains(c));
         Assert.DoesNotContain(new Coord(2, 2), set);
+        Assert.NotEmpty(Large.RelicSites);
+        Assert.All(Large.RelicSites, s => Assert.DoesNotContain(s.Cell, set));
 
         // 小图没有合规旗格（出生座位制）。
         Assert.Empty(FlagRules.LegalFlagCells(Map));
@@ -196,6 +201,75 @@ public class 自由插旗Tests
         Assert.Equal(manual, match.Flags.FlagCellOf(P2));
         Assert.NotEqual(p0, match.Flags.FlagCellOf(P0));
         Assert.True(FlagRules.Distance(match.Flags.FlagCellOf(P0)!.Value, manual) >= FlagRules.FlagGap);
+    }
+
+    [Fact]
+    public void 旗心距遗址不足7被拒_AI盲选合规()
+    {
+        // relic-sites 裁决 9：遗址周围 13×13（距离 0–6）全部不合规且原因文案点名遗址；距离恰 7 且其余判据满足的格合规；PlantAt 的报文带原因；AI 盲选（LegalFlagCells）自动遵守。
+        Assert.Equal(7, FlagRules.SiteClearance);
+        Assert.NotEmpty(Large.RelicSites);
+        int rejectedBySite = 0;
+        foreach (RelicSite site in Large.RelicSites)
+        {
+            for (int dy = -6; dy <= 6; dy++)
+            {
+                for (int dx = -6; dx <= 6; dx++)
+                {
+                    int x = site.Cell.X + dx, y = site.Cell.Y + dy;
+                    if (x < 0 || y < 0 || x >= Large.Width || y >= Large.Height)
+                    {
+                        continue;   // 画布外的格不构造坐标（Coord 不接受负值）；遗址可以离画布边只有 3 格，13×13 会出界。
+                    }
+
+                    var c = new Coord(x, y);
+                    Assert.False(FlagRules.IsLegalFlagCell(Large, c), $"{c.ToNotation()} 距遗址 {site.Cell.ToNotation()} 只有 {Math.Max(Math.Abs(dx), Math.Abs(dy))} 却合规。");
+                    string problem = FlagRules.FlagCellProblem(Large, c)!;
+                    if (problem.Contains("遗址", StringComparison.Ordinal))
+                    {
+                        Assert.Contains(site.Cell.ToNotation(), problem, StringComparison.Ordinal);
+                        rejectedBySite++;
+                    }
+                }
+            }
+        }
+
+        Assert.True(rejectedBySite > 0, "没有任何格是因为遗址被拒的（都被更早的判据挡下），测不到遗址文案。");
+
+        // 距离恰 7 的环上至少有一格合规（样本口径：规则是 ≥ 7 而不是 > 7）。
+        Assert.Contains(Large.RelicSites, s => Enumerable.Range(-7, 15).SelectMany(dx => new[] { (dx, -7), (dx, 7), (-7, dx), (7, dx) })
+            .Any(d => FlagRules.IsLegalFlagCell(Large, new Coord(s.Cell.X + d.Item1, s.Cell.Y + d.Item2))));
+
+        // 插旗入口：报文含"不是合规旗格"与原因（遗址点名）；其他原因的报文可分辨（平台格说平台，不说遗址）。
+        MatchFlow match = CreateLarge();
+        Coord onSite = Large.RelicSites[0].Cell;
+        SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Flags.PlantAt(P0, onSite));
+        Assert.Contains($"{onSite.ToNotation()} 不是合规旗格", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("遗址", ex.Message, StringComparison.Ordinal);
+        SiegeRuleException plate = Assert.Throws<SiegeRuleException>(() => match.Flags.PlantAt(P0, Large.Boards[0].Origin));
+        Assert.Contains("平台", plate.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("遗址", plate.Message, StringComparison.Ordinal);
+        Assert.Null(match.Flags.FlagCellOf(P0));
+
+        // AI 盲选 + 落座：地图种子 1–5 × 对局种子 1–3，锁定后每面旗与每处遗址 ≥ 7、13×13 出生棋盘不含任何遗址、落座图过校验。
+        for (ulong mapSeed = 1; mapSeed <= 5; mapSeed++)
+        {
+            MapData map = MapCatalog.Resolve(LinkMapId.Format(mapSeed, 4, MapTier.Large));
+            for (ulong gameSeed = 1; gameSeed <= 3; gameSeed++)
+            {
+                MatchFlow m = MatchFlow.Create(map, new GameSeed(gameSeed), All, Options);
+                m.PlantPrototype();
+                foreach (PlayerId p in All)
+                {
+                    Coord flag = m.Flags.FlagCellOf(p)!.Value;
+                    Assert.All(map.RelicSites, s => Assert.True(FlagRules.Distance(flag, s.Cell) >= 7, $"link:{mapSeed}:4:l 种子 {gameSeed}：旗 {flag.ToNotation()} 距遗址 {s.Cell.ToNotation()} 只有 {FlagRules.Distance(flag, s.Cell)}。"));
+                }
+
+                Assert.All(map.RelicSites, s => Assert.Null(m.Board.BaseMap.BirthBoardAt(s.Cell)));
+                Assert.Equal(map.RelicSites, m.Board.BaseMap.RelicSites);
+                Assert.True(MapValidator.Validate(m.Board.BaseMap).IsValid);
+            }
+        }
     }
 
     [Fact]

@@ -193,9 +193,10 @@ public sealed class FlagPlanting
         }
 
         RequireCanPlant(player);
-        if (!FlagRules.IsLegalFlagCell(Map, cell))
+        if (FlagRules.FlagCellProblem(Map, cell) is { } problem)
         {
-            throw new SiegeRuleException($"{cell.ToNotation()} 不是合规旗格：旗须插在高度 0、非桥、不在平台内的可落子格上，旗心 13×13 在图内且不压中立平台，9×9 出生圈内可落子格 ≥ {FlagRules.MinRingPlayable}。");
+            // relic-sites 裁决 9：原因文案由 FlagRules 唯一给出（压到遗址 / 压到平台 / 出生圈不足……各自可分辨），这里不复刻判据。
+            throw new SiegeRuleException($"{cell.ToNotation()} 不是合规旗格：{problem}");
         }
 
         if (_cells.TryGetValue(player, out Coord plantedCell))

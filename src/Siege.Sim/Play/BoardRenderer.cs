@@ -104,6 +104,9 @@ internal sealed class BoardRenderer
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知信物种类。"),
     };
 
+    /// <summary>信物遗址在盘面上的字母（relic-sites 裁决 6）：稀有 R、普通 r（大写 R 不是棋子类型码——棋子码见 <see cref="Letter"/>）。</summary>
+    internal static char SiteMark(RelicTier tier) => tier == RelicTier.Rare ? 'R' : 'r';
+
     /// <summary>改造目标的文案：动作 + 目标格 / 边。</summary>
     internal static string EditText(TerrainEdit edit) =>
         $"{TerrainEdit.DisplayName(edit.Kind)} {(edit.Kind == TerrainEditKind.Fence ? edit.Edge.ToString() : edit.Cell.ToNotation())}";
@@ -115,6 +118,8 @@ internal sealed class BoardRenderer
         MapData map = board.Map;
         ImmutableDictionary<Coord, RelicToken> relics = board.RelicsOnBoard().Where(r => board[r.Cell].Occupant is null).ToImmutableDictionary(r => r.Cell, r => r.Token);
         ImmutableDictionary<Coord, RelicKind> forecast = view.RelicForecast is { } f ? f.Slots.ToImmutableDictionary(s => s.Cell, s => s.Kind) : ImmutableDictionary<Coord, RelicKind>.Empty;
+        // relic-sites 裁决 6 / 8：大图的信物遗址（固定地标，信物只落在空着的遗址上）；小图为空，终端输出不变。
+        ImmutableDictionary<Coord, RelicTier> sites = map.RelicSites.ToImmutableDictionary(s => s.Cell, s => s.Tier);
         ImmutableDictionary<Coord, PieceType> staged = batch is null
             ? ImmutableDictionary<Coord, PieceType>.Empty
             : batch.Placements.ToImmutableDictionary(p => p.Coord, p => p.Type);
@@ -190,6 +195,11 @@ internal sealed class BoardRenderer
                 {
                     Ink($"!{RelicLetter(coming)} ", ConsoleColor.DarkYellow);
                 }
+                else if (sites.TryGetValue(c, out RelicTier siteTier))
+                {
+                    // 空着的遗址（有信物 / 预告 / 棋子时上面的分支已画）：稀有 R、普通 r，与信物小写字母 d/o/w/v/g 不混。
+                    Ink($" {SiteMark(siteTier)} ", ConsoleColor.DarkYellow);
+                }
                 else if (forbidden.TryGetValue(c, out PlayerId lifeOwner))
                 {
                     // 禁入格排在区号、合法空格之前：它回答的是"这里能不能落"（与预演第 1 步"禁入先于范围"同序）。
@@ -231,6 +241,10 @@ internal sealed class BoardRenderer
 
         _out.WriteLine("        信物（空格上即地图信物，落子拾取）：" + string.Join(" ", RelicKinds.Order.Select(k => $"{RelicLetter(k)}{k.DisplayName()}"))
             + "  !x=预告下一批落位");
+        if (!sites.IsEmpty)
+        {
+            _out.WriteLine($"        信物遗址（大图信物只落在空着的遗址上）：{SiteMark(RelicTier.Rare)}=稀有遗址  {SiteMark(RelicTier.Common)}=普通遗址");
+        }
         Coord[] covered = [.. forbidden.Keys.Where(relics.ContainsKey).Order()];
         if (covered.Length > 0)
         {

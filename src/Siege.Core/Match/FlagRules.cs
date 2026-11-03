@@ -12,7 +12,8 @@ namespace Siege.Core.Match;
 /// <remarks>
 /// <para><b>合规旗格</b>（D3，段 A 追加裁决 19）：可落子、高度 0、不是桥格、不在任何平台内；旗心 13×13（锁定后物化的出生平台）整块在画布内、且与任何中立平台的外接矩形至少隔 <see cref="PlateClearance"/> 格
 /// （不重叠落座图才过得了"出生棋盘不与平台重叠"的校验、构筑期的落子范围才不切进高台；隔 1 格是让中立平台坡道朝外的那格仍是"低地"而不是另一块棋盘的格——校验器 <c>PLATE_HEIGHT</c> 的口径）；
-/// 旗心 9×9（出生圈）内可落子格 ≥ <see cref="MinRingPlayable"/>（避免把出生圈压在海湾尖角上）。</para>
+/// 旗心与任一信物遗址切比雪夫距离 ≥ <see cref="SiteClearance"/>（relic-sites 裁决 9：13×13 出生平台不盖遗址）；
+/// 旗心 9×9（出生圈）内可落子格 ≥ <see cref="MinRingPlayable"/>（避免把出生圈压在海湾尖角上）。不合规的原因由 <see cref="FlagCellProblem"/> 给出文案，界面与终端据此提示。</para>
 /// <para><b>改派</b>（D3）：按插旗先后逐个确认——与已确认的每一面旗切比雪夫距离 ≥ <see cref="FlagGap"/> 即保留；否则改派到"与全部已确认旗间距 ≥ 60 的合规旗格里离原旗最近者"
 /// （切比雪夫距离，并列按先行后列取第一个）；一个都没有时改派到"到已确认旗的最小间距最大"的合规旗格（并列同样先行后列）。全程确定性、不消费随机。</para>
 /// <para><b>落座图</b>（D4，歧义 18）：出生区 z = 旗 z 心 9×9 ∩ 可落子，棋盘清单 = 每人一块 13×13 的出生棋盘（原点 = 旗 − (6, 6)、不带主题，按出生区编号）+ 既有中立平台；
@@ -34,6 +35,9 @@ public static class FlagRules
 
     /// <summary>出生平台外接矩形与任何中立平台外接矩形之间至少隔开的格数（追加裁决 19；校验器大图行的出生棋盘间隔同值）。</summary>
     public const int PlateClearance = 1;
+
+    /// <summary>旗心与任一信物遗址的最小切比雪夫距离（relic-sites 裁决 9，= <see cref="RelicSites.FlagClearance"/> 7：13×13 出生平台盖不住遗址）。</summary>
+    public const int SiteClearance = RelicSites.FlagClearance;
 
     /// <summary>旗心到出生平台边的格数（6）与到出生圈边的格数（4）。</summary>
     public const int PlateReach = (BirthPlateSide - 1) / 2;
@@ -79,7 +83,7 @@ public static class FlagRules
 
         int w = map.Width, h = map.Height;
         int[] prefix = PlayablePrefix(map);
-        bool[] blocked = BlockedByPlates(map);
+        bool[] blocked = BlockedByPlatesOrSites(map);
         var legal = ImmutableArray.CreateBuilder<Coord>();
         for (int y = PlateReach; y < h - PlateReach; y++)
         {
@@ -96,29 +100,69 @@ public static class FlagRules
         return legal.ToImmutable();
     }
 
-    /// <summary>单格判定（与 <see cref="LegalFlagCells"/> 同一口径，供界面与 <see cref="FlagPlanting.PlantAt"/> 逐格查）。</summary>
-    public static bool IsLegalFlagCell(MapData map, Coord c)
+    /// <summary>单格判定（与 <see cref="LegalFlagCells"/> 同一口径，供界面与 <see cref="FlagPlanting.PlantAt"/> 逐格查）：<see cref="FlagCellProblem"/> 为 <c>null</c> 即合规。</summary>
+    public static bool IsLegalFlagCell(MapData map, Coord c) => FlagCellProblem(map, c) is null;
+
+    /// <summary>
+    /// 单格不合规的原因（relic-sites 裁决 9 起界面要能区分"压到遗址"与其他原因）：合规返回 <c>null</c>，否则一句中文说明（第一条不满足的判据）。
+    /// 与 <see cref="LegalFlagCells"/> 同一口径，判据次序：档位 / 基图 → 在画布内 → 旗格本身（可落子、不在平台内、高度 0、非桥）→ 13×13 在画布内 → 不压中立平台 → 与遗址 ≥ 7 → 9×9 可落子 ≥ 40。
+    /// </summary>
+    public static string? FlagCellProblem(MapData map, Coord c)
     {
         ArgumentNullException.ThrowIfNull(map);
-        if (map.Tier != MapTier.Large || !map.BirthZones.IsDefaultOrEmpty || !map.Contains(c) || !IsFlagGround(map, c))
+        if (map.Tier != MapTier.Large || !map.BirthZones.IsDefaultOrEmpty)
         {
-            return false;
+            return $"地图 {map.Id} 不是大图基图（小图用出生座位，锁定后不再插旗）。";
+        }
+
+        if (!map.Contains(c))
+        {
+            return $"{c.ToNotation()} 不在画布内。";
+        }
+
+        if (!map.IsPlayable(c))
+        {
+            return $"{c.ToNotation()} 不可落子。";
+        }
+
+        if (map.Boards.Any(p => p.Contains(c)))
+        {
+            return $"{c.ToNotation()} 在平台内，旗不能插在平台上。";
+        }
+
+        if (map.HeightAt(c) != 0)
+        {
+            return $"{c.ToNotation()} 不是低地（高度 {map.HeightAt(c)}），旗只能插在高度 0 的格。";
+        }
+
+        if (map.HasBridge(c))
+        {
+            return $"{c.ToNotation()} 是桥格，旗不能插在桥上。";
         }
 
         // 旗心 13×13 整块在画布内（先判，再构造平台——坐标类型不接受负值）。
         if (c.X < PlateReach || c.Y < PlateReach || c.X + PlateReach >= map.Width || c.Y + PlateReach >= map.Height)
         {
-            return false;
+            return $"{c.ToNotation()} 离画布边不足 {PlateReach} 格，旗心 {BirthPlateSide}×{BirthPlateSide} 出生平台放不进画布。";
         }
 
         BoardPlate plate = BirthPlateOf(c);
-
         if (map.Boards.Any(p => !MapValidator.PlatesApart(p, plate, PlateClearance)))
         {
-            return false;
+            return $"{c.ToNotation()} 的 {BirthPlateSide}×{BirthPlateSide} 出生平台压到或贴着中立平台（须至少隔 {PlateClearance} 格）。";
         }
 
-        return BirthRingOf(map, c).Count >= MinRingPlayable;
+        foreach (RelicSite site in map.RelicSites)
+        {
+            int d = Distance(c, site.Cell);
+            if (d < SiteClearance)
+            {
+                return $"{c.ToNotation()} 与信物遗址 {site.Cell.ToNotation()} 相距 {d}，旗心与任一遗址须相距 ≥ {SiteClearance}（{BirthPlateSide}×{BirthPlateSide} 出生平台不得盖住遗址）。";
+            }
+        }
+
+        int ring = BirthRingOf(map, c).Count;
+        return ring >= MinRingPlayable ? null : $"{c.ToNotation()} 的 {BirthRingSide}×{BirthRingSide} 出生圈内只有 {ring} 个可落子格（须 ≥ {MinRingPlayable}）。";
     }
 
     /// <summary>
@@ -206,8 +250,11 @@ public static class FlagRules
     private static bool IsFlagGround(MapData map, Coord c) =>
         map.IsPlayable(c) && map.HeightAt(c) == 0 && !map.HasBridge(c) && !map.Boards.Any(p => p.Contains(c));
 
-    /// <summary>旗心 13×13 会与某块平台重叠或贴着它的格（按平台外接矩形外扩 6 + <see cref="PlateClearance"/> 格标记），下标 = y × 宽 + x。与 <see cref="IsLegalFlagCell"/> 的 <c>PlatesApart</c> 同一口径。</summary>
-    private static bool[] BlockedByPlates(MapData map)
+    /// <summary>
+    /// 旗心 13×13 会与某块平台重叠或贴着它的格（按平台外接矩形外扩 6 + <see cref="PlateClearance"/> 格标记），以及与某处信物遗址切比雪夫距离 &lt; <see cref="SiteClearance"/> 的格
+    /// （遗址周围 13×13，relic-sites 裁决 9），下标 = y × 宽 + x。与 <see cref="FlagCellProblem"/> 的 <c>PlatesApart</c> / 遗址距离同一口径。
+    /// </summary>
+    private static bool[] BlockedByPlatesOrSites(MapData map)
     {
         int w = map.Width, h = map.Height;
         int reach = PlateReach + PlateClearance;
@@ -217,6 +264,18 @@ public static class FlagRules
             for (int y = Math.Max(0, p.Origin.Y - reach); y < Math.Min(h, p.Origin.Y + p.Height + reach); y++)
             {
                 for (int x = Math.Max(0, p.Origin.X - reach); x < Math.Min(w, p.Origin.X + p.Width + reach); x++)
+                {
+                    blocked[(y * w) + x] = true;
+                }
+            }
+        }
+
+        int siteReach = SiteClearance - 1;
+        foreach (RelicSite site in map.RelicSites)
+        {
+            for (int y = Math.Max(0, site.Cell.Y - siteReach); y <= Math.Min(h - 1, site.Cell.Y + siteReach); y++)
+            {
+                for (int x = Math.Max(0, site.Cell.X - siteReach); x <= Math.Min(w - 1, site.Cell.X + siteReach); x++)
                 {
                     blocked[(y * w) + x] = true;
                 }

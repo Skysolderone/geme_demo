@@ -893,6 +893,8 @@ public sealed class MatchSession
             // big-map D7：档位与旗格只在大图写出（小图首部逐字节不变）。
             MapTier = Match.Tier == MapTier.Large ? Match.Tier.ToString() : null,
             Flags = Match.Tier == MapTier.Large ? [.. Match.Players.Select(p => Match.Flags.FlagCellOf(p)?.ToNotation() ?? "-")] : null,
+            // relic-sites 裁决 6 / 8：大图另记信物遗址清单（格:档位），小图不写。
+            RelicSites = Match.Tier == MapTier.Large ? [.. Match.Board.BaseMap.RelicSites.Select(s => s.ToString())] : null,
             // 段 F.3：开局出生棋盘（离线按棋盘归主题的依据；open-map 起地图整局不变）。seat-gap-25：只列出生座位（下标 = 出生棋盘编号），中立平台不列。
             Boards = [.. Match.Board.BaseMap.BirthBoards().Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
         };

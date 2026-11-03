@@ -52,6 +52,11 @@ public class 大图跑局与回放Tests
         Assert.Equal(3, log.Turns.Count);
         Assert.Equal("Large", log.Header.MapTier);
         Assert.Equal(4, log.Header.Flags!.Count);
+        // relic-sites 裁决 6 / 8：首部另记遗址清单（格:档位，稀有在前），与落座图的清单一致。
+        Assert.Equal(baseMapSites(), log.Header.RelicSites);
+        Assert.Equal(8, log.Header.RelicSites!.Count);
+        Assert.Equal(2, log.Header.RelicSites.Count(s => s.EndsWith(":Rare", StringComparison.Ordinal)));
+        static List<string> baseMapSites() => [.. MapCatalog.Resolve("link:7:4:l").RelicSites.Select(s => $"{s.Cell.ToNotation()}:{s.Tier}")];
         Assert.Equal(4, log.Header.ZoneCount);
         Assert.Equal([0, 1, 2, 3], log.Header.Zones);
         Assert.Equal(60, log.Header.Config.RoundCap);
@@ -75,9 +80,11 @@ public class 大图跑局与回放Tests
         MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 1), 1).Run();
         Assert.Null(log.Header.MapTier);
         Assert.Null(log.Header.Flags);
+        Assert.Null(log.Header.RelicSites);
         string header = log.DeterministicText().Split('\n')[0];
         Assert.DoesNotContain("MapTier", header, StringComparison.Ordinal);
         Assert.DoesNotContain("Flags", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("RelicSites", header, StringComparison.Ordinal);
         Assert.Equal(100, log.Header.Config.RoundCap);
     }
 }

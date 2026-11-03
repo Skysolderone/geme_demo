@@ -71,7 +71,7 @@ public static class RelicKinds
 
     // ---- 刷新（R8–R11，未校准）----
 
-    /// <summary>刷新普通档的整数权重，<b>未校准的初值 85</b>（与稀有档 15 相对）。</summary>
+    /// <summary>刷新普通档的整数权重，<b>未校准的初值 85</b>（与稀有档 15 相对）。只在小图抽档；大图的档位随信物遗址（relic-sites 裁决 8），不用这对权重。</summary>
     public const int UncalibratedCommonWeight = 85;
 
     /// <summary>刷新稀有档的整数权重，<b>未校准的初值 15</b>。</summary>

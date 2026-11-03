@@ -151,6 +151,9 @@ public static partial class LinkMapGenerator
         /// <summary>是否预置出生座位（只有小图）。</summary>
         internal bool HasSeats => Tier == MapTier.Small;
 
+        /// <summary>是否放信物遗址（relic-sites 裁决 6：只有大图）。</summary>
+        internal bool HasRelicSites => Tier == MapTier.Large;
+
         internal static TierGeometry Of(MapTier tier) => tier switch
         {
             MapTier.Small => new(tier, (CornerCutMin, CornerCutMax), (BayMinDepth, BayMaxDepth), (BayMinLength, BayMaxLength), (BayGapMin, BayGapMax), LinkMapGenerator.ReservedShore, LinkMapGenerator.RiverReach,
@@ -238,6 +241,7 @@ public static partial class LinkMapGenerator
     /// 全图可落子格沿气边不连通或占比填不到即重抽低地（至多 <see cref="MaxLowlandRedraws"/> 次，仍不行即整张布局重抽）。座位不做镜像 / 旋转（E1 留作可选，未实施），也就不为它消费随机。
     /// 不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决；relic-redesign 接线段起地图数据不再有信物格字段），布局流也不为信物消费随机。
     /// 最后（link-map-surfaces D1）用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按编号逐块（座位与中立平台一视同仁）叠加新地表（读抬升前的高度，D3），组装时把平台抬到 h=2、坡道 h=1。
+    /// 大图另在组装后用第四条独立子流 <see cref="MapRandom.ForLinkRelicSites"/> 放信物遗址（relic-sites 裁决 6，消费顺序见 <c>LinkMapGenerator.Sites.cs</c>）；小图不派生它。
     /// 叠加只改平台中间带的草地，不影响前面任何一步的判定，所以 <paramref name="overlaySurfaces"/> 为 <c>false</c> 的对照图与正式图只差新地表。
     /// 成品过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
     /// </summary>
@@ -271,6 +275,12 @@ public static partial class LinkMapGenerator
                     ? OverlaySurfaces(layout.Boards, MapRandom.ForLinkSurfaces(mapSeed, players, tier))
                     : [.. layout.Boards];
                 MapData map = Assemble(id, players, tier, island, layout, boards, lowland);
+                if (g.HasRelicSites)
+                {
+                    // relic-sites 裁决 6：大图在成品上、校验之前用第四条流放信物遗址（消费顺序见 LinkMapGenerator.Sites.cs）；小图不派生这条流。
+                    map = map with { RelicSites = PlaceRelicSites(map, players, MapRandom.ForLinkRelicSites(mapSeed, players, tier)) };
+                }
+
                 MapValidationResult validation = MapValidator.Validate(map);
                 if (!validation.IsValid)
                 {

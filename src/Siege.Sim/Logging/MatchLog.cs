@@ -479,6 +479,13 @@ public sealed record LogHeader
     public List<string>? Flags { get; init; }
 
     /// <summary>
+    /// 大图的信物遗址清单（relic-sites 裁决 6 / 8；每项 <c>格:档位</c>，如 <c>J14:Rare</c>，按地图清单次序——稀有在前）。只在大图的局写出，小图首部逐字节不变。
+    /// 离线即可核对刷新事件里的每件都落在遗址上、档位对应；回放按标识重建地图，不读它。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? RelicSites { get; init; }
+
+    /// <summary>
     /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。离线即可按它把坐标归到棋盘与主题，不必按地图标识重建地图（open-map 起地图整局不变）。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

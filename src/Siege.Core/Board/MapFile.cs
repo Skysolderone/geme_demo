@@ -8,7 +8,7 @@ namespace Siege.Core.Board;
 /// 地图数据的文件格式（JSON）。坐标一律用围棋记法，使手工编辑的地图文件可被人直接读写。
 /// </summary>
 /// <remarks>
-/// 地形、障碍与出生区由地图固定，因此它们必须能脱离代码维护（relic-redesign 起地图不含信物格）。
+/// 地形、障碍与出生区由地图固定，因此它们必须能脱离代码维护（relic-redesign 起地图不含信物格；relic-sites 起大图带信物遗址清单——位置与档位，不是信物）。
 /// 往返读写 MUST 无信息丢失——丢失的那一项通常是豁免理由或预算档位，而它们恰恰只在校验失败时才被注意到。
 /// 规格：openspec/changes/add-board-core/specs/map-definition —— Requirement: 地图为设计师固定的静态数据
 /// </remarks>
@@ -43,6 +43,10 @@ public static class MapFile
                 : [.. map.Boards.Select(b => new BoardDto { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Kind = b.Kind, Theme = b.Theme?.ToString() })],
             // 版本号为 0（初始地图与全部非链接档）不写出：既有地图的导出文件逐字节不变（board-link-mode 1.1）。
             MapVersion = map.MapVersion == 0 ? null : map.MapVersion,
+            // relic-sites 裁决 6：遗址清单只在非空（大图）时写出；小图为空不写，小图的导出文件与引入遗址之前逐字节相同。
+            RelicSites = map.RelicSites.IsDefaultOrEmpty
+                ? null
+                : [.. map.RelicSites.Select(s => new RelicSiteDto { Cell = s.Cell.ToNotation(), Tier = s.Tier.ToString() })],
             Obstacles = Sorted(map.Obstacles),
             BirthZones = [.. map.BirthZones.Select(Sorted)],
             ChokePoints = Sorted(map.ChokePoints),
@@ -98,6 +102,7 @@ public static class MapFile
             Tier = tier,
             Boards = ParseBoards(dto.Boards, profile, tier),
             MapVersion = ParseMapVersion(dto.MapVersion),
+            RelicSites = ParseRelicSites(dto.RelicSites),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
             ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
@@ -184,6 +189,30 @@ public static class MapFile
         }
 
         return plates.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// 信物遗址清单（relic-sites 裁决 6）：省略即空。这里只管"读得成一格 + 一个档位"：坐标是围棋记法、档位只认枚举名 <c>Rare</c> / <c>Common</c>（大小写不敏感，不认数字）；
+    /// 数量、距离、位置与"小图必须为空"属于静态校验（<see cref="MapValidator"/>），不在文件格式里判。
+    /// </summary>
+    private static ImmutableArray<RelicSite> ParseRelicSites(List<RelicSiteDto>? sites)
+    {
+        if (sites is null)
+        {
+            return [];
+        }
+
+        ImmutableArray<RelicSite>.Builder parsed = ImmutableArray.CreateBuilder<RelicSite>(sites.Count);
+        for (int i = 0; i < sites.Count; i++)
+        {
+            RelicSiteDto dto = Required(sites[i], $"RelicSites[{i}]");
+            string tierText = Required(dto.Tier, $"RelicSites[{i}].Tier").Trim();
+            PieceRelics.RelicTier tier = Enum.GetValues<PieceRelics.RelicTier>().Select(t => (PieceRelics.RelicTier?)t).FirstOrDefault(t => string.Equals(t.ToString(), tierText, StringComparison.OrdinalIgnoreCase))
+                ?? throw new FormatException($"地图文件的 RelicSites[{i}] 的档位 Tier 为 \"{dto.Tier}\"：信物遗址的档位只能是 Rare（稀有）/ Common（普通）。");
+            parsed.Add(new RelicSite(Coord.Parse(Required(dto.Cell, $"RelicSites[{i}].Cell")), tier));
+        }
+
+        return parsed.MoveToImmutable();
     }
 
     /// <summary>
@@ -441,6 +470,10 @@ public static class MapFile
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? MapVersion { get; set; }
 
+        /// <summary>信物遗址清单（relic-sites）。省略即空；空清单写出时也省略（小图）。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<RelicSiteDto>? RelicSites { get; set; }
+
         public List<string> Obstacles { get; set; } = [];
 
         public List<List<string>> BirthZones { get; set; } = [];
@@ -493,6 +526,30 @@ public static class MapFile
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonConverter(typeof(ThemeTextConverter))]
         public string? Theme { get; set; }
+    }
+
+    /// <summary>信物遗址清单的一项（relic-sites 裁决 6）：格（围棋记法）与档位的枚举名（<c>Rare</c> / <c>Common</c>）。</summary>
+    private sealed class RelicSiteDto
+    {
+        public string Cell { get; set; } = string.Empty;
+
+        /// <summary>档位的枚举名。按原文读成字符串（字符串或数字都收），由 <see cref="ParseRelicSites"/> 判定，使无法识别的取值指名该项报出。</summary>
+        [JsonConverter(typeof(RelicTierTextConverter))]
+        public string? Tier { get; set; }
+    }
+
+    /// <summary>信物遗址档位字段的原文读取：字符串原样、数字取其十进制文本（随后被拒）；写出为字符串。</summary>
+    private sealed class RelicTierTextConverter : JsonConverter<string?>
+    {
+        public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => System.Text.Encoding.UTF8.GetString(reader.ValueSpan),
+            JsonTokenType.Null => null,
+            _ => throw new FormatException($"地图文件的信物遗址档位 Tier 不是字符串（{reader.TokenType}）：档位只能是 Rare（稀有）/ Common（普通）。"),
+        };
+
+        public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
     }
 
     /// <summary>主题字段的原文读取：字符串原样、数字取其十进制文本（随后被拒）；写出为字符串。</summary>

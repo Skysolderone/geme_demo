@@ -323,7 +323,7 @@ internal static class PlayCommand
         output.WriteLine();
         while (true)
         {
-            output.Write($"自由插旗：输入旗格坐标（围棋记法，如 J14）。合规旗格 = 可落子、高度 0、非桥、不在平台内，旗心 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 在图内且与中立平台隔开，旗心 {FlagRules.BirthRingSide}×{FlagRules.BirthRingSide} 内可落子 ≥ {FlagRules.MinRingPlayable}；看不到别人的旗，选中即锁定，与别人太近按插旗先后改派 > ");
+            output.Write($"自由插旗：输入旗格坐标（围棋记法，如 J14）。合规旗格 = 可落子、高度 0、非桥、不在平台内，旗心 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 在图内且与中立平台隔开，与任一信物遗址相距 ≥ {FlagRules.SiteClearance}，旗心 {FlagRules.BirthRingSide}×{FlagRules.BirthRingSide} 内可落子 ≥ {FlagRules.MinRingPlayable}；看不到别人的旗，选中即锁定，与别人太近按插旗先后改派 > ");
             string? line = input.ReadLine() ?? throw new PlayQuitException();
             line = line.Trim();
             if (line is "q" or "quit")
@@ -348,9 +348,9 @@ internal static class PlayCommand
                 continue;
             }
 
-            if (!FlagRules.IsLegalFlagCell(map, cell))
+            if (FlagRules.FlagCellProblem(map, cell) is { } problem)
             {
-                output.WriteLine($"  {cell.ToNotation()} 不是合规旗格。");
+                output.WriteLine($"  {cell.ToNotation()} 不是合规旗格：{problem}");
                 continue;
             }
 
