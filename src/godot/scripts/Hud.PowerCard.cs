@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using Siege.Core.Board;
 using Siege.Presentation.Hud;
@@ -10,8 +11,9 @@ using Siege.Presentation.Visibility;
 namespace Siege.Godot;
 
 /// <summary>
-/// 个人势力卡片（左上回合信息下方）与确认落子后的数值构筑演出。卡片的每一处文字取自 <see cref="PowerCard.Build"/>，
-/// 构筑的数值与分段取自 <see cref="PowerCardBuild"/>；本文件只负责摆放、取色与特效（飞入放大、滚动、粒子、亮环、轻震、缩回）。
+/// 个人势力卡片（左上回合信息下方）与结算后的地图势力飘字（power-map）。卡片的每一处文字取自 <see cref="PowerCard.Build"/>，
+/// 飘字的数值与分段取自 <see cref="PowerBurst"/>；本文件只负责摆放、取色与特效：飘字跟着落子处在屏幕上的投影走（不占全屏、不压暗），
+/// 本机玩家自己的那一手定格后飞一道光进卡片、卡片原位飙升。
 /// </summary>
 public sealed partial class Hud
 {
@@ -26,40 +28,48 @@ public sealed partial class Hud
     private Label _cardForecastMain = null!;
     private Label _cardForecastRange = null!;
     private Label _cardForecastRank = null!;
+    private ViewerWorld? _cardWorld;
 
-    // ---------- 数值构筑 ----------
-    private Control _buildRoot = null!;
-    private ColorRect _buildDim = null!;
-    private PowerBuildFx _buildFx = null!;
-    private PowerBuildFx _buildFxBack = null!;
-    private PanelContainer _buildCard = null!;
-    private StyleBoxFlat _buildCardStyle = null!;
-    private EmblemIcon _buildEmblem = null!;
-    private Label _buildTitle = null!;
-    private Label _buildValue = null!;
-    private Label _buildStage = null!;
-    private Label _buildDelta = null!;
-    private Label _buildRank = null!;
+    // ---------- 地图飘字 ----------
+    private Control _mapLabels = null!;
+    private PowerBuildFx _mapFx = null!;
+    private PowerBuildFx _topFx = null!;
+    private readonly List<(PowerChange Change, Vector3 Anchor, bool ForViewer)> _armedBursts = [];
+    private readonly List<ActiveBurst> _bursts = [];
 
-    private PowerChange? _armedBuild;
-    private PowerCardBuild? _build;
-    private double _buildMs;
-    private PowerBuildPhase _lastPhase = PowerBuildPhase.Done;
-    private string _lastValueText = string.Empty;
-    private double _valuePulse;
-    private double _shakeLeft;
-    private double _shakeTotal;
-
-    private const float BuildCardWidth = 520f;
-    private const float BuildCardHeight = 300f;
-    private const int BuildValueFontPx = 88;
     private const int CardValueFontPx = 30;
 
-    /// <summary>数值构筑是否正在播放（截图与测试自证用）。</summary>
-    public bool PowerBuildPlaying => _build is not null;
+    /// <summary>一条正在播的飘字。</summary>
+    private sealed class ActiveBurst
+    {
+        public required PowerBurst Burst { get; init; }
 
-    /// <summary>数值构筑此刻的画面；没在播为 <c>null</c>（截图取景用）。</summary>
-    public PowerBuildFrame? PowerBuildFrameNow => _build?.At((int)_buildMs);
+        public required Vector3 Anchor { get; init; }
+
+        public required Color Faction { get; init; }
+
+        public required Label Value { get; init; }
+
+        public required Label Stage { get; init; }
+
+        public double Ms { get; set; }
+
+        public PowerBurstPhase LastPhase { get; set; } = PowerBurstPhase.Done;
+
+        public string LastText { get; set; } = string.Empty;
+
+        public double Pulse { get; set; }
+
+        public PowerBurstFrame Frame { get; set; }
+
+        public Vector2 LabelAt { get; set; }
+    }
+
+    /// <summary>是否有飘字正在播（截图与自检用）。</summary>
+    public bool PowerBurstPlaying => _bursts.Count > 0;
+
+    /// <summary>本机玩家飘字此刻的画面；没在播为 <c>null</c>（截图取景用）。</summary>
+    public PowerBurstFrame? ViewerBurstFrameNow => _bursts.Find(b => b.Burst.ForViewer) is { } b ? b.Frame : null;
 
     /// <summary>左列：回合信息、势力卡片、信息层面板自上而下排，回合信息折行变高时下面跟着下移，不互相压住。</summary>
     private void BuildLeftColumn()
@@ -117,9 +127,10 @@ public sealed partial class Hud
         panel.Visible = false;
     }
 
-    /// <summary>刷新卡片：<paramref name="mask"/> 里有本机玩家的势力显示时与排名栏同步滚动；构筑播放期间卡片让位给中央的大卡片。</summary>
+    /// <summary>刷新卡片：<paramref name="mask"/> 里有本机玩家的势力显示时与排名栏同步滚动；本机飘字在播时卡片数字听飘字的（光飞到之前旧值、飙升段滚到新值）。</summary>
     private void RefreshPowerCard(ViewerWorld world, ShowMask mask)
     {
+        _cardWorld = world;
         var power = (PowerLayerContent)world.Layer(TacticalLayer.Power);
         PowerDisplay? display = mask.Power.TryGetValue(world.Viewer, out PowerDisplay? shown) ? shown : null;
         if (PowerCard.Build(power, world.Viewer, world.Preview(), display) is not { } card)
@@ -134,6 +145,8 @@ public sealed partial class Hud
         _cardEmblem.Set(faction.Emblem, factionColor);
         _cardTitle.Text = card.StatusText is { } status ? $"{card.TitleText}　{status}" : card.TitleText;
         _cardValue.Text = card.ValueText;
+        _cardValue.Scale = Vector2.One;
+        _cardValue.AddThemeColorOverride("font_color", Ui.InfoText);
         _cardLive.Text = card.LiveDeltaText ?? string.Empty;
         _cardLive.AddThemeColorOverride("font_color", card.LiveDeltaNegative ? Ui.DangerText : factionColor.Lightened(0.2f));
         _cardBreakdown.Text = card.BreakdownText;
@@ -150,81 +163,34 @@ public sealed partial class Hud
         _cardForecastRank.Text = card.ForecastRankText ?? string.Empty;
         _cardForecastRank.Visible = card.ForecastRankText is not null;
 
-        // 构筑播放中：小卡片透明，由中央大卡片代表它（缩回时落到它的位置再显形）。
-        _cardPanel.Modulate = new Color(1f, 1f, 1f, _build is null ? 1f : 0f);
+        if (_bursts.Find(b => b.Burst.ForViewer) is { } mine)
+        {
+            ApplyBurstToCard(mine, 0d);
+        }
     }
 
-    // ---------- 数值构筑：搭建 ----------
+    // ---------- 地图飘字：搭建 ----------
 
-    private void BuildPowerBuildOverlay()
+    /// <summary>压在面板之下的两层（飘字文字与地图特效）：先于全部面板加入，界面面板永远盖在它们上面。</summary>
+    private void BuildPowerBurstUnderlay()
     {
-        _buildRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
-        _buildRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _root.AddChild(_buildRoot);
-
-        _buildDim = new ColorRect { Color = new Color(0.02f, 0.03f, 0.06f, 0f), MouseFilter = Control.MouseFilterEnum.Ignore };
-        _buildDim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _buildRoot.AddChild(_buildDim);
-
-        _buildFxBack = new PowerBuildFx { MouseFilter = Control.MouseFilterEnum.Ignore, Back = true };
-        _buildFxBack.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _buildRoot.AddChild(_buildFxBack);
-
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space1);
-        _buildCard = panel;
-        // 大卡片自带一只样式盒：边框与外发光逐帧取本段档位色（白 → 金 → 橙 → 红）。
-        _buildCardStyle = new StyleBoxFlat
-        {
-            BgColor = new Color(0.07f, 0.09f, 0.13f, 0.94f),
-            ShadowSize = 26,
-            ContentMarginLeft = 24,
-            ContentMarginRight = 24,
-            ContentMarginTop = 18,
-            ContentMarginBottom = 18,
-        };
-        _buildCardStyle.SetBorderWidthAll(3);
-        _buildCardStyle.SetCornerRadiusAll(12);
-        panel.AddThemeStyleboxOverride("panel", _buildCardStyle);
-        panel.Size = new Vector2(BuildCardWidth, BuildCardHeight);
-        panel.CustomMinimumSize = new Vector2(BuildCardWidth, BuildCardHeight);
-        panel.PivotOffset = new Vector2(BuildCardWidth, BuildCardHeight) * 0.5f;
-        panel.TooltipText = "点击跳过";
-        panel.GuiInput += e =>
-        {
-            if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
-            {
-                SkipPowerBuild();
-            }
-        };
-        body.Alignment = BoxContainer.AlignmentMode.Center;
-
-        var head = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Alignment = BoxContainer.AlignmentMode.Center };
-        head.AddThemeConstantOverride("separation", UiTheme.Space2);
-        _buildEmblem = new EmblemIcon { CustomMinimumSize = new Vector2(26f, 26f), MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
-        head.AddChild(_buildEmblem);
-        _buildTitle = Ui.Text("势力构筑", Ui.PanelBorder, UiTheme.BodyFontPx + 4);
-        head.AddChild(_buildTitle);
-        body.AddChild(head);
-
-        _buildValue = CenteredLabel(BuildValueFontPx, 14);
-        _buildValue.CustomMinimumSize = new Vector2(0f, BuildValueFontPx + 16f);
-        body.AddChild(_buildValue);
-        _buildStage = CenteredLabel(UiTheme.BodyFontPx * 2, 8);
-        body.AddChild(_buildStage);
-        _buildDelta = CenteredLabel(UiTheme.BodyFontPx + 8, 6);
-        body.AddChild(_buildDelta);
-        _buildRank = CenteredLabel(UiTheme.BodyFontPx + 4, 5);
-        body.AddChild(_buildRank);
-
-        _buildRoot.AddChild(panel);
-
-        // 前层：火花、亮环、闪白盖在大卡片之上。
-        _buildFx = new PowerBuildFx { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _buildFx.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _buildRoot.AddChild(_buildFx);
+        _mapFx = new PowerBuildFx { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _mapFx.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_mapFx);
+        _mapLabels = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _mapLabels.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_mapLabels);
     }
 
-    private static Label CenteredLabel(int size, int outline)
+    /// <summary>盖在面板之上的一层：飞向卡片的光与卡片周围的火花。</summary>
+    private void BuildPowerBurstOverlay()
+    {
+        _topFx = new PowerBuildFx { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _topFx.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_topFx);
+    }
+
+    private static Label OutlinedLabel(int size, int outline)
     {
         Label label = Ui.Text(string.Empty, Ui.InfoText, size);
         label.HorizontalAlignment = HorizontalAlignment.Center;
@@ -234,273 +200,319 @@ public sealed partial class Hud
         return label;
     }
 
-    // ---------- 数值构筑：触发 ----------
+    // ---------- 地图飘字：触发 ----------
 
-    /// <summary>本机确认落子、结算节拍里自己的势力上涨：先挂上，等结算演出播到势力节拍（或演出结束）再开演。</summary>
-    public void ArmPowerBuild(PowerChange change)
+    /// <summary>
+    /// 一次正常时长的结算演出开始：行动玩家这一手让自己势力上涨就挂上一条飘字（<paramref name="anchor"/> = 落子处在场景里的中心），
+    /// 等演出走到势力节拍（或演出结束）再开演。
+    /// </summary>
+    public void ArmPowerBurst(PowerChange change, Vector3 anchor, bool forViewer)
     {
         ArgumentNullException.ThrowIfNull(change);
-        _armedBuild = PowerCardBuild.Wants(change) ? change : null;
-    }
-
-    /// <summary>结算演出播完：挂着的构筑若还没开演（零时长或没有走到势力节拍）此刻开演。</summary>
-    public void ShowFinishedForPowerBuild()
-    {
-        if (_armedBuild is { } armed)
+        if (PowerBurst.Wants(change))
         {
-            StartPowerBuild(armed);
+            _armedBursts.Add((change, anchor, forViewer));
         }
     }
 
-    /// <summary>演出被截断（弃赛）：构筑一并取消。</summary>
-    public void CancelPowerBuild()
+    /// <summary>结算演出播完：还没开演的飘字此刻开演。</summary>
+    public void ShowFinishedForPowerBurst()
     {
-        _armedBuild = null;
-        EndPowerBuild();
-    }
-
-    private void TryStartArmedBuild(ShowMask mask)
-    {
-        if (_armedBuild is not { } armed || !mask.Power.TryGetValue(armed.Player, out PowerDisplay? display) || display.Stage == PowerStage.Pending)
+        foreach ((PowerChange change, Vector3 anchor, bool forViewer) in _armedBursts)
         {
-            return;
+            StartPowerBurst(change, anchor, forViewer);
         }
 
-        StartPowerBuild(armed);
+        _armedBursts.Clear();
     }
 
-    private void StartPowerBuild(PowerChange change)
+    /// <summary>演出被截断（弃赛）：全部飘字取消。</summary>
+    public void CancelPowerBursts()
     {
-        _armedBuild = null;
-        _build = new PowerCardBuild(change);
-        _buildMs = 0d;
-        _lastPhase = PowerBuildPhase.Done;
-        _lastValueText = string.Empty;
-        _shakeLeft = 0d;
-
-        FactionStyle faction = FactionTable.For(change.Player);
-        Color factionColor = Visuals.ToColor(faction.Primary);
-        _buildEmblem.Set(faction.Emblem, factionColor);
-        _buildTitle.Text = $"{faction.Name} · 势力构筑";
-        _buildFx.Begin(factionColor);
-        _buildFxBack.Begin(factionColor);
-        _buildRoot.Visible = true;
-        _cardPanel.Modulate = new Color(1f, 1f, 1f, 0f);
-        StepPowerBuild(0d);
-    }
-
-    private void SkipPowerBuild()
-    {
-        if (_build is { } build && _buildMs < build.ExitStartMs)
+        _armedBursts.Clear();
+        foreach (ActiveBurst b in _bursts)
         {
-            _buildMs = build.ExitStartMs;
+            b.Value.QueueFree();
+            b.Stage.QueueFree();
+        }
+
+        _bursts.Clear();
+        _mapFx?.Clear();
+        _topFx?.Clear();
+    }
+
+    private void TryStartArmedBursts(ShowMask mask)
+    {
+        for (int i = _armedBursts.Count - 1; i >= 0; i--)
+        {
+            (PowerChange change, Vector3 anchor, bool forViewer) = _armedBursts[i];
+            if (mask.Power.TryGetValue(change.Player, out PowerDisplay? display) && display.Stage != PowerStage.Pending)
+            {
+                _armedBursts.RemoveAt(i);
+                StartPowerBurst(change, anchor, forViewer);
+            }
         }
     }
 
-    private void EndPowerBuild()
+    private void StartPowerBurst(PowerChange change, Vector3 anchor, bool forViewer)
     {
-        _build = null;
-        if (_buildRoot is not null)
+        int tier = change.TotalTier;
+        Label value = OutlinedLabel(34 + (tier * 6), 8);
+        Label stage = OutlinedLabel(UiTheme.BodyFontPx + 4, 5);
+        _mapLabels.AddChild(value);
+        _mapLabels.AddChild(stage);
+        _bursts.Add(new ActiveBurst
         {
-            _buildRoot.Visible = false;
-            _buildFx.Clear();
-            _buildFxBack.Clear();
-        }
-
-        if (_cardPanel is not null)
-        {
-            _cardPanel.Modulate = Colors.White;
-        }
+            Burst = new PowerBurst(change, forViewer),
+            Anchor = anchor,
+            Faction = Visuals.ToColor(FactionTable.For(change.Player).Primary),
+            Value = value,
+            Stage = stage,
+        });
     }
 
-    public override void _Process(double delta)
+    // ---------- 地图飘字：逐帧 ----------
+
+    /// <summary>
+    /// 逐帧推进全部飘字（由 GameRoot 在推进对局之后调用，截图冻结时不调用）。<paramref name="project"/> 把场景坐标投影到屏幕（在镜头背后为 <c>null</c>）。
+    /// 返回本帧该给镜头的轻震进度（‰）；不震为 <c>null</c>。
+    /// </summary>
+    public int? StepPowerBursts(double delta, Func<Vector3, Vector2?> project)
     {
-        if (_build is not null)
+        ArgumentNullException.ThrowIfNull(project);
+        // 没有飘字时也推进特效层：最后一条播完后火花与亮环还要再飞一会才散尽。
+        _mapFx.BeginFrame();
+        _topFx.BeginFrame();
+        if (_bursts.Count == 0)
         {
-            StepPowerBuild(delta);
+            _mapFx.Step((float)delta);
+            _topFx.Step((float)delta);
+            return null;
         }
+
+        int? shake = null;
+        bool restoreCard = false;
+        for (int i = _bursts.Count - 1; i >= 0; i--)
+        {
+            ActiveBurst b = _bursts[i];
+            b.Ms += delta * 1000d;
+            b.Frame = b.Burst.At((int)b.Ms);
+            if (b.Frame.Phase == PowerBurstPhase.Done)
+            {
+                b.Value.QueueFree();
+                b.Stage.QueueFree();
+                _bursts.RemoveAt(i);
+                restoreCard |= b.Burst.ForViewer;
+                continue;
+            }
+
+            StepBurst(b, delta, project(b.Anchor));
+            if (b.Burst.ShakePermilleAt(b.Frame) is int s)
+            {
+                shake = Math.Max(shake ?? 0, s);
+            }
+        }
+
+        _mapFx.Step((float)delta);
+        _topFx.Step((float)delta);
+        if (restoreCard && _cardWorld is { } world)
+        {
+            // 卡片回到视图模型的值（此刻已是结算后快照）；若另一场演出正在播，下一帧 RefreshShow 会再按遮罩刷新。
+            RefreshPowerCard(world, ShowMask.Empty);
+        }
+
+        return shake;
     }
 
-    // ---------- 数值构筑：逐帧 ----------
-
-    private void StepPowerBuild(double delta)
+    private void StepBurst(ActiveBurst b, double delta, Vector2? projected)
     {
-        PowerCardBuild build = _build!;
-        _buildMs += delta * 1000d;
-        PowerBuildFrame frame = build.At((int)_buildMs);
-        if (frame.Phase == PowerBuildPhase.Done)
-        {
-            EndPowerBuild();
-            return;
-        }
-
+        PowerBurstFrame frame = b.Frame;
         float p = frame.PhasePermille / 1000f;
-        Vector2 screen = _root.Size;
-        Vector2 center = screen * 0.5f - new Vector2(0f, 40f);
-        Rect2 small = _cardPanel.GetGlobalRect();
-        Vector2 smallCenter = small.Size.X > 1f ? small.GetCenter() : new Vector2(160f, 160f);
-        float smallScale = small.Size.X > 1f ? Mathf.Clamp(small.Size.X / BuildCardWidth, 0.3f, 1f) : 0.6f;
+        bool entering = frame.Phase != b.LastPhase;
+        b.LastPhase = frame.Phase;
+        Color tierColor = Visuals.ToColor(NumberTierStyle.For(frame.StageTier).RevealColor);
+        // 一档的档位色近白：光柱与亮环改用阵营色，数字仍按档位色。
+        Color accent = frame.StageTier <= NumberTier.Lowest ? b.Faction : tierColor;
 
-        bool entering = frame.Phase != _lastPhase;
-        NumberTierStyle tierStyle = NumberTierStyle.For(frame.StageTier);
-        Color tierColor = Visuals.ToColor(tierStyle.RevealColor);
+        Rect2 view = new(Vector2.Zero, _root.Size);
+        bool onScreen = projected is { } ps && view.Grow(120f).HasPoint(ps);
+        Vector2 ground = projected ?? b.LabelAt;
 
-        // 位置与缩放：飞入（缓出）、缩回（缓入），其余停在中央。
-        Vector2 at = center;
-        float scale = 1f;
-        float dim = 0.5f;
-        float alpha = 1f;
-        switch (frame.Phase)
+        // 飘字从地面往上升：滚动段内升到顶，之后停在那里。
+        int rolling = b.Burst.Change.TerritoryDelta.IsZero || b.Burst.Change.GroupDelta.IsZero ? 1 : 2;
+        float rise = frame.Phase switch
         {
-            case PowerBuildPhase.Enter:
-                float e = EaseOutBack(p);
-                at = smallCenter.Lerp(center, Mathf.Clamp(e, 0f, 1.1f));
-                scale = Mathf.Lerp(smallScale, 1f, e);
-                dim = 0.5f * p;
-                break;
-            case PowerBuildPhase.Exit:
-                float x = p * p;
-                at = center.Lerp(smallCenter, x);
-                scale = Mathf.Lerp(1f, smallScale, x);
-                dim = 0.5f * (1f - p);
-                alpha = 1f - Mathf.Clamp((p - 0.7f) / 0.3f, 0f, 1f);
-                break;
+            PowerBurstPhase.Territory => p / rolling,
+            PowerBurstPhase.Group => rolling == 1 ? p : 0.5f + (p / 2f),
+            _ => 1f,
+        };
+        Vector2 labelAt = ground - new Vector2(0f, 60f + (60f * EaseOut(rise)));
+        b.LabelAt = labelAt;
+
+        float alpha = frame.Phase switch
+        {
+            PowerBurstPhase.Fly or PowerBurstPhase.Fade => 1f - p,
+            PowerBurstPhase.Soar => 0f,
+            _ => 1f,
+        };
+
+        // 数字：每次变化弹一下；收束段先放大再回落。
+        if (frame.ShownDeltaText != b.LastText)
+        {
+            b.LastText = frame.ShownDeltaText;
+            b.Pulse = 1d;
         }
 
-        // 轻震：收束段起按档位震，四五档更猛。
-        Vector2 shake = Vector2.Zero;
-        if (_shakeLeft > 0d)
+        b.Pulse = Math.Max(0d, b.Pulse - (delta * 8d));
+        float pop = 1f + (0.12f * (float)b.Pulse);
+        if (frame.Phase == PowerBurstPhase.Finale)
         {
-            _shakeLeft -= delta;
-            float k = (float)(_shakeLeft / Math.Max(_shakeTotal, 0.001d));
-            float amp = 4f + (frame.StageTier * 2.5f);
-            shake = new Vector2((float)GD.RandRange(-amp, amp), (float)GD.RandRange(-amp, amp)) * k;
+            pop += (NumberTierStyle.For(b.Burst.Tier).PopPermille - 1000) / 1000f * (1f - EaseOut(p));
         }
 
-        _buildCard.Scale = new Vector2(scale, scale);
-        _buildCard.Position = at - (_buildCard.Size * 0.5f) + shake;
-        _buildCard.Modulate = new Color(1f, 1f, 1f, alpha);
-        _buildDim.Color = new Color(0.02f, 0.03f, 0.06f, dim);
+        Place(b.Value, frame.ShownDeltaText, labelAt, pop, frame.Phase is PowerBurstPhase.Territory or PowerBurstPhase.Group ? tierColor : Visuals.ToColor(NumberTierStyle.For(b.Burst.Tier).RevealColor), alpha, onScreen);
+        string? stageText = frame.StageText
+            ?? (frame.Phase is PowerBurstPhase.Finale or PowerBurstPhase.Hold && b.Burst.RankText is { } rank ? rank : null);
+        Place(b.Stage, stageText ?? string.Empty, labelAt + new Vector2(0f, 40f + (b.Burst.Tier * 3f)), 1f, b.Faction.Lightened(0.3f), alpha * (stageText is null ? 0f : 1f), onScreen);
 
-        // 数字：每次变化弹一下；颜色随本段档位（白 → 金 → 橙 → 红），收束后整体取总增量档位。
-        if (frame.ValueText != _lastValueText)
+        if (onScreen)
         {
-            _lastValueText = frame.ValueText;
-            _valuePulse = 1d;
+            float beam = frame.Phase switch
+            {
+                PowerBurstPhase.Territory or PowerBurstPhase.Group => 0.55f + (0.45f * p),
+                PowerBurstPhase.Finale => 1.3f - (0.3f * p),
+                PowerBurstPhase.Hold => 1f,
+                PowerBurstPhase.Fly or PowerBurstPhase.Fade => 1f - p,
+                _ => 0f,
+            };
+            if (beam > 0.01f)
+            {
+                _mapFx.AddBeam(ground, accent, beam, 150f + (b.Burst.Tier * 28f));
+            }
+
+            if (entering)
+            {
+                switch (frame.Phase)
+                {
+                    case PowerBurstPhase.Territory:
+                    case PowerBurstPhase.Group:
+                        _mapFx.Burst(ground, 10 + (frame.StageTier * 6), accent, 260f, upward: true);
+                        _mapFx.Ring(ground, accent, 0.45f, 70f);
+                        break;
+                    case PowerBurstPhase.Finale:
+                        int tier = b.Burst.Tier;
+                        NumberTierStyle style = NumberTierStyle.For(tier);
+                        Color final = Visuals.ToColor(style.RevealColor);
+                        _mapFx.Burst(labelAt, 26 + (tier * 14), final, 300f + (tier * 45f));
+                        _mapFx.Burst(ground, 16 + (tier * 4), b.Faction, 240f, upward: true);
+                        for (int r = 0; r <= style.RingCount + 1; r++)
+                        {
+                            _mapFx.Ring(ground, tier <= NumberTier.Lowest ? b.Faction : final, 0.55f + (r * 0.18f), 110f + (r * 60f) + (tier * 12f), r * 0.1f);
+                        }
+
+                        break;
+                }
+            }
+
+            if (frame.Phase is PowerBurstPhase.Territory or PowerBurstPhase.Group && GD.Randf() < 0.5f)
+            {
+                _mapFx.Burst(ground + new Vector2((float)GD.RandRange(-24d, 24d), 0f), 1, accent, 200f, upward: true);
+            }
+
+            if (frame.Phase == PowerBurstPhase.Finale)
+            {
+                _mapFx.AddBloom(labelAt, Visuals.ToColor(NumberTierStyle.For(b.Burst.Tier).RevealColor), 50f + (b.Burst.Tier * 10f), 1f - p);
+            }
         }
 
-        _valuePulse = Math.Max(0d, _valuePulse - (delta * 9d));
-        _buildValue.Text = frame.ValueText;
-        _buildValue.PivotOffset = _buildValue.Size * 0.5f;
-        float pop = frame.Phase is PowerBuildPhase.Territory or PowerBuildPhase.Group
-            ? 1f + (0.06f * (float)_valuePulse) + ((tierStyle.PopPermille - 1000) / 1000f * (1f - p) * 0.35f)
-            : frame.Phase == PowerBuildPhase.Finale ? 1f + ((tierStyle.PopPermille - 1000) / 1000f * (1f - EaseOut(p))) : 1f;
-        _buildValue.Scale = new Vector2(pop, pop);
-        Color valueColor = frame.Phase is PowerBuildPhase.Enter ? Ui.InfoText : tierColor;
-        if (frame.Phase == PowerBuildPhase.Finale)
+        if (b.Burst.ForViewer)
         {
-            valueColor = Colors.White.Lerp(tierColor, Mathf.Clamp(p * 2f, 0f, 1f));
+            StepViewerFlight(b, frame, p, entering, labelAt, accent);
+            ApplyBurstToCard(b, delta);
+        }
+    }
+
+    /// <summary>本机玩家：定格后一道光从飘字飞进卡片的势力数字，落到时卡片周围炸一圈火花。</summary>
+    private void StepViewerFlight(ActiveBurst b, PowerBurstFrame frame, float p, bool entering, Vector2 from, Color accent)
+    {
+        Rect2 card = _cardValue.GetGlobalRect();
+        Vector2 target = card.GetCenter();
+        if (frame.Phase == PowerBurstPhase.Fly)
+        {
+            // 光从屏幕外的落子处飞来时，起点夹到屏幕边缘（镜头不为飘字移动，裁决 7）。
+            Vector2 start = new(Mathf.Clamp(from.X, 0f, _root.Size.X), Mathf.Clamp(from.Y, 0f, _root.Size.Y));
+            const int trail = 12;
+            var points = new Vector2[trail];
+            for (int k = 0; k < trail; k++)
+            {
+                float q = Mathf.Clamp(p - ((trail - 1 - k) * 0.035f), 0f, 1f);
+                float e = q * q;
+                Vector2 straight = start.Lerp(target, e);
+                Vector2 normal = (target - start).Orthogonal().Normalized();
+                points[k] = straight + (normal * Mathf.Sin(Mathf.Pi * e) * 90f);
+            }
+
+            _topFx.AddComet(points, accent.Lightened(0.2f));
         }
 
-        _buildValue.AddThemeColorOverride("font_color", valueColor);
-
-        // 本段增量：从下方飞入、段内上浮淡出。
-        if (frame.StageText is { } stageText)
+        if (entering && frame.Phase == PowerBurstPhase.Soar)
         {
-            _buildStage.Text = stageText;
-            float rise = EaseOut(Mathf.Clamp(p * 3f, 0f, 1f));
-            _buildStage.Modulate = new Color(tierColor.R, tierColor.G, tierColor.B, Mathf.Clamp(rise * (1.3f - p), 0f, 1f));
-            _buildStage.PivotOffset = _buildStage.Size * 0.5f;
-            float s = 1.5f - (0.5f * rise);
-            _buildStage.Scale = new Vector2(s, s);
+            _topFx.Burst(target, 30 + (b.Burst.Tier * 8), accent, 260f);
+            _topFx.Ring(target, accent, 0.5f, 90f);
+        }
+
+        if (frame.Phase == PowerBurstPhase.Soar)
+        {
+            _mapFx.AddGlow(_cardPanel.GetGlobalRect(), accent, 1f - (0.6f * p));
+            if (GD.Randf() < 0.6f)
+            {
+                Rect2 r = _cardPanel.GetGlobalRect();
+                Vector2 edge = new((float)GD.RandRange(r.Position.X, r.End.X), r.End.Y - 4f);
+                _topFx.Burst(edge, 1, accent, 160f, upward: true);
+            }
+        }
+    }
+
+    /// <summary>本机飘字在播时卡片的数字：光飞到之前保持旧值，飙升段滚到新值、按档位着色并弹动，旁边写本手总增量。</summary>
+    private void ApplyBurstToCard(ActiveBurst b, double delta)
+    {
+        PowerBurstFrame frame = b.Frame;
+        _cardValue.Text = frame.CardValueText;
+        _cardBreakdown.Visible = false;
+        if (frame.Phase == PowerBurstPhase.Soar)
+        {
+            float p = frame.PhasePermille / 1000f;
+            Color tier = Visuals.ToColor(NumberTierStyle.For(b.Burst.Tier).RevealColor);
+            _cardValue.AddThemeColorOverride("font_color", tier.Lerp(Ui.InfoText, p * p));
+            _cardValue.PivotOffset = new Vector2(0f, _cardValue.Size.Y * 0.5f);
+            float s = 1f + (0.35f * (1f - EaseOut(p))) + (0.05f * Mathf.Sin(p * 40f) * (1f - p));
+            _cardValue.Scale = new Vector2(s, s);
+            _cardLive.Text = b.Burst.Change.DeltaText;
+            _cardLive.AddThemeColorOverride("font_color", tier);
         }
         else
         {
-            _buildStage.Modulate = new Color(1f, 1f, 1f, 0f);
+            _cardValue.Scale = Vector2.One;
+            _cardLive.Text = string.Empty;
+        }
+    }
+
+    private static void Place(Label label, string text, Vector2 center, float scale, Color color, float alpha, bool visible)
+    {
+        label.Visible = visible && alpha > 0.01f && text.Length > 0;
+        if (!label.Visible)
+        {
+            return;
         }
 
-        // 收束起：总增量与名次变化。
-        bool settled = frame.Phase is PowerBuildPhase.Finale or PowerBuildPhase.Hold or PowerBuildPhase.Exit;
-        _buildDelta.Text = settled ? $"本手 {build.DeltaText}" : string.Empty;
-        _buildDelta.AddThemeColorOverride("font_color", Visuals.ToColor(NumberTierStyle.For(build.Tier).RevealColor));
-        _buildRank.Text = settled && build.RankText is { } rank ? $"{rank}{(build.RankUp ? "  ▲" : "  ▼")}" : string.Empty;
-        _buildRank.AddThemeColorOverride("font_color", build.RankUp ? Ui.PanelBorder : Ui.DangerText);
-        if (frame.Phase == PowerBuildPhase.Finale)
-        {
-            float a = Mathf.Clamp(p * 4f, 0f, 1f);
-            _buildDelta.Modulate = new Color(1f, 1f, 1f, a);
-            _buildRank.Modulate = new Color(1f, 1f, 1f, a);
-        }
-        else if (settled)
-        {
-            _buildDelta.Modulate = Colors.White;
-            _buildRank.Modulate = Colors.White;
-        }
-
-        // 特效：每段开头一簇火花；收束爆一大团 + 亮环 + 轻震；数字滚动时持续冒细小火花。
-        Vector2 burstAt = at + new Vector2(0f, -20f);
-        if (entering)
-        {
-            switch (frame.Phase)
-            {
-                case PowerBuildPhase.Territory:
-                case PowerBuildPhase.Group:
-                    _buildFx.Burst(burstAt, 14 + (frame.StageTier * 8), tierColor, 320f + (frame.StageTier * 60f));
-                    _buildFx.Ring(burstAt, tierColor, 0.45f, 180f);
-                    break;
-                case PowerBuildPhase.Finale:
-                    int tier = build.Tier;
-                    NumberTierStyle finale = NumberTierStyle.For(tier);
-                    Color finaleColor = Visuals.ToColor(finale.RevealColor);
-                    _buildFx.Burst(burstAt, 40 + (tier * 22), finaleColor, 420f + (tier * 90f));
-                    _buildFx.Burst(burstAt, 24, Colors.White, 260f);
-                    for (int i = 0; i <= finale.RingCount + 1; i++)
-                    {
-                        _buildFx.Ring(burstAt, finaleColor, 0.7f + (i * 0.22f), 320f + (i * 140f), i * 0.12f);
-                    }
-
-                    _buildFx.Flash(finaleColor);
-                    _shakeTotal = (Math.Max(finale.ShakeMs, tier >= 3 ? 160 : 0)) / 1000d;
-                    _shakeLeft = _shakeTotal;
-                    break;
-            }
-
-            _lastPhase = frame.Phase;
-        }
-
-        if (frame.Phase is PowerBuildPhase.Territory or PowerBuildPhase.Group && GD.Randf() < 0.55f)
-        {
-            _buildFx.Burst(burstAt + new Vector2((float)GD.RandRange(-120d, 120d), 0f), 2, tierColor, 180f);
-        }
-
-        float glow = frame.Phase switch
-        {
-            PowerBuildPhase.Enter => p,
-            PowerBuildPhase.Exit => 1f - p,
-            PowerBuildPhase.Finale => 1f + (0.6f * (1f - p)),
-            _ => 1f,
-        };
-        // 一档的档位色近白，光晕改用阵营色，免得低档一片灰白。
-        Color glowColor = frame.Phase is PowerBuildPhase.Enter or PowerBuildPhase.Exit || frame.StageTier <= NumberTier.Lowest ? _buildFxBack.BaseColor : tierColor;
-        _buildFxBack.SetGlow(at, glow, glowColor, scale);
-        _buildFxBack.Step((float)delta);
-        _buildFx.Step((float)delta);
-
-        // 大卡片边框与外发光：随档位色，收束段先亮后收，其余时候轻微呼吸。
-        float breathe = 0.55f + (0.15f * Mathf.Sin((float)_buildMs / 180f));
-        float shine = frame.Phase == PowerBuildPhase.Finale ? 1f - (0.45f * p) : breathe;
-        _buildCardStyle.BorderColor = glowColor.Lerp(Colors.White, frame.Phase == PowerBuildPhase.Finale ? 0.5f * (1f - p) : 0f);
-        _buildCardStyle.ShadowColor = new Color(glowColor.R, glowColor.G, glowColor.B, shine * Mathf.Min(glow, 1f) * 0.8f);
-        _buildCardStyle.ShadowSize = frame.Phase == PowerBuildPhase.Finale ? (int)(26 + (30 * (1f - p))) : 26;
+        label.Text = text;
+        label.ResetSize();
+        label.PivotOffset = label.Size * 0.5f;
+        label.Position = center - (label.Size * 0.5f);
+        label.Scale = new Vector2(scale, scale);
+        label.AddThemeColorOverride("font_color", color);
+        label.Modulate = new Color(1f, 1f, 1f, alpha);
     }
 
     private static float EaseOut(float p) => 1f - ((1f - p) * (1f - p));
-
-    private static float EaseOutBack(float p)
-    {
-        const float c1 = 1.70158f;
-        const float c3 = c1 + 1f;
-        float q = p - 1f;
-        return 1f + (c3 * q * q * q) + (c1 * q * q);
-    }
 }

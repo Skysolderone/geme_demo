@@ -123,31 +123,55 @@ public class 个人势力卡片Tests
     }
 
     [Fact]
-    public void 数值构筑按段推进()
+    public void 地图飘字从零滚到总增量()
     {
-        var build = new PowerCardBuild(new PowerChange(P1, 300, 1284, 3, 1, TerritoryDelta: 184, GroupDelta: 800));
-        int e = PowerCardBuild.EnterMs, s = PowerCardBuild.SegmentMs;
-        Assert.Equal(e + s + s + PowerCardBuild.FinaleMs + PowerCardBuild.HoldMs + PowerCardBuild.ExitMs, build.DurationMs);
+        var burst = new PowerBurst(new PowerChange(P1, 300, 1284, 3, 1, TerritoryDelta: 184, GroupDelta: 800), forViewer: false);
+        int s = PowerBurst.SegmentMs;
+        Assert.Equal(s + s + PowerBurst.FinaleMs + PowerBurst.HoldMs + PowerBurst.FadeMs, burst.DurationMs);
 
-        Assert.Equal((PowerBuildPhase.Enter, new BigInteger(300)), (build.At(0).Phase, build.At(0).Value));
-        PowerBuildFrame territory = build.At(e + (s / 2));
-        Assert.Equal(PowerBuildPhase.Territory, territory.Phase);
+        Assert.Equal((PowerBurstPhase.Territory, "+0"), (burst.At(0).Phase, burst.At(0).ShownDeltaText));
+        PowerBurstFrame territory = burst.At(s / 2);
         Assert.Equal("领地 +184", territory.StageText);
-        Assert.InRange(territory.Value, new BigInteger(300), new BigInteger(484));
-        Assert.Equal(new BigInteger(484), build.At(e + s).Value);   // 领地段末恰为旧值 + 领地增量
-        Assert.Equal("军势 +800", build.At(e + s).StageText);
-        Assert.Equal((PowerBuildPhase.Finale, new BigInteger(1284)), (build.At(e + s + s).Phase, build.At(e + s + s).Value));
-        Assert.Equal(PowerBuildPhase.Exit, build.At(build.ExitStartMs).Phase);
-        Assert.Equal(PowerBuildPhase.Done, build.At(build.DurationMs).Phase);
-        Assert.Equal("+984", build.DeltaText);
-        Assert.Equal("名次 3 → 1", build.RankText);
-        Assert.True(build.RankUp);
+        Assert.InRange(territory.ShownDelta, BigInteger.Zero, new BigInteger(184));
+        Assert.Equal((PowerBurstPhase.Group, "+184", "军势 +800"), (burst.At(s).Phase, burst.At(s).ShownDeltaText, burst.At(s).StageText));
+        Assert.Equal((PowerBurstPhase.Finale, "+984"), (burst.At(s + s).Phase, burst.At(s + s).ShownDeltaText));
+        Assert.Equal(PowerBurstPhase.Fade, burst.At(s + s + PowerBurst.FinaleMs + PowerBurst.HoldMs).Phase);
+        Assert.Equal(PowerBurstPhase.Done, burst.At(burst.DurationMs).Phase);
+        Assert.Equal("名次 3 → 1", burst.RankText);
 
-        // 数字单调不减（缓出插值不回跳）。
+        // 其他玩家的飘字不飞卡片：没有飞入 / 飙升段。
+        Assert.DoesNotContain(PowerBurstPhase.Fly, Enumerable.Range(0, burst.DurationMs).Select(ms => burst.At(ms).Phase));
+
+        // 飘字单调不减（缓出插值不回跳）。
         BigInteger last = 0;
-        for (int ms = 0; ms <= build.DurationMs; ms += 10)
+        for (int ms = 0; ms <= burst.DurationMs; ms += 10)
         {
-            BigInteger v = build.At(ms).Value;
+            BigInteger v = burst.At(ms).ShownDelta;
+            Assert.True(v >= last, $"{ms} ms: {v} < {last}");
+            last = v;
+        }
+    }
+
+    [Fact]
+    public void 本机飘字定格后飞入卡片并飙升()
+    {
+        var burst = new PowerBurst(new PowerChange(P1, 300, 1284, 3, 1, TerritoryDelta: 184, GroupDelta: 800), forViewer: true);
+        int settled = (2 * PowerBurst.SegmentMs) + PowerBurst.FinaleMs + PowerBurst.HoldMs;
+        Assert.Equal(settled + PowerBurst.FlyMs + PowerBurst.SoarMs, burst.DurationMs);
+
+        // 光飞到之前，卡片保持旧值（不提前泄露新值）。
+        Assert.Equal("300", burst.At(0).CardValueText);
+        Assert.Equal((PowerBurstPhase.Fly, "300"), (burst.At(settled).Phase, burst.At(settled).CardValueText));
+
+        PowerBurstFrame soar = burst.At(settled + PowerBurst.FlyMs + (PowerBurst.SoarMs / 2));
+        Assert.Equal(PowerBurstPhase.Soar, soar.Phase);
+        Assert.InRange(soar.CardValue, new BigInteger(301), new BigInteger(1283));
+        Assert.Equal((PowerBurstPhase.Done, "1284"), (burst.At(burst.DurationMs).Phase, burst.At(burst.DurationMs).CardValueText));
+
+        BigInteger last = 0;
+        for (int ms = 0; ms <= burst.DurationMs; ms += 10)
+        {
+            BigInteger v = burst.At(ms).CardValue;
             Assert.True(v >= last, $"{ms} ms: {v} < {last}");
             last = v;
         }
@@ -156,13 +180,28 @@ public class 个人势力卡片Tests
     [Fact]
     public void 分项为零的段跳过且只播上涨()
     {
-        var groupOnly = new PowerCardBuild(new PowerChange(P1, 10, 18, 1, 1, TerritoryDelta: 0, GroupDelta: 8));
-        Assert.Equal(PowerBuildPhase.Group, groupOnly.At(PowerCardBuild.EnterMs).Phase);
-        Assert.DoesNotContain(PowerBuildPhase.Territory, Enumerable.Range(0, groupOnly.DurationMs).Select(ms => groupOnly.At(ms).Phase));
+        var groupOnly = new PowerBurst(new PowerChange(P1, 10, 18, 1, 1, TerritoryDelta: 0, GroupDelta: 8), forViewer: false);
+        Assert.Equal(PowerBurstPhase.Group, groupOnly.At(0).Phase);
+        Assert.DoesNotContain(PowerBurstPhase.Territory, Enumerable.Range(0, groupOnly.DurationMs).Select(ms => groupOnly.At(ms).Phase));
 
-        Assert.True(PowerCardBuild.Wants(new PowerChange(P1, 10, 18, 1, 1)));
-        Assert.False(PowerCardBuild.Wants(new PowerChange(P1, 10, 10, 1, 1)));
-        Assert.False(PowerCardBuild.Wants(new PowerChange(P1, 10, 7, 1, 1)));
-        Assert.Equal(new[] { 0, 1000, 750 }, new[] { PowerCardBuild.EaseOut(0), PowerCardBuild.EaseOut(1000), PowerCardBuild.EaseOut(500) });
+        Assert.True(PowerBurst.Wants(new PowerChange(P1, 10, 18, 1, 1)));
+        Assert.False(PowerBurst.Wants(new PowerChange(P1, 10, 10, 1, 1)));
+        Assert.False(PowerBurst.Wants(new PowerChange(P1, 10, 7, 1, 1)));
+        Assert.Equal(new[] { 0, 1000, 750 }, new[] { PowerBurst.EaseOut(0), PowerBurst.EaseOut(1000), PowerBurst.EaseOut(500) });
+    }
+
+    [Fact]
+    public void 高档位收束才轻震()
+    {
+        var small = new PowerBurst(new PowerChange(P1, 10, 15, 1, 1), forViewer: false);
+        int finale = PowerBurst.SegmentMs;
+        Assert.Null(small.ShakePermilleAt(small.At(finale)));
+
+        var big = new PowerBurst(new PowerChange(P1, 10, 1010, 1, 1), forViewer: false);
+        Assert.Equal(0, big.ShakePermilleAt(big.At(finale)));
+        Assert.NotNull(big.ShakePermilleAt(big.At(finale + 100)));
+        Assert.Null(big.ShakePermilleAt(big.At(0)));
+        Assert.Null(big.ShakePermilleAt(big.At(finale + PowerBurst.FinaleMs - 1)));
     }
 }
+
