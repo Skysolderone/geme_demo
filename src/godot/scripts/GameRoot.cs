@@ -11,6 +11,7 @@ using Siege.Core.Recruit;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Diagnostics;
 using Siege.Presentation.Hand;
+using Siege.Presentation.Hud;
 using Siege.Presentation.Layers;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Preview;
@@ -193,7 +194,8 @@ public sealed partial class GameRoot : Node3D
             // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
             // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
             // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
-            _shotShow = args.Text("shot-show", "placement / capture / power / banner（等该节拍进行中再截图）");
+            // power-card / power-card-roll（power-card）：本机确认后个人势力卡片的数值构筑播到收束段 / 滚动段时取图（见 PowerCardShotReady）。
+            _shotShow = args.Text("shot-show", "placement / capture / power / banner / power-card / power-card-roll（等该节拍进行中再截图）");
 
             ReadRevealArgs(args);
 
@@ -249,9 +251,9 @@ public sealed partial class GameRoot : Node3D
 
             if (_shotShow is not null)
             {
-                if (_shotShow is not ("placement" or "capture" or "power" or "banner"))
+                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "power-card" or "power-card-roll"))
                 {
-                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power 或 banner（open-map：expand / field 随拼接演出与战场横幅删除）。");
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、power-card 或 power-card-roll（open-map：expand / field 随拼接演出与战场横幅删除）。");
                 }
 
                 if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
@@ -788,7 +790,24 @@ public sealed partial class GameRoot : Node3D
             _screenshotFrame = -1;
             BeginCapture();
         }
+
+        if (_screenshotFrame >= 0 && PowerCardShotReady())
+        {
+            _screenshotFrame = -1;
+            GD.Print($"[power-card] 第 {_frame} 帧取图：{_hud.PowerBuildFrameNow}");
+            BeginCapture();
+        }
     }
+
+    /// <summary>
+    /// <c>--shot-show=power-card</c> / <c>power-card-roll</c> 的取图点（power-card）：本机确认后的数值构筑播到收束段三成（爆光、亮环、总增量已出）/ 滚动段一半。
+    /// </summary>
+    private bool PowerCardShotReady() => _shotShow switch
+    {
+        "power-card" => _hud.PowerBuildFrameNow is { Phase: PowerBuildPhase.Finale, PhasePermille: >= 300 },
+        "power-card-roll" => _hud.PowerBuildFrameNow is { Phase: PowerBuildPhase.Territory or PowerBuildPhase.Group, PhasePermille: >= 450 },
+        _ => false,
+    };
 
     /// <summary>
     /// <c>--shot-board=</c>：把相机对准棋盘清单里的第 <paramref name="index"/> 块棋盘——注视点取其外接矩形中心，
@@ -1456,6 +1475,12 @@ public sealed partial class GameRoot : Node3D
         _pendingFlash = TurnFlash.Of(beats);
         _hud.SetTurnSummary(null, default);
         BeginShow(beats, ShowDuration.Normal, "本机");
+
+        // 个人势力卡片的数值构筑（power-card）：本机这一手让自己势力上涨才播；等演出走到势力节拍再开演。
+        if (beats.OfType<PowerBeat>().SelectMany(b => b.Changes).FirstOrDefault(c => c.Player == _session.Me) is { } mine)
+        {
+            _hud.ArmPowerBuild(mine);
+        }
     }
 
     /// <summary>建时间线并打一行节拍数（3.1）。正常时长下先清掉上一回合残留的落子 / 被提高亮（改造落成一项原样保留）。</summary>
@@ -1520,6 +1545,8 @@ public sealed partial class GameRoot : Node3D
     private bool ShotShowReady() => _shotShow switch
     {
         "power" => _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300),
+        // 个人势力卡片的构筑在结算演出之后还要播一阵：不在演出里取图，交给 _Process 的 PowerCardShotReady。
+        "power-card" or "power-card-roll" => false,
         _ => _show.ProgressPermille >= 500,
     };
 
@@ -1530,6 +1557,7 @@ public sealed partial class GameRoot : Node3D
         _pendingFlash = TurnFlash.None;
         _flashTimer = FlashSeconds;
         _dirty = true;
+        _hud.ShowFinishedForPowerBuild();
         if (_verifyResultAfterShow)
         {
             _verifyResultAfterShow = false;
@@ -1550,6 +1578,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _show = ShowTimeline.Finished;
+        _hud.CancelPowerBuild();
         FinishShow();
     }
 
@@ -1561,7 +1590,7 @@ public sealed partial class GameRoot : Node3D
     {
         "placement" => beat is PlacementBeat,
         "capture" => beat is CaptureBeat,
-        "power" => beat is PowerBeat,
+        "power" or "power-card" or "power-card-roll" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
         _ => false,
     };
