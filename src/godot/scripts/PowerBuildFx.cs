@@ -4,7 +4,8 @@ using Godot;
 namespace Siege.Godot;
 
 /// <summary>
-/// 数值构筑的特效层：卡片背后的光晕、迸发的火花、向外扩散的亮环与收束时的一下闪白。纯画面，不读任何对局数据。
+/// 势力飘字的特效层（power-map）：火花与亮环是持续粒子（自己推进寿命）；光柱、卡片外发光、飞行光束与局部亮光是逐帧绘制的即时图元
+/// （每帧 <see cref="BeginFrame"/> 清空，由 HUD 按当帧画面重新加入）。纯画面，不读任何对局数据。
 /// </summary>
 public sealed partial class PowerBuildFx : Control
 {
@@ -16,6 +17,7 @@ public sealed partial class PowerBuildFx : Control
         public float MaxLife;
         public float Size;
         public Color Color;
+        public float Gravity;
     }
 
     private struct RingFx
@@ -28,76 +30,78 @@ public sealed partial class PowerBuildFx : Control
         public float Delay;
     }
 
+    private readonly record struct Beam(Vector2 Base, Color Color, float Strength, float Height);
+
+    private readonly record struct Glow(Rect2 Rect, Color Color, float Strength);
+
+    private readonly record struct Comet(Vector2[] Trail, Color Color);
+
+    private readonly record struct Bloom(Vector2 Center, Color Color, float Radius, float Strength);
+
     private readonly List<Spark> _sparks = [];
     private readonly List<RingFx> _rings = [];
-    private Vector2 _glowAt;
-    private float _glow;
-    private float _glowScale = 1f;
-    private Color _glowColor = Colors.White;
-    private float _flash;
-    private Color _flashColor = Colors.White;
+    private readonly List<Beam> _beams = [];
+    private readonly List<Glow> _glows = [];
+    private readonly List<Comet> _comets = [];
+    private readonly List<Bloom> _blooms = [];
     private float _time;
 
-    /// <summary>本次构筑的阵营色（飞入 / 缩回时的光晕色）。</summary>
-    public Color BaseColor { get; private set; } = Colors.White;
-
-    /// <summary>
-    /// 本层画哪一部分：<c>true</c> = 背层（光晕与旋转光芒，压在卡片之下）；<c>false</c> = 前层（火花、亮环、闪白，盖在卡片之上）。
-    /// 同一组粒子数据只在前层推进，背层只读光晕参数。
-    /// </summary>
-    public bool Back { get; init; }
-
-    public void Begin(Color faction)
-    {
-        Clear();
-        BaseColor = faction;
-    }
-
+    /// <summary>清掉全部粒子与即时图元。</summary>
     public void Clear()
     {
         _sparks.Clear();
         _rings.Clear();
-        _glow = 0f;
-        _flash = 0f;
+        BeginFrame();
         QueueRedraw();
     }
 
-    public void Burst(Vector2 at, int count, Color color, float speed)
+    /// <summary>新的一帧：清空即时图元（粒子保留）。</summary>
+    public void BeginFrame()
+    {
+        _beams.Clear();
+        _glows.Clear();
+        _comets.Clear();
+        _blooms.Clear();
+    }
+
+    /// <summary>一簇火花：从 <paramref name="at"/> 向四周（<paramref name="upward"/> 为真时偏向上方）迸出。</summary>
+    public void Burst(Vector2 at, int count, Color color, float speed, bool upward = false)
     {
         for (int i = 0; i < count; i++)
         {
-            float angle = (float)GD.RandRange(0d, Mathf.Tau);
+            float angle = upward ? (float)GD.RandRange(-Mathf.Pi * 0.95f, -Mathf.Pi * 0.05f) : (float)GD.RandRange(0d, Mathf.Tau);
             float v = speed * (0.35f + (GD.Randf() * 0.65f));
-            float life = 0.5f + (GD.Randf() * 0.7f);
+            float life = 0.45f + (GD.Randf() * 0.6f);
             _sparks.Add(new Spark
             {
-                Pos = at + new Vector2((float)GD.RandRange(-30d, 30d), (float)GD.RandRange(-14d, 14d)),
+                Pos = at + new Vector2((float)GD.RandRange(-16d, 16d), (float)GD.RandRange(-8d, 8d)),
                 Vel = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * v,
                 Life = life,
                 MaxLife = life,
-                Size = 1.5f + (GD.Randf() * 3f),
-                Color = color.Lerp(Colors.White, GD.Randf() * 0.4f),
+                Size = 1.5f + (GD.Randf() * 2.5f),
+                Color = color.Lerp(Colors.White, GD.Randf() * 0.45f),
+                Gravity = upward ? 60f : 160f,
             });
         }
     }
 
+    /// <summary>一圈向外扩散的亮环。</summary>
     public void Ring(Vector2 at, Color color, float seconds, float radius, float delay = 0f) =>
         _rings.Add(new RingFx { Center = at, Color = color, Life = seconds, MaxLife = seconds, Radius = radius, Delay = delay });
 
-    public void Flash(Color color)
-    {
-        _flash = 1f;
-        _flashColor = color;
-    }
+    /// <summary>本帧：从 <paramref name="baseAt"/> 向上的一道阵营色光柱。</summary>
+    public void AddBeam(Vector2 baseAt, Color color, float strength, float height) => _beams.Add(new Beam(baseAt, color, strength, height));
 
-    public void SetGlow(Vector2 at, float strength, Color color, float scale)
-    {
-        _glowAt = at;
-        _glow = strength;
-        _glowColor = color;
-        _glowScale = scale;
-    }
+    /// <summary>本帧：矩形外发光（个人卡片飙升时贴着卡片外缘）。</summary>
+    public void AddGlow(Rect2 rect, Color color, float strength) => _glows.Add(new Glow(rect, color, strength));
 
+    /// <summary>本帧：一道飞行光束（头在 <paramref name="trail"/> 末尾，越往后越细越淡）。</summary>
+    public void AddComet(Vector2[] trail, Color color) => _comets.Add(new Comet(trail, color));
+
+    /// <summary>本帧：一团局部亮光（收束时飘字背后）。</summary>
+    public void AddBloom(Vector2 center, Color color, float radius, float strength) => _blooms.Add(new Bloom(center, color, radius, strength));
+
+    /// <summary>推进粒子寿命并请求重画。</summary>
     public void Step(float dt)
     {
         _time += dt;
@@ -111,8 +115,8 @@ public sealed partial class PowerBuildFx : Control
                 continue;
             }
 
-            s.Vel *= 1f - Mathf.Min(1f, dt * 2.2f);
-            s.Vel += new Vector2(0f, 140f * dt);
+            s.Vel *= 1f - Mathf.Min(1f, dt * 2.4f);
+            s.Vel += new Vector2(0f, s.Gravity * dt);
             s.Pos += s.Vel * dt;
             _sparks[i] = s;
         }
@@ -138,44 +142,48 @@ public sealed partial class PowerBuildFx : Control
             _rings[i] = r;
         }
 
-        _flash = Mathf.Max(0f, _flash - (dt * 3.5f));
         QueueRedraw();
     }
 
     public override void _Draw()
     {
-        if (!Back)
+        foreach (Glow g in _glows)
         {
-            DrawFront();
-            return;
-        }
-
-        // 光晕：多层同心圆叠出柔边，随时间轻微呼吸。
-        if (_glow > 0.01f)
-        {
-            float breathe = 1f + (0.04f * Mathf.Sin(_time * 5f));
-            for (int i = 6; i >= 1; i--)
+            for (int i = 5; i >= 1; i--)
             {
-                float radius = (110f + (i * 34f)) * _glowScale * breathe;
-                float a = 0.05f * _glow * (7 - i) / 6f;
-                DrawCircle(_glowAt, radius, new Color(_glowColor.R, _glowColor.G, _glowColor.B, a));
-            }
-
-            // 旋转的光芒：八道细长的三角从光晕中心向外。
-            for (int k = 0; k < 8; k++)
-            {
-                float angle = (_time * 0.6f) + (k * Mathf.Tau / 8f);
-                Vector2 dir = new(Mathf.Cos(angle), Mathf.Sin(angle));
-                Vector2 side = new Vector2(-dir.Y, dir.X) * 18f * _glowScale;
-                float len = 360f * _glowScale;
-                var ray = new[] { _glowAt + side, _glowAt - side, _glowAt + (dir * len) };
-                DrawColoredPolygon(ray, new Color(_glowColor.R, _glowColor.G, _glowColor.B, 0.07f * Mathf.Min(_glow, 1f)));
+                float a = 0.11f * g.Strength * (6 - i) / 5f;
+                DrawRect(g.Rect.Grow(i * 5f), new Color(g.Color, a));
             }
         }
-    }
 
-    private void DrawFront()
-    {
+        foreach (Beam b in _beams)
+        {
+            // 光柱：底宽顶窄、底亮顶透明的四边形，外加一道更宽更淡的外晕；底部一个压扁的光斑贴在地面上。
+            float breathe = 1f + (0.08f * Mathf.Sin(_time * 7f));
+            for (int layer = 0; layer < 2; layer++)
+            {
+                float w = (layer == 0 ? 34f : 14f) * breathe;
+                float alpha = (layer == 0 ? 0.18f : 0.45f) * b.Strength;
+                Vector2 top = b.Base - new Vector2(0f, b.Height);
+                Vector2[] points = [b.Base + new Vector2(-w, 0f), b.Base + new Vector2(w, 0f), top + new Vector2(w * 0.35f, 0f), top - new Vector2(w * 0.35f, 0f)];
+                Color[] colors = [new Color(b.Color, alpha), new Color(b.Color, alpha), new Color(b.Color, 0f), new Color(b.Color, 0f)];
+                DrawPolygon(points, colors);
+            }
+
+            DrawSetTransform(b.Base, 0f, new Vector2(1f, 0.38f));
+            DrawCircle(Vector2.Zero, 46f * breathe, new Color(b.Color, 0.22f * b.Strength));
+            DrawCircle(Vector2.Zero, 24f * breathe, new Color(b.Color.Lightened(0.4f), 0.35f * b.Strength));
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+
+        foreach (Bloom bl in _blooms)
+        {
+            for (int i = 4; i >= 1; i--)
+            {
+                DrawCircle(bl.Center, bl.Radius * (0.4f + (i * 0.25f)), new Color(bl.Color, 0.08f * bl.Strength * (5 - i)));
+            }
+        }
+
         foreach (RingFx r in _rings)
         {
             if (r.Delay > 0f)
@@ -184,21 +192,33 @@ public sealed partial class PowerBuildFx : Control
             }
 
             float t = 1f - (r.Life / r.MaxLife);
-            float radius = 40f + (r.Radius * (1f - ((1f - t) * (1f - t))));
-            DrawArc(r.Center, radius, 0f, Mathf.Tau, 96, new Color(r.Color.R, r.Color.G, r.Color.B, 0.9f * (1f - t)), 3f + (10f * (1f - t)), true);
+            float radius = 12f + (r.Radius * (1f - ((1f - t) * (1f - t))));
+            DrawArc(r.Center, radius, 0f, Mathf.Tau, 72, new Color(r.Color, 0.9f * (1f - t)), 2f + (7f * (1f - t)), true);
+        }
+
+        foreach (Comet c in _comets)
+        {
+            int n = c.Trail.Length;
+            for (int i = 1; i < n; i++)
+            {
+                float k = i / (float)(n - 1);
+                DrawLine(c.Trail[i - 1], c.Trail[i], new Color(c.Color, 0.15f + (0.75f * k)), 2f + (9f * k), true);
+            }
+
+            if (n > 0)
+            {
+                Vector2 head = c.Trail[n - 1];
+                DrawCircle(head, 16f, new Color(c.Color, 0.25f));
+                DrawCircle(head, 8f, new Color(c.Color.Lightened(0.5f), 0.9f));
+                DrawCircle(head, 4f, Colors.White);
+            }
         }
 
         foreach (Spark s in _sparks)
         {
-            float a = s.Life / s.MaxLife;
-            var color = new Color(s.Color.R, s.Color.G, s.Color.B, a);
+            var color = new Color(s.Color, s.Life / s.MaxLife);
             DrawLine(s.Pos, s.Pos - (s.Vel * 0.03f), color, s.Size, true);
             DrawCircle(s.Pos, s.Size * 0.8f, color);
-        }
-
-        if (_flash > 0.01f)
-        {
-            DrawRect(new Rect2(Vector2.Zero, Size), new Color(_flashColor.R, _flashColor.G, _flashColor.B, 0.22f * _flash));
         }
     }
 }

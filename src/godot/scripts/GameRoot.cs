@@ -194,7 +194,7 @@ public sealed partial class GameRoot : Node3D
             // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
             // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
             // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
-            // power-card / power-card-roll（power-card）：本机确认后个人势力卡片的数值构筑播到收束段 / 滚动段时取图（见 PowerCardShotReady）。
+            // power-card / power-card-roll（power-map）：本机确认后地图势力飘字播到收束段 / 个人卡片飙升段时取图（见 PowerCardShotReady）。
             _shotShow = args.Text("shot-show", "placement / capture / power / banner / power-card / power-card-roll（等该节拍进行中再截图）");
 
             ReadRevealArgs(args);
@@ -714,6 +714,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         UpdateCamera(delta);
+        StepPowerBursts(delta);
         // 分块流式加载（big-map D9）：相机输入之后按注视点更新加载集，变了就重画棋子与叠加层；小图恒为 false。
         if (_board.UpdateStreaming())
         {
@@ -794,18 +795,18 @@ public sealed partial class GameRoot : Node3D
         if (_screenshotFrame >= 0 && PowerCardShotReady())
         {
             _screenshotFrame = -1;
-            GD.Print($"[power-card] 第 {_frame} 帧取图：{_hud.PowerBuildFrameNow}");
+            GD.Print($"[power-card] 第 {_frame} 帧取图：{_hud.ViewerBurstFrameNow}");
             BeginCapture();
         }
     }
 
     /// <summary>
-    /// <c>--shot-show=power-card</c> / <c>power-card-roll</c> 的取图点（power-card）：本机确认后的数值构筑播到收束段三成（爆光、亮环、总增量已出）/ 滚动段一半。
+    /// <c>--shot-show=power-card</c> / <c>power-card-roll</c> 的取图点（power-map）：本机确认后地图飘字播到收束段三成（亮环、火花、总增量已出）/ 个人卡片飙升段三成。
     /// </summary>
     private bool PowerCardShotReady() => _shotShow switch
     {
-        "power-card" => _hud.PowerBuildFrameNow is { Phase: PowerBuildPhase.Finale, PhasePermille: >= 300 },
-        "power-card-roll" => _hud.PowerBuildFrameNow is { Phase: PowerBuildPhase.Territory or PowerBuildPhase.Group, PhasePermille: >= 450 },
+        "power-card" => _hud.ViewerBurstFrameNow is { Phase: PowerBurstPhase.Finale, PhasePermille: >= 300 },
+        "power-card-roll" => _hud.ViewerBurstFrameNow is { Phase: PowerBurstPhase.Soar, PhasePermille: >= 300 },
         _ => false,
     };
 
@@ -1475,12 +1476,55 @@ public sealed partial class GameRoot : Node3D
         _pendingFlash = TurnFlash.Of(beats);
         _hud.SetTurnSummary(null, default);
         BeginShow(beats, ShowDuration.Normal, "本机");
+    }
 
-        // 个人势力卡片的数值构筑（power-card）：本机这一手让自己势力上涨才播；等演出走到势力节拍再开演。
-        if (beats.OfType<PowerBeat>().SelectMany(b => b.Changes).FirstOrDefault(c => c.Player == _session.Me) is { } mine)
+    private bool _burstShaking;
+
+    /// <summary>逐帧推进地图势力飘字（跟着镜头投影走）；收束段的高档位轻震借用结算演出的镜头轻震入口，演出自己在播时由演出遮罩管轻震。</summary>
+    private void StepPowerBursts(double delta)
+    {
+        int? shake = _hud.StepPowerBursts(delta, v => _board.Camera.IsPositionBehind(v) ? null : _board.Camera.UnprojectPosition(v));
+        if (shake is { } permille)
         {
-            _hud.ArmPowerBuild(mine);
+            _board.SetShake(permille);
+            _burstShaking = true;
         }
+        else if (_burstShaking)
+        {
+            _burstShaking = false;
+            if (!ShowPlaying)
+            {
+                _board.SetShake(null);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 地图势力飘字（power-map）：正常时长的一次结算（本机或 AI），行动玩家 = 落子的主人；这一手让他自己势力上涨就在落子中心挂一条飘字，
+    /// 本机玩家的那条定格后飞入个人卡片。Pass（没有落子）不挂。等演出走到势力节拍再开演。
+    /// </summary>
+    private void ArmPowerBurst(ImmutableArray<SettlementBeat> beats)
+    {
+        PlacedPiece[] placed = [.. beats.OfType<PlacementBeat>().SelectMany(b => b.Pieces)];
+        if (placed.Length == 0)
+        {
+            return;
+        }
+
+        PlayerId actor = placed[0].Owner;
+        if (beats.OfType<PowerBeat>().SelectMany(b => b.Changes).FirstOrDefault(c => c.Player == actor) is not { } change)
+        {
+            return;
+        }
+
+        Vector3 anchor = Vector3.Zero;
+        PlacedPiece[] own = [.. placed.Where(p => p.Owner == actor)];
+        foreach (PlacedPiece piece in own)
+        {
+            anchor += _board.CenterOf(piece.Coord);
+        }
+
+        _hud.ArmPowerBurst(change, anchor / own.Length, actor == _session.Me);
     }
 
     /// <summary>建时间线并打一行节拍数（3.1）。正常时长下先清掉上一回合残留的落子 / 被提高亮（改造落成一项原样保留）。</summary>
@@ -1501,6 +1545,10 @@ public sealed partial class GameRoot : Node3D
             // 创建瞬间的提示（show-sound-cues D1）：首拍在进度 0 就已"当前"（势力 0 ms 即领地段、提子 / 信物 / 横幅 0 ms 即显示），没有 Advance 跨越它，
             // 以空遮罩为"前"导出一次。无人值守下 _sounds 为 null，且零时长遮罩恒空。
             EmitCues(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
+            if (who != "预览")
+            {
+                ArmPowerBurst(beats);
+            }
         }
     }
 
@@ -1545,7 +1593,7 @@ public sealed partial class GameRoot : Node3D
     private bool ShotShowReady() => _shotShow switch
     {
         "power" => _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300),
-        // 个人势力卡片的构筑在结算演出之后还要播一阵：不在演出里取图，交给 _Process 的 PowerCardShotReady。
+        // 地图势力飘字在结算演出之后还要播一阵：不在演出里取图，交给 _Process 的 PowerCardShotReady。
         "power-card" or "power-card-roll" => false,
         _ => _show.ProgressPermille >= 500,
     };
@@ -1557,7 +1605,7 @@ public sealed partial class GameRoot : Node3D
         _pendingFlash = TurnFlash.None;
         _flashTimer = FlashSeconds;
         _dirty = true;
-        _hud.ShowFinishedForPowerBuild();
+        _hud.ShowFinishedForPowerBurst();
         if (_verifyResultAfterShow)
         {
             _verifyResultAfterShow = false;
@@ -1578,7 +1626,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _show = ShowTimeline.Finished;
-        _hud.CancelPowerBuild();
+        _hud.CancelPowerBursts();
         FinishShow();
     }
 

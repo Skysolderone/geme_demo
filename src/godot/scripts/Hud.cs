@@ -100,6 +100,8 @@ public sealed partial class Hud : CanvasLayer
         _root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_root);
 
+        // 地图势力飘字（power-map）压在全部面板之下：先于面板加入。
+        BuildPowerBurstUnderlay();
         BuildLeftColumn();
         BuildTurnBanner();
         BuildPowerCard();
@@ -150,8 +152,8 @@ public sealed partial class Hud : CanvasLayer
         Ui.Anchor(_hoverReadout, 0f, 0f, 334f, 28f, 470f, 54f);
         _root.AddChild(_hoverReadout);
 
-        // 数值构筑演出放最上层：压在全部面板之上，播完即隐藏。
-        BuildPowerBuildOverlay();
+        // 飞向个人卡片的光与卡片周围的火花盖在面板之上（power-map）。
+        BuildPowerBurstOverlay();
     }
 
     /// <summary>插旗提示里是否带一行推屏说明：只在一屏看不全的地图上显示（一屏看全的 v4 上插旗画面保持原样）。</summary>
@@ -364,7 +366,7 @@ public sealed partial class Hud : CanvasLayer
     {
         ArgumentNullException.ThrowIfNull(mask);
         RefreshRank(world, mask);
-        TryStartArmedBuild(mask);
+        TryStartArmedBursts(mask);
         RefreshPowerCard(world, mask);
         RefreshShowOverlay(mask);
     }
