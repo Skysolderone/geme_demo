@@ -100,7 +100,9 @@ public sealed partial class Hud : CanvasLayer
         _root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_root);
 
+        BuildLeftColumn();
         BuildTurnBanner();
+        BuildPowerCard();
         BuildOrderBar();
         BuildRankPanel();
         BuildHandBar();
@@ -147,6 +149,9 @@ public sealed partial class Hud : CanvasLayer
         _hoverReadout = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx + 2);
         Ui.Anchor(_hoverReadout, 0f, 0f, 334f, 28f, 470f, 54f);
         _root.AddChild(_hoverReadout);
+
+        // 数值构筑演出放最上层：压在全部面板之上，播完即隐藏。
+        BuildPowerBuildOverlay();
     }
 
     /// <summary>插旗提示里是否带一行推屏说明：只在一屏看不全的地图上显示（一屏看全的 v4 上插旗画面保持原样）。</summary>
@@ -188,8 +193,10 @@ public sealed partial class Hud : CanvasLayer
         texts.AddChild(_turnSubtitle);
         row.AddChild(texts);
         body.AddChild(row);
-        Ui.Anchor(panel, 0f, 0f, 14f, 14f, 322f, 68f);
-        _root.AddChild(panel);
+        // 左列第一格（power-card）：宽度固定 308，长状态说明在此宽度内折行，下面的势力卡片跟着下移。
+        panel.CustomMinimumSize = new Vector2(308f, 54f);
+        panel.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+        _leftColumn.AddChild(panel);
     }
 
     private void BuildOrderBar()
@@ -272,8 +279,9 @@ public sealed partial class Hud : CanvasLayer
         _layerBody = new VBoxContainer();
         _layerBody.AddThemeConstantOverride("separation", 2);
         body.AddChild(_layerBody);
-        Ui.Anchor(panel, 0f, 0f, 14f, 92f, 392f, 600f);
-        _root.AddChild(panel);
+        // 左列第三格（power-card）：接在势力卡片下面，宽 378。
+        panel.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        _leftColumn.AddChild(panel);
         panel.Visible = false;
     }
 
@@ -339,6 +347,7 @@ public sealed partial class Hud : CanvasLayer
         RefreshTurnBanner(session, world, layers);
         RefreshOrderBar(world);
         RefreshRank(world, mask ?? ShowMask.Empty);
+        RefreshPowerCard(world, mask ?? ShowMask.Empty);
         RefreshHand(session, world);
         RefreshLayerButtons(layers, handPanel);
         RefreshActions(session, world);
@@ -355,6 +364,8 @@ public sealed partial class Hud : CanvasLayer
     {
         ArgumentNullException.ThrowIfNull(mask);
         RefreshRank(world, mask);
+        TryStartArmedBuild(mask);
+        RefreshPowerCard(world, mask);
         RefreshShowOverlay(mask);
     }
 

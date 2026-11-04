@@ -371,9 +371,10 @@ public class 征募面板可收起Tests
         Assert.True(orderAnchor.Success);
         float orderBottom = float.Parse(orderAnchor.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 
-        // 左侧信息层面板（BuildLayerPanel，贴左）与右上排名面板（贴右，宽 300）。
-        int layer = hud.IndexOf("private void BuildLayerPanel()", StringComparison.Ordinal);
-        System.Text.RegularExpressions.Match layerAnchor = Regex.Match(hud[layer..], @"Ui\.Anchor\(panel,\s*0f,\s*0f,\s*[\d.]+f,\s*([\d.]+)f,\s*([\d.]+)f,\s*([\d.]+)f\)");
+        // 左侧信息层面板与右上排名面板（贴右，宽 300）。power-card 起信息层面板排在左列（回合信息、势力卡片之下），右缘即左列的右缘（BuildLeftColumn）。
+        string card = Godot("Hud.PowerCard.cs");
+        Assert.Contains("_leftColumn.AddChild(panel);", hud[hud.IndexOf("private void BuildLayerPanel()", StringComparison.Ordinal)..]);
+        System.Text.RegularExpressions.Match layerAnchor = Regex.Match(card, @"Ui\.Anchor\(_leftColumn,\s*0f,\s*0f,\s*[\d.]+f,\s*([\d.]+)f,\s*([\d.]+)f,\s*([\d.]+)f\)");
         Assert.True(layerAnchor.Success);
         float layerRight = float.Parse(layerAnchor.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
         Assert.True(layerRight >= 300f);
