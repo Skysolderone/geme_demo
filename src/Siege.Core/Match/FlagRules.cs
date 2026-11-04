@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Match;
 
@@ -12,7 +13,7 @@ namespace Siege.Core.Match;
 /// <remarks>
 /// <para><b>合规旗格</b>（D3，段 A 追加裁决 19）：可落子、高度 0、不是桥格、不在任何平台内；旗心 13×13（锁定后物化的出生平台）整块在画布内、且与任何中立平台的外接矩形至少隔 <see cref="PlateClearance"/> 格
 /// （不重叠落座图才过得了"出生棋盘不与平台重叠"的校验、构筑期的落子范围才不切进高台；隔 1 格是让中立平台坡道朝外的那格仍是"低地"而不是另一块棋盘的格——校验器 <c>PLATE_HEIGHT</c> 的口径）；
-/// 旗心与任一信物遗址切比雪夫距离 ≥ <see cref="SiteClearance"/>（relic-sites 裁决 9：13×13 出生平台不盖遗址）；
+/// 旗心与任一普通信物遗址切比雪夫距离 ≥ <see cref="SiteClearance"/>（relic-sites 裁决 9：13×13 出生平台不盖遗址），与任一稀有遗址<b>区域</b>（<see cref="RelicSites.RareZoneOf"/>）同样 ≥ <see cref="SiteClearance"/>（relic-zones 裁决 3）；
 /// 旗心 9×9（出生圈）内可落子格 ≥ <see cref="MinRingPlayable"/>（避免把出生圈压在海湾尖角上）。不合规的原因由 <see cref="FlagCellProblem"/> 给出文案，界面与终端据此提示。</para>
 /// <para><b>改派</b>（D3）：按插旗先后逐个确认——与已确认的每一面旗切比雪夫距离 ≥ <see cref="FlagGap"/> 即保留；否则改派到"与全部已确认旗间距 ≥ 60 的合规旗格里离原旗最近者"
 /// （切比雪夫距离，并列按先行后列取第一个）；一个都没有时改派到"到已确认旗的最小间距最大"的合规旗格（并列同样先行后列）。全程确定性、不消费随机。</para>
@@ -105,7 +106,7 @@ public static class FlagRules
 
     /// <summary>
     /// 单格不合规的原因（relic-sites 裁决 9 起界面要能区分"压到遗址"与其他原因）：合规返回 <c>null</c>，否则一句中文说明（第一条不满足的判据）。
-    /// 与 <see cref="LegalFlagCells"/> 同一口径，判据次序：档位 / 基图 → 在画布内 → 旗格本身（可落子、不在平台内、高度 0、非桥）→ 13×13 在画布内 → 不压中立平台 → 与遗址 ≥ 7 → 9×9 可落子 ≥ 40。
+    /// 与 <see cref="LegalFlagCells"/> 同一口径，判据次序：档位 / 基图 → 在画布内 → 旗格本身（可落子、不在平台内、高度 0、非桥）→ 13×13 在画布内 → 不压中立平台 → 与稀有遗址区域 ≥ 7 → 与普通遗址 ≥ 7 → 9×9 可落子 ≥ 40。
     /// </summary>
     public static string? FlagCellProblem(MapData map, Coord c)
     {
@@ -152,7 +153,22 @@ public static class FlagRules
             return $"{c.ToNotation()} 的 {BirthPlateSide}×{BirthPlateSide} 出生平台压到或贴着中立平台（须至少隔 {PlateClearance} 格）。";
         }
 
-        foreach (RelicSite site in map.RelicSites)
+        // relic-zones 裁决 3：稀有遗址只公开区域，旗心离区域须 ≥ 7（区域外扩 6 圈整块禁插）——遗址的 13×13 禁插方块因此整个包在里面，悬停逐格探红框也找不出遗址；文案只提区域、不带遗址坐标。
+        foreach (RareSiteZone zone in RelicSites.RareZones(map))
+        {
+            int d = zone.DistanceTo(c);
+            if (d == 0)
+            {
+                return $"{c.ToNotation()} 在稀有信物遗址区域内（遗址具体位置需进图探索），旗不能插在区域里。";
+            }
+
+            if (d < SiteClearance)
+            {
+                return $"{c.ToNotation()} 离稀有信物遗址区域只有 {d} 格，旗心须离区域 ≥ {SiteClearance}（{BirthPlateSide}×{BirthPlateSide} 出生平台不得伸进区域）。";
+            }
+        }
+
+        foreach (RelicSite site in map.RelicSites.Where(s => s.Tier == RelicTier.Common))
         {
             int d = Distance(c, site.Cell);
             if (d < SiteClearance)
@@ -251,8 +267,8 @@ public static class FlagRules
         map.IsPlayable(c) && map.HeightAt(c) == 0 && !map.HasBridge(c) && !map.Boards.Any(p => p.Contains(c));
 
     /// <summary>
-    /// 旗心 13×13 会与某块平台重叠或贴着它的格（按平台外接矩形外扩 6 + <see cref="PlateClearance"/> 格标记），以及与某处信物遗址切比雪夫距离 &lt; <see cref="SiteClearance"/> 的格
-    /// （遗址周围 13×13，relic-sites 裁决 9），下标 = y × 宽 + x。与 <see cref="FlagCellProblem"/> 的 <c>PlatesApart</c> / 遗址距离同一口径。
+    /// 旗心 13×13 会与某块平台重叠或贴着它的格（按平台外接矩形外扩 6 + <see cref="PlateClearance"/> 格标记），以及与某处普通信物遗址切比雪夫距离 &lt; <see cref="SiteClearance"/> 的格
+    /// （遗址周围 13×13，relic-sites 裁决 9）、与某个稀有遗址区域距离 &lt; <see cref="SiteClearance"/> 的格（区域外扩 6 圈，relic-zones 裁决 3），下标 = y × 宽 + x。与 <see cref="FlagCellProblem"/> 的 <c>PlatesApart</c> / 遗址距离同一口径。
     /// </summary>
     private static bool[] BlockedByPlatesOrSites(MapData map)
     {
@@ -271,7 +287,18 @@ public static class FlagRules
         }
 
         int siteReach = SiteClearance - 1;
-        foreach (RelicSite site in map.RelicSites)
+        foreach (RareSiteZone zone in RelicSites.RareZones(map))
+        {
+            for (int y = Math.Max(0, zone.Origin.Y - siteReach); y <= Math.Min(h - 1, zone.Origin.Y + zone.Height - 1 + siteReach); y++)
+            {
+                for (int x = Math.Max(0, zone.Origin.X - siteReach); x <= Math.Min(w - 1, zone.Origin.X + zone.Width - 1 + siteReach); x++)
+                {
+                    blocked[(y * w) + x] = true;
+                }
+            }
+        }
+
+        foreach (RelicSite site in map.RelicSites.Where(s => s.Tier == RelicTier.Common))
         {
             for (int y = Math.Max(0, site.Cell.Y - siteReach); y <= Math.Min(h - 1, site.Cell.Y + siteReach); y++)
             {

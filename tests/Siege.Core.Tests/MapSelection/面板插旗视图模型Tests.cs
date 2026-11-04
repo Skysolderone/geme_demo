@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
@@ -128,11 +129,22 @@ public class 面板插旗视图模型Tests
         Assert.NotEmpty(Large.RelicSites);
         foreach (RelicSite site in Large.RelicSites)
         {
-            Assert.Equal(site.Tier, pick.SiteAt(site.Cell));
             string readout = pick.Readout(site.Cell);
             Assert.Contains(site.Cell.ToNotation(), readout, StringComparison.Ordinal);
-            Assert.Contains(Labels.RelicSite(site.Tier), readout, StringComparison.Ordinal);
             Assert.False(pick.IsLegal(site.Cell));   // 旗心距遗址 ≥ 7（relic-sites 裁决 9）
+            if (site.Tier == RelicTier.Common)
+            {
+                Assert.Equal(site.Tier, pick.SiteAt(site.Cell));
+                Assert.Contains(Labels.RelicSite(site.Tier), readout, StringComparison.Ordinal);
+            }
+            else
+            {
+                // relic-zones 裁决 7：稀有遗址不公开精确格——悬停正上方也只说区域，不报"稀有信物遗址"这一格。
+                Assert.Null(pick.SiteAt(site.Cell));
+                Assert.DoesNotContain(Labels.RelicSite(RelicTier.Rare) + "；", readout + "；", StringComparison.Ordinal);
+                Assert.Contains("稀有信物遗址区域", readout, StringComparison.Ordinal);
+                Assert.True(pick.InRareZone(site.Cell));
+            }
         }
 
         Assert.Equal("稀有信物遗址", Labels.RelicSite(RelicTier.Rare));
@@ -141,5 +153,40 @@ public class 面板插旗视图模型Tests
         Assert.Null(pick.SiteAt(plain));
         Assert.DoesNotContain("遗址", pick.Readout(plain), StringComparison.Ordinal);
         Assert.Equal(FlagRules.PlateReach, FlagPickModel.PlateReach);
+    }
+
+    [Fact]
+    public void 可插遮罩与Core合规旗格一致_换图重算_小图为空()
+    {
+        // relic-zones 裁决 1：不可插格整层压暗——遮罩按地图算一次，真格 = LegalFlagCells；区域清单 = Core 的稀有区域。
+        var pick = new FlagPickModel();
+        pick.Bind(Large);
+        Assert.Equal(Large.Width, pick.MaskWidth);
+        Assert.Equal(Large.Height, pick.MaskHeight);
+        Assert.Equal(Large.Width * Large.Height, pick.LegalMask.Length);
+        var legal = FlagRules.LegalFlagCells(Large).ToHashSet();
+        Assert.Equal(legal.Count, pick.LegalMask.Count(b => b));
+        foreach (Coord c in legal)
+        {
+            Assert.True(pick.LegalMask[(c.Y * Large.Width) + c.X]);
+            Assert.True(pick.IsLegal(c));
+        }
+
+        Assert.Equal(RelicSites.RareZones(Large), pick.RareZones);
+        Assert.NotEmpty(pick.RareZones);
+        RareSiteZone zone = pick.RareZones[0];
+        Assert.False(pick.LegalMask[(zone.Origin.Y * Large.Width) + zone.Origin.X]);   // 区域里整块不可插
+
+        ImmutableArray<bool> before = pick.LegalMask;
+        pick.Bind(MapCatalog.Resolve("link:7:4:l"));   // 同一张图：不重算
+        Assert.True(before == pick.LegalMask);
+        pick.Bind(MapCatalog.Resolve("link:8:4:l"));
+        Assert.False(before == pick.LegalMask);
+        Assert.Equal(FlagRules.LegalFlagCells(MapCatalog.Resolve("link:8:4:l")).Length, pick.LegalMask.Count(b => b));
+
+        pick.Bind(MapCatalog.Resolve("link:8:4"));   // 小图：不启用，遮罩与区域为空
+        Assert.True(pick.LegalMask.IsEmpty);
+        Assert.True(pick.RareZones.IsEmpty);
+        Assert.Equal(0, pick.MaskWidth);
     }
 }

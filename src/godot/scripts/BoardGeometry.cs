@@ -114,6 +114,9 @@ public static class BoardGeometry
     /// <summary>小地图（big-map D9）：格坐标系里的点（x 向东、y 向北，格左下角为整数）→ 控件像素（北在上，等比缩放；<paramref name="size"/> 为控件尺寸）。与 <see cref="MinimapCellAt"/> 互逆，<c>--pick-check</c> 在大图上做往返自检。</summary>
     public static Vector2 MinimapPixelOf(float x, float y, int width, int height, Vector2 size) => new(x * size.X / width, (height - y) * size.Y / height);
 
+    /// <summary>小地图 / 缩略位图（每格一个像素、北在上）里第 <paramref name="y"/> 行格所在的像素行：地形底图（<c>Minimap.BuildTerrain</c>）与插旗压暗层（<c>MapThumbnail</c>，relic-zones 裁决 1）共用。</summary>
+    public static int MinimapImageRow(int y, int height) => height - 1 - y;
+
     /// <summary>小地图控件像素 → 格（出界夹到边缘格）。</summary>
     public static Coord MinimapCellAt(Vector2 pixel, int width, int height, Vector2 size) =>
         ClampToBoard((int)MathF.Floor(pixel.X * width / size.X), height - 1 - (int)MathF.Floor(pixel.Y * height / size.Y), width, height);

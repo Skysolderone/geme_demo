@@ -115,11 +115,12 @@ public class Godot层不含规则计算Tests
         (string Name, string Text) geometry = scripts.Single(s => s.Name == "BoardGeometry.cs");
 
         // 反面：判据在唯一实现里确实命中，否则下面的"别处没有"只是规则失效。
-        // 9 处的构成：Center 的 x / z 各一处，Nearest（世界 → 格反算本体，TryFromWorld 与 NearestCell 共用）的 x / y 各一处，
+        // 10 处的构成：Center 的 x / z 各一处，Nearest（世界 → 格反算本体，TryFromWorld 与 NearestCell 共用）的 x / y 各一处，
         // board-coordinates 新增的两个标注锚点各取一次边界行列（ColumnLabelAnchor 的 height - 1、RowLabelAnchor 的 width - 1），
-        // big-map 段 B / 段 C check 并入的 ClampToBoard（列、行上界各一处——光标格网、插旗预览框与流式注视格共用）与 MinimapCellAt 的北在上翻转（height - 1 − 行）一处。
+        // big-map 段 B / 段 C check 并入的 ClampToBoard（列、行上界各一处——光标格网、插旗预览框与流式注视格共用）与 MinimapCellAt 的北在上翻转（height - 1 − 行）一处，
+        // relic-zones 并入的 MinimapImageRow（位图行翻转：地形底图与插旗压暗层共用，原先地形底图在 Minimap.cs 里自写）一处。
         // 这个数字是精确值而非下界：BoardGeometry 每多一处换算都该有人复审一次，确认它不是第二份映射。
-        Assert.Equal(9, Regex.Matches(geometry.Text, centering, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
+        Assert.Equal(10, Regex.Matches(geometry.Text, centering, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
         Assert.Equal(2, Regex.Matches(geometry.Text, inverse, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
 
         string[] second =

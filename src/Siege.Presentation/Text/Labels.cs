@@ -166,6 +166,9 @@ public static class Labels
     /// <summary>信物遗址的档位名（relic-sites 裁决 10）：缩略 / 小地图悬停与 3D 标注共用。</summary>
     public static string RelicSite(RelicTier tier) => tier == RelicTier.Rare ? "稀有信物遗址" : "普通信物遗址";
 
+    /// <summary>稀有遗址区域的悬停读数（relic-zones 裁决 7）：只说区域、不给遗址坐标。</summary>
+    public static string RareZone => "稀有信物遗址区域，具体位置需进图探索";
+
     /// <summary>新局面板大图未选格时"开始"旁的提示（relic-sites 裁决 3）。</summary>
     public static string PickFlagHint => "先在地图上点一格插旗";
 

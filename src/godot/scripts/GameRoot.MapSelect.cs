@@ -296,6 +296,17 @@ public sealed partial class GameRoot
             RefreshViews();
             ok = disabled && _pick.Picked is null && !_hud.MapStartEnabled && _pick.Notice.Length > 0;
             what += $" → 提示「{_pick.Notice}」";
+            // relic-zones 裁决 1 / 7：压暗层按画布尺寸就位；悬停稀有遗址那一格的读数只说区域、不报"稀有信物遗址"那一格。
+            Vector2I mask = _hud.ThumbnailMaskSize;
+            MapData map = _session.Match.Map;
+            ok &= mask == new Vector2I(map.Width, map.Height) && !_pick.RareZones.IsEmpty;
+            foreach (RelicSite site in map.RelicSites.Where(s => s.Tier == Siege.Core.PieceRelics.RelicTier.Rare))
+            {
+                string readout = _pick.Readout(site.Cell);
+                ok &= _pick.SiteAt(site.Cell) is null && readout.Contains("稀有信物遗址区域", System.StringComparison.Ordinal);
+            }
+
+            what += $"，压暗层 {mask.X}×{mask.Y}，稀有区域 {_pick.RareZones.Length} 块";
         }
         else if (step is 9 or 11 && model.Tier == MapTier.Large)
         {

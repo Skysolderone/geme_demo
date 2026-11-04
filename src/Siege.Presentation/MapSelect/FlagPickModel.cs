@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.PieceRelics;
@@ -13,6 +14,7 @@ namespace Siege.Presentation.MapSelect;
 public sealed class FlagPickModel
 {
     private MapData? _map;
+    private HashSet<Coord> _legal = [];
 
     /// <summary>当前绑定的预览地图是不是大图基图（只有它能在面板上插旗）。</summary>
     public bool Enabled => _map is { Tier: MapTier.Large } && _map.BirthZones.IsDefaultOrEmpty;
@@ -25,6 +27,21 @@ public sealed class FlagPickModel
 
     /// <summary>最近一次点格不合规的原因（Core 文案）；合规或未点过为空串。</summary>
     public string Notice { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 可插旗遮罩（relic-zones 裁决 1：不可插格整层压暗）：下标 = y × <see cref="MaskWidth"/> + x，真即合规旗格（Core <see cref="FlagRules.LegalFlagCells"/> 那一份）。
+    /// 按地图标识算一次缓存（150×150 不能每次悬停重算）；不启用时为空。
+    /// </summary>
+    public ImmutableArray<bool> LegalMask { get; private set; } = [];
+
+    /// <summary>遮罩宽（= 地图画布宽）；不启用为 0。</summary>
+    public int MaskWidth { get; private set; }
+
+    /// <summary>遮罩高（= 地图画布高）；不启用为 0。</summary>
+    public int MaskHeight { get; private set; }
+
+    /// <summary>稀有遗址区域（relic-zones 裁决 2，Core <see cref="RelicSites.RareZones(MapData)"/>）：缩略只画区域、不画稀有遗址的精确格。不启用时为空。</summary>
+    public ImmutableArray<RareSiteZone> RareZones { get; private set; } = [];
 
     /// <summary>旗心到 13×13 构筑范围边的格数（画框用，取 Core 常量）。</summary>
     public static int PlateReach => FlagRules.PlateReach;
@@ -39,16 +56,48 @@ public sealed class FlagPickModel
             Picked = null;
             Hover = null;
             Notice = string.Empty;
+            _map = map;
+            RebuildMask();
         }
 
         _map = map;
     }
 
+    /// <summary>换图时重算遮罩与区域；小图 / 解绑清空。</summary>
+    private void RebuildMask()
+    {
+        if (!Enabled)
+        {
+            _legal = [];
+            LegalMask = [];
+            MaskWidth = 0;
+            MaskHeight = 0;
+            RareZones = [];
+            return;
+        }
+
+        MapData map = _map!;
+        _legal = [.. FlagRules.LegalFlagCells(map)];
+        var mask = new bool[map.Width * map.Height];
+        foreach (Coord c in _legal)
+        {
+            mask[(c.Y * map.Width) + c.X] = true;
+        }
+
+        LegalMask = ImmutableArray.Create(mask);
+        MaskWidth = map.Width;
+        MaskHeight = map.Height;
+        RareZones = RelicSites.RareZones(map);
+    }
+
+    /// <summary>该格在不在某个稀有遗址区域里（relic-zones 裁决 7）。</summary>
+    public bool InRareZone(Coord cell) => RareZones.Any(z => z.Contains(cell));
+
     /// <summary>某格不合规的原因；合规为 <c>null</c>。不启用时给出"不是大图基图"的原因。</summary>
     public string? ProblemOf(Coord cell) => _map is null ? "尚未选定地图。" : FlagRules.FlagCellProblem(_map, cell);
 
     /// <summary>某格此刻能否插旗（只在启用时可能为真）。</summary>
-    public bool IsLegal(Coord cell) => Enabled && ProblemOf(cell) is null;
+    public bool IsLegal(Coord cell) => Enabled && _legal.Contains(cell);
 
     /// <summary>悬停到某格（或离开缩略）。</summary>
     public void SetHover(Coord? cell) => Hover = Enabled ? cell : null;
@@ -72,7 +121,10 @@ public sealed class FlagPickModel
         return true;
     }
 
-    /// <summary>某格若是信物遗址，给出档位；否则 <c>null</c>（裁决 10：悬停显示"稀有 / 普通信物遗址"）。</summary>
+    /// <summary>
+    /// 某格若是公开的信物遗址，给出档位；否则 <c>null</c>（裁决 10：悬停显示"普通信物遗址"）。
+    /// 稀有遗址不公开精确格（relic-zones 裁决 2 / 7），这里一律不报——悬停只给 <see cref="Labels.RareZone"/>。
+    /// </summary>
     public RelicTier? SiteAt(Coord cell)
     {
         if (_map is null || _map.RelicSites.IsDefaultOrEmpty)
@@ -82,7 +134,7 @@ public sealed class FlagPickModel
 
         foreach (RelicSite site in _map.RelicSites)
         {
-            if (site.Cell == cell)
+            if (site.Cell == cell && site.Tier == RelicTier.Common)
             {
                 return site.Tier;
             }
@@ -91,11 +143,13 @@ public sealed class FlagPickModel
         return null;
     }
 
-    /// <summary>某格的一行读数：坐标 + 合规 / 不合规原因，若是遗址再加档位名。</summary>
+    /// <summary>某格的一行读数：坐标 + 合规 / 不合规原因，若是普通遗址再加档位名；在稀有遗址区域里而原因没提区域时补一句区域说明（不带遗址坐标）。</summary>
     public string Readout(Coord cell)
     {
         string verdict = ProblemOf(cell) is { } problem ? problem : "合规，点此插旗";
-        string site = SiteAt(cell) is { } tier ? $"；{Labels.RelicSite(tier)}" : string.Empty;
+        string site = SiteAt(cell) is { } tier ? $"；{Labels.RelicSite(tier)}"
+            : InRareZone(cell) && !verdict.Contains("稀有信物遗址区域", StringComparison.Ordinal) ? $"；{Labels.RareZone}"
+            : string.Empty;
         return $"{cell.ToNotation()}：{verdict}{site}";
     }
 
