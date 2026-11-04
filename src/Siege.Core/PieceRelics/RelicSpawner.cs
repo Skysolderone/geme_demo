@@ -197,7 +197,8 @@ public static class RelicSpawner
     }
 
     /// <summary>
-    /// 大图的一批（relic-sites 裁决 8）：候选 = <see cref="SiteCandidates"/>；同一条子流 <c>relic-spawn:&lt;落位大回合&gt;</c>，逐件 <c>NextInt(剩余候选数)</c> 不放回抽遗址，
+    /// 大图的一批（relic-sites 裁决 8）：候选 = <see cref="SiteCandidates"/>；同一条子流 <c>relic-spawn:&lt;落位大回合&gt;</c>，逐件按权重不放回抽遗址
+    /// （rare-weight 裁决 1：<c>WeightedPick</c>，稀有遗址权重 <see cref="RelicKinds.UncalibratedRareSiteWeight"/>、普通 1，权重按剩余候选的字典序排列——即一次 <c>NextInt(剩余权重和)</c>），
     /// 种类按该遗址的档位抽（稀有遗址只出稀有件、普通遗址只出普通件，档内等权——与小图 <see cref="DrawKind"/> 抽中档位之后的那一步相同；大图不做 85 / 15 抽档）；
     /// 抽中一处稀有遗址后把其余稀有遗址移出本批候选（每批稀有至多 1 处）。空遗址不足时本批只有那么多件。
     /// </summary>
@@ -208,7 +209,7 @@ public static class RelicSpawner
         ImmutableArray<RelicSpawnSlot>.Builder slots = ImmutableArray.CreateBuilder<RelicSpawnSlot>(count);
         for (int k = 0; k < count && pool.Count > 0; k++)
         {
-            int pick = stream.NextInt(pool.Count);
+            int pick = stream.WeightedPick([.. pool.Select(SiteWeight)]);
             RelicSite site = pool[pick];
             pool.RemoveAt(pick);
             slots.Add(new RelicSpawnSlot(site.Cell, DrawKindOf(stream, site.Tier)));
@@ -220,6 +221,9 @@ public static class RelicSpawner
 
         return new RelicForecast(landing, slots.ToImmutable());
     }
+
+    /// <summary>大图抽遗址时一处遗址的权重（rare-weight 裁决 1）：稀有 <see cref="RelicKinds.UncalibratedRareSiteWeight"/>、普通 1。</summary>
+    private static int SiteWeight(RelicSite site) => site.Tier == RelicTier.Rare ? RelicKinds.UncalibratedRareSiteWeight : 1;
 
     /// <summary>
     /// 落位（R8 / R11）：按预告次序，跳过已被占或已有信物的格（不重抽），其余依次分配编号 <paramref name="firstId"/>、<paramref name="firstId"/> + 1……
