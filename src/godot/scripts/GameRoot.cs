@@ -121,6 +121,18 @@ public sealed partial class GameRoot : Node3D
     private ulong _firstFrameMsec;
     private Coord? _hover;
 
+    /// <summary>左键按下时的屏幕位置（按下落在棋盘上、尚未松开）；松开时没拖过才算一次点击，点击按这个位置拾取。</summary>
+    private Vector2? _pressAt;
+
+    /// <summary>按下时指针所指的地面点（世界坐标）；拖动中每移完一次相机就重新锚定，夹到地图边时不会"攒"出一跳。</summary>
+    private Vector3? _dragGround;
+
+    /// <summary>本次按住已越过拖动阈值：算拖动镜头，松开不落子。</summary>
+    private bool _dragging;
+
+    /// <summary>按下后指针移过这么多像素才算拖动，小于它的抖动仍是点击。</summary>
+    private const float DragThresholdPx = 6f;
+
     /// <inheritdoc/>
     public override void _Ready()
     {
@@ -1856,7 +1868,8 @@ public sealed partial class GameRoot : Node3D
         Vector2 size = SyncAspect();
         float right = Input.GetActionStrength(InputBindings.CameraRightAction) - Input.GetActionStrength(InputBindings.CameraLeftAction);
         float up = Input.GetActionStrength(InputBindings.CameraUpAction) - Input.GetActionStrength(InputBindings.CameraDownAction);
-        if (!Unattended && _mouseInside && GetWindow().HasFocus() && GetViewport().GuiGetHoveredControl() is null)
+        // 拖动中指针常常拖到窗口边上，此时贴边推屏不能再叠加——否则抓住的地面会从指针底下滑走。
+        if (!Unattended && !_dragging && _mouseInside && GetWindow().HasFocus() && GetViewport().GuiGetHoveredControl() is null)
         {
             Vector2 mouse = GetViewport().GetMousePosition();
             (float edgeRight, float edgeUp) = EdgePan.Intent(mouse.X, mouse.Y, size.X, size.Y);
@@ -1983,11 +1996,19 @@ public sealed partial class GameRoot : Node3D
     /// <inheritdoc/>
     public override void _Input(InputEvent @event)
     {
-        if (@event is InputEventMouseMotion)
+        if (@event is InputEventMouseMotion motion)
         {
             // 启动时指针若本来就在窗内，不会有"进入窗口"的通知；第一次鼠标移动同样说明它在窗内。
             // 反过来初值不能取 true：启动时指针在窗外也不会有"离开"通知，GetMousePosition 常报 (0, 0)——正好在左上角感应带里。
             _mouseInside = true;
+            OnPointerMoved(motion);
+            return;
+        }
+
+        // 左键松开：按下落在棋盘上时才有 _pressAt。先于下面的演出提速与界面控件处理——没拖过才是点击，拖过就只是结束拖动。
+        if (_pressAt is not null && @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
+        {
+            OnLeftReleased();
             return;
         }
 
@@ -2136,10 +2157,89 @@ public sealed partial class GameRoot : Node3D
             _session.Unstage(unstage);
             _dirty = true;
         }
-        else if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } && PickCell() is { } coord)
+        else if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        {
+            // 按下只记录，落子推迟到松开：按住拖过阈值是拖动镜头，没拖过才是点击——否则想拖的那一下会先把子暂放上去。
+            Vector2 at = GetViewport().GetMousePosition();
+            _pressAt = at;
+            _dragging = false;
+            _dragGround = BoardGeometry.TryGround(_board.Camera, at, out Vector3 ground) ? ground : null;
+        }
+    }
+
+    /// <summary>
+    /// 按住左键移动：越过阈值进入拖动，之后每次移动都把"抓点 − 指针此刻所指的地面点"交给视图模型，抓住的地面始终留在指针底下。
+    /// 松开发生在窗外 / 切走窗口时收不到松开事件，按钮掩码里没有左键就静默作废——不落子也不拖。
+    /// </summary>
+    private void OnPointerMoved(InputEventMouseMotion motion)
+    {
+        if (_pressAt is not { } pressAt)
+        {
+            return;
+        }
+
+        if ((motion.ButtonMask & MouseButtonMask.Left) == 0)
+        {
+            ClearPress();
+            return;
+        }
+
+        Vector2 mouse = GetViewport().GetMousePosition();
+        if (!_dragging && mouse.DistanceTo(pressAt) < DragThresholdPx)
+        {
+            return;
+        }
+
+        if (_dragGround is not { } grab || !BoardGeometry.TryGround(_board.Camera, mouse, out Vector3 now))
+        {
+            return;
+        }
+
+        CameraPose before = _board.Rig.Pose;
+        _board.Rig.Drag(grab.X - now.X, grab.Z - now.Z);
+        if (!_dragging && _board.Rig.Pose == before)
+        {
+            // 相机动不了（全局预览、一屏看全的图、已贴着图边再往外拖）就不算拖动：松开仍是点击，不能把落子吃掉。
+            return;
+        }
+
+        _dragging = true;
+        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+        ApplyCamera("拖动");
+        // 相机只平移，移完后指针底下正是抓点；夹到地图边时则不是——重新锚定，下一步从此刻的地面点量起，回拖时不会跳。
+        _dragGround = BoardGeometry.TryGround(_board.Camera, mouse, out Vector3 anchored) ? anchored : null;
+    }
+
+    /// <summary>
+    /// 左键松开：拖过就只是结束拖动；没拖过才是点击，按<b>按下位置</b>拾取（阈值内的抖动跨了格线时，以玩家瞄准的那格为准）。
+    /// "点击能否到达棋盘"的门槛已在按下时由界面控件的消费决定（与改前同一道门），这里不再另设。
+    /// </summary>
+    private void OnLeftReleased()
+    {
+        if (_pressAt is not { } pressAt)
+        {
+            return;
+        }
+
+        bool dragged = _dragging;
+        ClearPress();
+        GetViewport().SetInputAsHandled();
+        if (dragged || ShowPlaying || Selecting || Supplying)
+        {
+            return;
+        }
+
+        if (_board.TryPickScreen(pressAt, out Coord coord))
         {
             OnBoardClicked(coord);
         }
+    }
+
+    private void ClearPress()
+    {
+        _pressAt = null;
+        _dragGround = null;
+        _dragging = false;
     }
 
     private Coord? PickCell() =>

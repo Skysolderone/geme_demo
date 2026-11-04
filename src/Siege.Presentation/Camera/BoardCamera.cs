@@ -240,6 +240,23 @@ public sealed class BoardCamera
         Clamp();
     }
 
+    /// <summary>
+    /// 拖动：按住鼠标左键拖动时，引擎侧把"按下时抓住的地面点 − 指针此刻所指的地面点"作为世界位移 (<paramref name="dx"/>, <paramref name="dz"/>) 交来，
+    /// 注视点随之平移，抓住的那块地面就留在指针底下（俯角与距离不变，相机只做平移，所以这一步是精确的）。
+    /// 与 <see cref="Pan"/> 同样只改注视点、经夹取；全局预览中同样无效。
+    /// </summary>
+    public void Drag(float dx, float dz)
+    {
+        if (_overview)
+        {
+            return;
+        }
+
+        _x += dx;
+        _z += dz;
+        Clamp();
+    }
+
     /// <summary>缩放：<paramref name="steps"/> 为正拉近、为负拉远（滚轮格数）。只改距离；改后立即重夹注视点。</summary>
     public void Zoom(int steps)
     {

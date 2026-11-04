@@ -196,4 +196,33 @@ public static class BoardGeometry
 
         return false;
     }
+
+    /// <summary>
+    /// 屏幕像素 → 地面（h=0 地砖上表面所在水平面）上的世界点：拖动镜头用——抓住的是"这块地面"，与格无关，也不分层
+    /// （高台上的点只差一个常量高度，拖动手感无差别）。相机俯角恒为 60 度、视场角 54 度，画面每一点的射线都朝下，正常不会失败。
+    /// </summary>
+    public static bool TryGround(Camera3D camera, Vector2 screen, out Vector3 point)
+    {
+        point = default;
+        if (camera is null)
+        {
+            return false;
+        }
+
+        Vector3 origin = camera.ProjectRayOrigin(screen);
+        Vector3 dir = camera.ProjectRayNormal(screen);
+        if (Mathf.Abs(dir.Y) < 0.0001f)
+        {
+            return false;
+        }
+
+        float t = (TopYOf(0) - origin.Y) / dir.Y;
+        if (t <= 0f)
+        {
+            return false;
+        }
+
+        point = origin + (dir * t);
+        return true;
+    }
 }

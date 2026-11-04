@@ -828,7 +828,7 @@ public sealed partial class Hud : CanvasLayer
             _centerBody.AddChild(Ui.Heading("开局自由插旗"));
             _centerBody.AddChild(Ui.Text($"{Labels.FlagLayout}。\n点任一合规格，旗即锁定（光标处预览出生圈与构筑范围，不合规为红）；其他玩家的旗不可见，太近的旗在锁定时按插旗先后改派。\n锁定后镜头落在自己的旗心。", Ui.InfoText, wrap: true));
             _centerBody.AddChild(Ui.Text(Labels.FlagBuildHint, Ui.MutedText, wrap: true));
-            _centerBody.AddChild(Ui.Text("地图很大：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家；右下小地图点击跳转，M 键显隐。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Text("地图很大：按住左键拖动，或贴边 / 方向键 / WASD 推屏；滚轮缩放，空格回家；右下小地图点击跳转，M 键显隐。", Ui.MutedText, wrap: true));
             _centerPanel.Visible = true;
             return;
         }
@@ -842,7 +842,7 @@ public sealed partial class Hud : CanvasLayer
             _centerBody.AddChild(Ui.Text("前三个大回合限在自己的座位落子、改造；\n第四回合起可在全图行动（含中立平台）。\n全员整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
-                _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
+                _centerBody.AddChild(Ui.Text("地图一屏看不全：按住左键拖动，或贴边 / 方向键 / WASD 推屏；滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
             }
             _centerPanel.Visible = true;
             return;
