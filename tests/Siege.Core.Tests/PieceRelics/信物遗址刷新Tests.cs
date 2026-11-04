@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.PieceRelics;
 
 /// <summary>
 /// 规格：openspec/specs/relic-spawn —— Requirement: 大图只落信物遗址（relic-sites 裁决 8）：大图每批只落在空着的遗址格、档位随遗址（稀有遗址只出稀有件、普通只出普通件）、每批稀有至多 1 处，
-/// 被占 / 已有信物的遗址不在候选；掉落同样只落空遗址、没有空遗址即消失；小图路径逐位不变（刷新与掉落序列按改动前的实际值钉住）。
+/// 被占 / 已有信物的遗址不在候选；rare-weight 裁决 1：稀有遗址按权重 3（普通 1）抽；掉落同样只落空遗址、没有空遗址即消失；小图路径逐位不变（刷新与掉落序列按改动前的实际值钉住）。
 /// </summary>
 public class 信物遗址刷新Tests
 {
@@ -76,6 +76,33 @@ public class 信物遗址刷新Tests
         Assert.Equal(20 * 3 * 3, batches);
         Assert.True(rareBatches > 0, "180 批里没有任何稀有件：稀有遗址从未被抽中");
         Assert.True(rareBatches < batches, "每批都有稀有件：普通遗址从未被抽中");   // 样本口径
+        // rare-weight 裁决 1 / 2：稀有遗址权重 3，4 人局遗址全空时每批出稀有的期望约 78%（等权时 46%）。样本带宽取 65%–92%：等权实现落不进来。
+        Assert.InRange(rareBatches * 100 / batches, 65, 92);
+    }
+
+    [Fact]
+    public void 稀有遗址按权重3被抽中()
+    {
+        // rare-weight 裁决 1：候选只剩 1 处稀有 + 1 处普通、每批 1 件（2 人）时，稀有被抽中的期望 = 3 / (3 + 1) = 75%（等权为 50%）；400 个对局种子取样带宽 67%–83%。
+        Assert.Equal(3, RelicKinds.UncalibratedRareSiteWeight);
+        GameBoard board = Large();
+        RelicSite rare = board.Map.RelicSites.First(s => s.Tier == RelicTier.Rare);
+        RelicSite common = board.Map.RelicSites.First(s => s.Tier == RelicTier.Common);
+        foreach (RelicSite site in board.Map.RelicSites.Where(s => s != rare && s != common))
+        {
+            board.Place(site.Cell.ToNotation(), TestMaps.P0);
+        }
+
+        Assert.Equal(2, RelicSpawner.SiteCandidates(board, Birth(board)).Length);
+        int rareHits = 0;
+        for (ulong seed = 1; seed <= 400; seed++)
+        {
+            RelicSpawnSlot slot = Assert.Single(RelicSpawner.Forecast(board, Birth(board), new GameSeed(seed), 3, 2, 0)!.Slots);
+            Assert.True(slot.Cell == rare.Cell || slot.Cell == common.Cell);
+            rareHits += slot.Cell == rare.Cell ? 1 : 0;
+        }
+
+        Assert.InRange(rareHits * 100 / 400, 67, 83);
     }
 
     [Fact]

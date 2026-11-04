@@ -77,6 +77,12 @@ public static class RelicKinds
     /// <summary>刷新稀有档的整数权重，<b>未校准的初值 15</b>。</summary>
     public const int UncalibratedRareWeight = 15;
 
+    /// <summary>
+    /// 大图抽遗址时稀有遗址的整数权重（普通遗址恒为 1），<b>未校准的初值 3</b>（rare-weight 裁决 1 / 2，11-04：稀有刷新多一点）。
+    /// 4 人局遗址全空时每批出稀有的概率由 46% 升到约 78%，2 人局由 20% 升到约 43%；每批稀有至多 1 处不变。小图不用它。
+    /// </summary>
+    public const int UncalibratedRareSiteWeight = 3;
+
     /// <summary>第一批落位的大回合，<b>未校准的初值 4</b>（R8：开局不刷，第 4 大回合起）。</summary>
     public const int UncalibratedFirstLandingRound = 4;
 
