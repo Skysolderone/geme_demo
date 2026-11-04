@@ -74,6 +74,9 @@ public sealed partial class Hud
     /// <summary>按像素点一下缩略（与鼠标左键同一条路径：叠层 → 唯一映射 → <see cref="MapThumbnailClicked"/>）。</summary>
     public void ClickThumbnail(Vector2 pixel) => _mapThumbnailOverlay?.Click(pixel);
 
+    /// <summary>缩略压暗层纹理的像素尺寸（自检探针，relic-zones 裁决 1：大图须等于画布尺寸）。</summary>
+    public Vector2I ThumbnailMaskSize => _mapThumbnailOverlay?.MaskSize ?? Vector2I.Zero;
+
     /// <summary>新局面板此刻是否显示。</summary>
     public bool MapSelectOpen => _selectRoot is { Visible: true };
 
@@ -110,8 +113,8 @@ public sealed partial class Hud
             _mapThumbnailFrame.Ratio = (float)thumbnail.GetWidth() / thumbnail.GetHeight();
         }
 
-        // 缩略叠层（relic-sites 裁决 1 / 2 / 10）：遗址标记、悬停框（合规绿 / 不合规红）、选中框；合规与否只问视图模型。小图不启用（thumbnail 为 null 时整块隐藏）。
-        _mapThumbnailOverlay!.Refresh(thumbnail is null ? null : thumbnailBoard, pick.Enabled, pick.Hover, pick.Hover is { } hover && pick.IsLegal(hover), pick.Picked, FlagPickModel.PlateReach);
+        // 缩略叠层（relic-sites 裁决 1 / 2 / 10，relic-zones 裁决 1 / 2）：不可插格压暗、遗址标记（稀有只画区域）、悬停框（合规绿 / 不合规红）、选中框；合规与否只问视图模型。小图不启用（thumbnail 为 null 时整块隐藏）。
+        _mapThumbnailOverlay!.Refresh(thumbnail is null ? null : thumbnailBoard, pick.Enabled, pick.Hover, pick.Hover is { } hover && pick.IsLegal(hover), pick.Picked, FlagPickModel.PlateReach, pick.LegalMask, pick.MaskWidth, pick.MaskHeight);
         _mapHoverText!.Text = pick.HoverReadout;
         _mapHoverText.Visible = thumbnail is not null && pick.Enabled;
         // "开始"（裁决 3）：大图未选格时禁用并提示"先在地图上点一格插旗"，选中后文案"插旗并开始"；小图照旧。

@@ -11,7 +11,7 @@ using Siege.Presentation.Visibility;
 namespace Siege.Godot;
 
 /// <summary>
-/// 右下角小地图（big-map 裁决 8 / D9，只在大图上显示）：建局时按地图数据一次绘出地形色底图（岛面地表 / 深水 / 障碍，虚空透明），每次刷新叠棋子点、出生区框与相机视口框；
+/// 右下角小地图（big-map 裁决 8 / D9，只在大图上显示）：建局时按地图数据一次绘出地形色底图（岛面地表 / 深水 / 障碍，虚空透明），每次刷新叠棋子点、出生区框、信物遗址（稀有只画区域）与相机视口框；
 /// 点击 → 相机注视点跳到该格（<see cref="CellClicked"/>），M 键显隐（GameRoot）。格 ↔ 像素只做等比缩放（北在上），映射本体在 <see cref="BoardGeometry.MinimapPixelOf"/> / <see cref="BoardGeometry.MinimapCellAt"/>；
 /// 世界 → 格经 <see cref="BoardGeometry.CellPositionOf"/> 那一份映射——本类不另写任何换算（coordinates.md「映射唯一」）。
 /// 只读默认棋盘视图模型与相机位姿，不读地图、不判规则。
@@ -133,7 +133,7 @@ public sealed partial class Minimap : Control
                 color = color.Lightened(cell.Height == 1 ? 0.12f : 0.26f);
             }
 
-            image.SetPixel(cell.Coord.X, board.Height - 1 - cell.Coord.Y, color);
+            image.SetPixel(cell.Coord.X, BoardGeometry.MinimapImageRow(cell.Coord.Y, board.Height), color);
         }
 
         return ImageTexture.CreateFromImage(image);
@@ -149,7 +149,7 @@ public sealed partial class Minimap : Control
             DrawTextureRect(_terrain, full, false);
         }
 
-        DrawRelicSites(this, _sites, PixelOf, _board is null ? 1f : Size.X / Math.Max(1, _board.Width));
+        DrawRelicSites(this, _sites, PixelOf, _board is null ? 1f : Size.X / Math.Max(1, _board.Width), _board?.Width ?? 1, _board?.Height ?? 1);
 
         foreach ((Rect2 rect, Color color) in _zones)
         {
@@ -170,10 +170,11 @@ public sealed partial class Minimap : Control
     }
 
     /// <summary>
-    /// 信物遗址标记（relic-sites 裁决 10）：稀有金色五角星（外径 ≥ 7 px）、普通白色点（带墨色描边，浅色地砖上才看得见），小地图与新局面板缩略共用这一份画法，在叠层画、不进底图。
-    /// 只按视图模型的遗址清单画；格 → 像素经调用方给的那一份映射（<see cref="BoardGeometry.MinimapPixelOf"/>），这里不另算。
+    /// 信物遗址标记（relic-sites 裁决 10 / relic-zones 裁决 2 / 5）：稀有遗址只画所在<b>区域</b>（Core <see cref="RelicSites.RareZoneOf"/> 的网格块：金色淡填充 + 金色描边，不画精确格，让玩家进图自己找）；
+    /// 普通遗址仍是白色点（带墨色描边，浅色地砖上才看得见）。小地图与新局面板缩略共用这一份画法，在叠层画、不进底图。
+    /// 只按视图模型的遗址清单画；格 → 像素经调用方给的那一份映射（<see cref="BoardGeometry.MinimapPixelOf"/>），这里不另算；区域几何只取 Core，这里不另写。
     /// </summary>
-    public static void DrawRelicSites(CanvasItem canvas, ImmutableArray<RelicSite> sites, Func<float, float, Vector2> pixelOf, float pixelsPerCell)
+    public static void DrawRelicSites(CanvasItem canvas, ImmutableArray<RelicSite> sites, Func<float, float, Vector2> pixelOf, float pixelsPerCell, int width, int height)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(pixelOf);
@@ -182,29 +183,27 @@ public sealed partial class Minimap : Control
             return;
         }
 
-        float star = Math.Max(3.5f, pixelsPerCell * 1.4f);
+        foreach (RareSiteZone zone in RelicSites.RareZones(sites, width, height))
+        {
+            Vector2 a = pixelOf(zone.Origin.X, zone.Origin.Y + zone.Height);
+            Vector2 b = pixelOf(zone.Origin.X + zone.Width, zone.Origin.Y);
+            var rect = new Rect2(a, b - a);
+            canvas.DrawRect(rect, new Color(Visuals.RelicForecast, 0.22f));
+            canvas.DrawRect(rect, Visuals.GridInk, false, 3f);
+            canvas.DrawRect(rect, Visuals.RelicForecast, false, 1.5f);
+        }
+
         float dot = Math.Max(1.6f, pixelsPerCell * 0.55f);
         foreach (RelicSite site in sites)
         {
-            Vector2 at = pixelOf(site.Cell.X + 0.5f, site.Cell.Y + 0.5f);
             if (site.Tier == RelicTier.Rare)
             {
-                var points = new Vector2[10];
-                for (int i = 0; i < points.Length; i++)
-                {
-                    float r = (i & 1) == 0 ? star : star * 0.45f;
-                    float a = (-MathF.PI / 2f) + (i * MathF.PI / 5f);
-                    points[i] = at + new Vector2(MathF.Cos(a) * r, MathF.Sin(a) * r);
-                }
+                continue;
+            }
 
-                canvas.DrawColoredPolygon(points, Visuals.RelicForecast);
-                canvas.DrawPolyline([.. points, points[0]], Visuals.GridInk, 1f);
-            }
-            else
-            {
-                canvas.DrawCircle(at, dot + 1f, Visuals.GridInk);
-                canvas.DrawCircle(at, dot, Colors.White);
-            }
+            Vector2 at = pixelOf(site.Cell.X + 0.5f, site.Cell.Y + 0.5f);
+            canvas.DrawCircle(at, dot + 1f, Visuals.GridInk);
+            canvas.DrawCircle(at, dot, Colors.White);
         }
     }
 

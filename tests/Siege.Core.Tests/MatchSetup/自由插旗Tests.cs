@@ -3,13 +3,14 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using static Siege.Core.Tests.LinkModeFixtures;
 
 namespace Siege.Core.Tests.MatchSetup;
 
 /// <summary>
 /// 规格：openspec/specs/match-setup —— Requirement: 大图自由插旗（big-map 裁决 2 / 4，D3）：合规旗格、锁定时按插旗先后的间距改派、AI 盲选、两档入口互斥、锁定前旗格不可见；
-/// relic-sites 裁决 9：旗心与任一信物遗址切比雪夫距离 ≥ 7（「合规旗格的判定」的独立算式随之加上遗址项；「旗心距遗址不足7被拒_AI盲选合规」）。
+/// relic-sites 裁决 9：旗心与任一信物遗址切比雪夫距离 ≥ 7（「合规旗格的判定」的独立算式随之加上遗址项；「旗心距遗址不足7被拒_AI盲选合规」）；relic-zones 裁决 3：稀有遗址改为与其 20×20 区域距离 ≥ 7。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 A 实跑，mutate.py，备份 → 改 → 跑本类 → 逐字节还原 → 刷新时间戳）：
@@ -43,8 +44,14 @@ public class 自由插旗Tests
             bool inside = c.X >= 6 && c.Y >= 6 && c.X + 6 < Large.Width && c.Y + 6 < Large.Height;
             // 13×13 与任何中立平台外接矩形至少隔 1 格（追加裁决 19）。
             bool clear = Large.Boards.All(p => c.X + 7 < p.Origin.X || p.Origin.X + p.Width < c.X - 6 || c.Y + 7 < p.Origin.Y || p.Origin.Y + p.Height < c.Y - 6);
-            // 与任一遗址切比雪夫距离 ≥ 7（relic-sites 裁决 9）。
-            bool apart = Large.RelicSites.All(s => Math.Max(Math.Abs(c.X - s.Cell.X), Math.Abs(c.Y - s.Cell.Y)) >= 7);
+            // 与任一普通遗址切比雪夫距离 ≥ 7（relic-sites 裁决 9）；与任一稀有遗址所在的 20×20 网格块（裁到画布内）切比雪夫距离 ≥ 7（relic-zones 裁决 3）。
+            bool apart = Large.RelicSites.Where(s => s.Tier == RelicTier.Common).All(s => Math.Max(Math.Abs(c.X - s.Cell.X), Math.Abs(c.Y - s.Cell.Y)) >= 7)
+                && Large.RelicSites.Where(s => s.Tier == RelicTier.Rare).All(s =>
+                {
+                    int x0 = s.Cell.X / 20 * 20, y0 = s.Cell.Y / 20 * 20;
+                    int x1 = Math.Min(x0 + 19, Large.Width - 1), y1 = Math.Min(y0 + 19, Large.Height - 1);
+                    return Math.Max(Math.Max(0, Math.Max(x0 - c.X, c.X - x1)), Math.Max(0, Math.Max(y0 - c.Y, c.Y - y1))) >= 7;
+                });
             int ring = 0;
             for (int dy = -4; dy <= 4; dy++)
             {
@@ -233,7 +240,17 @@ public class 自由插旗Tests
                     string problem = FlagRules.FlagCellProblem(Large, c)!;
                     if (problem.Contains("遗址", StringComparison.Ordinal))
                     {
-                        Assert.Contains(site.Cell.ToNotation(), problem, StringComparison.Ordinal);
+                        if (site.Tier == RelicTier.Common)
+                        {
+                            Assert.Contains(site.Cell.ToNotation(), problem, StringComparison.Ordinal);
+                        }
+                        else
+                        {
+                            // relic-zones 裁决 7：稀有遗址只说区域，文案不带遗址坐标（否则悬停一下就把位置交出去了）。
+                            Assert.Contains("稀有信物遗址区域", problem, StringComparison.Ordinal);
+                            Assert.DoesNotContain(site.Cell.ToNotation(), problem[c.ToNotation().Length..], StringComparison.Ordinal);   // 开头是悬停格自己的坐标
+                        }
+
                         rejectedBySite++;
                     }
                 }
@@ -242,14 +259,14 @@ public class 自由插旗Tests
 
         Assert.True(rejectedBySite > 0, "没有任何格是因为遗址被拒的（都被更早的判据挡下），测不到遗址文案。");
 
-        // 距离恰 7 的环上至少有一格合规（样本口径：规则是 ≥ 7 而不是 > 7）。
-        Assert.Contains(Large.RelicSites, s => Enumerable.Range(-7, 15).SelectMany(dx => new[] { (dx, -7), (dx, 7), (-7, dx), (7, dx) })
+        // 普通遗址距离恰 7 的环上至少有一格合规（样本口径：规则是 ≥ 7 而不是 > 7；稀有遗址的口径是区域，见「稀有遗址区域」）。
+        Assert.Contains(Large.RelicSites.Where(s => s.Tier == RelicTier.Common), s => Enumerable.Range(-7, 15).SelectMany(dx => new[] { (dx, -7), (dx, 7), (-7, dx), (7, dx) })
             .Any(d => FlagRules.IsLegalFlagCell(Large, new Coord(s.Cell.X + d.Item1, s.Cell.Y + d.Item2))));
 
         // 插旗入口：报文含"不是合规旗格"与原因（遗址点名）；其他原因的报文可分辨（平台格说平台，不说遗址）。
         MatchFlow match = CreateLarge();
         // 取一处"被拒的第一条判据就是遗址"的格（判据次序在前的平台 / 画布边缘会先挡下；遗址位置随生成口径变，不钉第 0 处）。
-        Coord onSite = Large.RelicSites.Select(s => s.Cell).First(c => FlagRules.FlagCellProblem(Large, c)!.Contains("遗址", StringComparison.Ordinal));
+        Coord onSite = Large.RelicSites.Where(s => s.Tier == RelicTier.Common).Select(s => s.Cell).First(c => FlagRules.FlagCellProblem(Large, c)!.Contains("遗址", StringComparison.Ordinal));
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Flags.PlantAt(P0, onSite));
         Assert.Contains($"{onSite.ToNotation()} 不是合规旗格", ex.Message, StringComparison.Ordinal);
         Assert.Contains("遗址", ex.Message, StringComparison.Ordinal);
