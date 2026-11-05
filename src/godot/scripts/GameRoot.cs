@@ -1407,6 +1407,13 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        // power-perf：地图势力飘字 / 个人卡片飙升还在播时不跑 AI 小回合。AI 想一手的那一帧要上百毫秒，
+        // 压在飞光与卡片滚动中间画面会一顿一顿；等飘字播完再想（停顿计时与飘字并行，不额外叠加）。
+        if (_hud.PowerBurstPlaying)
+        {
+            return;
+        }
+
         PlayerId aiActor = _session.Match.CurrentPlayer!.Value;
         TurnFlash flash = _session.RunAiTurn();
         if (_session.LastAiLookahead is { } lookahead)
