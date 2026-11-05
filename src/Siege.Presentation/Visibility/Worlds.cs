@@ -125,9 +125,32 @@ public sealed class ViewerWorld
     /// <summary>全玩家手牌对比面板（open-map 裁决 O4：全部玩家的公开手牌类型对全员可见，"他战场遮蔽"随唯一战场删除）。</summary>
     public HandInfoPanelView HandPanel() => HandInfoPanelView.Build(this);
 
-    /// <summary>某信息层的内容。只读公开世界。<paramref name="reading"/> 只对盘面层有意义。</summary>
+    /// <summary>
+    /// 已算过的信息层内容（power-perf）：本对象是不可变快照，同一层同一读法的内容不会变。结算演出期间势力排名栏与个人势力卡片逐帧读势力层，
+    /// 大图上每次现算要按座位过滤两万多格，逐帧重复算会卡顿。只缓存缺省阈值的结果；键里的读法对非盘面层归一。
+    /// </summary>
+    private readonly Dictionary<(TacticalLayer Layer, BoardReading Reading), LayerContent> _layers = [];
+
+    /// <summary>某信息层的内容。只读公开世界。<paramref name="reading"/> 只对盘面层有意义。同一实例上缺省阈值的结果只算一次。</summary>
     public LayerContent Layer(
         TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null)
+    {
+        if (thresholds is not null)
+        {
+            return BuildLayer(layer, reading, thresholds);
+        }
+
+        (TacticalLayer, BoardReading) key = (layer, layer == TacticalLayer.Board ? reading : BoardReading.Ownership);
+        if (!_layers.TryGetValue(key, out LayerContent? content))
+        {
+            content = BuildLayer(layer, reading, null);
+            _layers[key] = content;
+        }
+
+        return content;
+    }
+
+    private LayerContent BuildLayer(TacticalLayer layer, BoardReading reading, LibertyThresholds? thresholds)
     {
         LayerContent content = TacticalLayers.Build(Public, layer, reading, thresholds);
         if (Seat is not { } seat)
