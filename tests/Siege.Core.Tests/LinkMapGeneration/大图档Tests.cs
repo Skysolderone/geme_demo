@@ -60,6 +60,13 @@ public class 大图档Tests(ITestOutputHelper output)
                 Assert.Empty(map.BirthBoards());
                 int neutral = map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
                 Assert.InRange(neutral, LinkMapGenerator.LargeNeutralPlateMin, LinkMapGenerator.LargeNeutralPlateMax);
+                // plate-tiers：中立平台只有 15×15 / 10×10 / 8×8 三档方形，各档块数在区间内。
+                foreach ((int side, int min, int max) in LinkMapGenerator.LargePlateTiers)
+                {
+                    Assert.InRange(map.Boards.Count(b => b.Width == side && b.Height == side), min, max);
+                }
+
+                Assert.All(map.Boards, b => Assert.Contains(LinkMapGenerator.LargePlateTiers, t => t.Side == b.Width && t.Side == b.Height));
                 Assert.Equal(neutral, map.Boards.Length);
                 Assert.Empty(MapValidator.LibertySplit(map));
 
