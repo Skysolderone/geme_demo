@@ -7,7 +7,7 @@ namespace Siege.Core.Board.Maps;
 /// <summary>
 /// 链接档地图生成器（规格 link-map-generation；map-expand-25 D1–D5 / 裁决 Q3–Q6、R1–R6；seat-gap-25 E1–E3 / 裁决 S1–S6；big-map D2）。唯一入口 <see cref="Generate(ulong, int, MapTier)"/>。
 /// <b>大图</b>（<see cref="MapTier.Large"/>，big-map 裁决 3 / 12）：不分人数统一 <see cref="LargeIslandSide"/>×<see cref="LargeIslandSide"/> 的大陆，不预置出生座位（出生区在插旗锁定时由 <c>FlagRules.Seat</c> 物化），
-/// 中立平台 14–18 块均匀落位、河道 6–9 条、湖泊 / 岩区按"均匀撒点 + 局部尝试"投放到非可落子占外接矩形 29%–32%；几何常量见 <see cref="TierGeometry"/>，小图路径上的每一次随机消费与引入档位之前相同。
+/// 中立平台分三档方形（<see cref="LargePlateTiers"/>：15×15 1–2 块、10×10 2–3 块、8×8 2–3 块，plate-tiers）均匀落位、河道 6–9 条、湖泊 / 岩区按"均匀撒点 + 局部尝试"投放到非可落子占外接矩形 29%–32%；几何常量见 <see cref="TierGeometry"/>，小图路径上的每一次随机消费与引入档位之前相同。
 /// <b>小图</b>（三段标识）：由地图种子与人数生成一整座<b>长方形浮空岛</b>——
 /// 恰 n 个 8×8 出生座位（位置只由人数决定），任意两座位外接矩形间距 ≥ <see cref="SeatGap"/>，座位之间的战场里散布 n–(n+1) 块 6–8 边长的中立平台；
 /// 平台（座位与中立平台一视同仁）为 h=2 高台、四周崖壁、各有 2–3 个 h=1 坡道；平台之间是 h=0 低地，夹 n 条深水河道（各 2 座预置桥），岛缘点缀林地与少量岩石。
@@ -78,9 +78,19 @@ public static partial class LinkMapGenerator
     /// <summary>大图外接矩形边长（裁决 3：不随人数变化；画布 150 + 2 × <see cref="Margin"/> = 154）。</summary>
     public const int LargeIslandSide = 150;
 
-    /// <summary>大图的中立平台数区间（D2：按面积放大，14–18 块）。</summary>
-    public const int LargeNeutralPlateMin = 14;
-    public const int LargeNeutralPlateMax = 18;
+    /// <summary>
+    /// 大图中立平台的三档（plate-tiers，2026-11-06 用户裁决，替换原 14–18 块 6–8 边长）：方形边长与该档块数区间——15×15 1–2 块、10×10 2–3 块、8×8 2–3 块，不分人数。
+    /// 落位按本表次序（大的先放），见 <see cref="PlaceLargePlates"/>。
+    /// </summary>
+    public static readonly ImmutableArray<(int Side, int Min, int Max)> LargePlateTiers = [(15, 1, 2), (10, 2, 3), (8, 2, 3)];
+
+    /// <summary>大图的中立平台总数区间 = 三档下限之和到上限之和（5–8 块；校验器大图预算行同值）。</summary>
+    public const int LargeNeutralPlateMin = 5;
+    public const int LargeNeutralPlateMax = 8;
+
+    /// <summary>大图中立平台边长的最小 / 最大值（三档 8 / 15；校验器大图平台边长区间同值）。</summary>
+    public const int LargePlateMinSide = 8;
+    public const int LargePlateMaxSide = 15;
 
     /// <summary>大图的河道数区间（D2：6–9 条，布局流抽一次）。</summary>
     public const int LargeRiverMin = 6;
@@ -144,7 +154,7 @@ public static partial class LinkMapGenerator
         internal (int Width, int Height) IslandSize(int players) =>
             Tier == MapTier.Small ? LinkMapGenerator.IslandSize(players) : (LargeIslandSide, LargeIslandSide);
 
-        /// <summary>中立平台数区间：小图按人数 n–(n+1)，大图 14–18。</summary>
+        /// <summary>中立平台数区间：小图按人数 n–(n+1)，大图三档合计 5–8。</summary>
         internal (int Min, int Max) NeutralPlates(int players) =>
             Tier == MapTier.Small ? NeutralPlateCount(players) : (LargeNeutralPlateMin, LargeNeutralPlateMax);
 
@@ -497,13 +507,18 @@ public static partial class LinkMapGenerator
     }
 
     /// <summary>
-    /// 平台落位（seat-gap-25 E1 / E2；贴紧式候选沿用 map-expand-25 段 A1 实施修订）：n 个座位固定（<see cref="Island.Seats"/>，不消费随机）；中立平台数在区间里抽一次，
+    /// 平台落位（seat-gap-25 E1 / E2；贴紧式候选沿用 map-expand-25 段 A1 实施修订）：大图转 <see cref="PlaceLargePlates"/>；以下是小图——n 个座位固定（<see cref="Island.Seats"/>，不消费随机）；中立平台数在区间里抽一次，
     /// 逐块抽宽、高（6–8），在全部合法原点里只保留"贴紧"的——横纵两个方向都恰好顶在岛边距线上、或恰好与某块已放平台隔 <see cref="PlateGap"/>——按先行后列排好后均匀抽一个。
     /// 抽到的尺寸没有候选时退到 6×6 再找（不消费随机）；仍没有就停止追加。中立平台放够下限即成功，否则返回 <c>null</c>。
     /// 结果座位在前（按左下角先行后列）、中立平台在后（同样排序），保证 <see cref="MapData.Boards"/> 里出生棋盘 i 即出生区 i。
     /// </summary>
     private static List<BoardPlate>? PlacePlates(Island island, int players, RandomStream rng, TierGeometry g)
     {
+        if (g.Tier == MapTier.Large)
+        {
+            return PlaceLargePlates(island, rng);
+        }
+
         (int min, int max) = g.NeutralPlates(players);
         int target = min + rng.NextInt(max - min + 1);
         int seats = g.HasSeats ? players : 0;
@@ -513,22 +528,13 @@ public static partial class LinkMapGenerator
         {
             int width = PlateMinSide + rng.NextInt(PlateMaxSide - PlateMinSide + 1);
             int height = PlateMinSide + rng.NextInt(PlateMaxSide - PlateMinSide + 1);
-            BoardPlate? chosen;
-            if (g.Tier == MapTier.Small)
+            List<BoardPlate> spots = PlateSpots(island, plates, width, height);
+            if (spots.Count == 0 && (width, height) != (PlateMinSide, PlateMinSide))
             {
-                List<BoardPlate> spots = PlateSpots(island, plates, width, height);
-                if (spots.Count == 0 && (width, height) != (PlateMinSide, PlateMinSide))
-                {
-                    spots = PlateSpots(island, plates, PlateMinSide, PlateMinSide);
-                }
-
-                chosen = spots.Count == 0 ? null : spots[rng.NextInt(spots.Count)];
-            }
-            else
-            {
-                chosen = ScatterPlate(island, plates, width, height, rng);
+                spots = PlateSpots(island, plates, PlateMinSide, PlateMinSide);
             }
 
+            BoardPlate? chosen = spots.Count == 0 ? null : spots[rng.NextInt(spots.Count)];
             if (chosen is not { } plate)
             {
                 break;
@@ -541,6 +547,30 @@ public static partial class LinkMapGenerator
         return neutral.Count >= min
             ? [.. plates.Take(seats).OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X), .. neutral.OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X)]
             : null;
+    }
+
+    /// <summary>
+    /// 大图的中立平台落位（plate-tiers）：按 <see cref="LargePlateTiers"/> 的次序逐档先抽块数（该档区间内均匀），再逐块 <see cref="ScatterPlate"/>；
+    /// 任何一块放不下即返回 <c>null</c>（整张布局在同一条流上重抽）。结果按左下角先行后列排序。大图没有出生座位。
+    /// </summary>
+    private static List<BoardPlate>? PlaceLargePlates(Island island, RandomStream rng)
+    {
+        var neutral = new List<BoardPlate>();
+        foreach ((int side, int min, int max) in LargePlateTiers)
+        {
+            int count = min + rng.NextInt(max - min + 1);
+            for (int k = 0; k < count; k++)
+            {
+                if (ScatterPlate(island, neutral, side, side, rng) is not { } plate)
+                {
+                    return null;
+                }
+
+                neutral.Add(plate);
+            }
+        }
+
+        return [.. neutral.OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X)];
     }
 
     /// <summary>大图一块中立平台的落位尝试次数上限（均匀抽原点，与已放平台间隔 ≥ <see cref="PlateGap"/> 即落下）。</summary>

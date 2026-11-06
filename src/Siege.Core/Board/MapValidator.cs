@@ -96,7 +96,7 @@ public static class MapValidator
     /// </para>
     /// <para>
     /// big-map D2（2026-11-01）：链接行按<b>档位</b>（<see cref="MapData.Tier"/>）分成两组预算与两组清单规则，小图一组一字不改。大图：外接矩形恒 150×150、画布 154×154、
-    /// 中立平台 14–18 块、可落子格区间 14500–16760（种子 1–20 × 2 / 3 / 4 人实测 15271–15961，下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十；种子 1–200 × 4 人的扩大扫描见 <c>大图档Tests</c> 的慢测试）；
+    /// 中立平台 5–8 块（plate-tiers：15×15 / 10×10 / 8×8 三档，边长区间 8–15）、可落子格区间 14500–16760（种子 1–20 × 2 / 3 / 4 人实测 15271–15961，下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十；种子 1–200 × 4 人的扩大扫描见 <c>大图档Tests</c> 的慢测试）；
     /// 基图不预置出生座位（出生区 0），锁定时物化的落座图恰 n 个出生区——
     /// 预算行的出生区数区间写成 (0, n)，"出生棋盘数 = 出生区数"由两档共用的 <c>BIRTH_BOARD_MISMATCH</c> 守住。清单规则分流（design D2 末段）：
     /// 只对小图生效——出生区 = 出生棋盘 3×3 核心区、出生棋盘与中立平台同样是带主题 / 抬高 / 坡道的地形平台（<see cref="PlateRules.BirthTerrain"/>）、座位 8×8、座位间距 25；
@@ -123,15 +123,15 @@ public static class MapValidator
                     }.ToImmutableDictionary(),
                     [MapTier.Large] = new Dictionary<int, Budget>
                     {
-                        [2] = new(14500, 16760, (0, 2), null, (14, 18), Island: (150, 150), Canvas: (154, 154)),
-                        [3] = new(14500, 16760, (0, 3), null, (14, 18), Island: (150, 150), Canvas: (154, 154)),
-                        [4] = new(14500, 16760, (0, 4), null, (14, 18), Island: (150, 150), Canvas: (154, 154)),
+                        [2] = new(14500, 16760, (0, 2), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
+                        [3] = new(14500, 16760, (0, 3), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
+                        [4] = new(14500, 16760, (0, 4), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
                     }.ToImmutableDictionary(),
                 }.ToImmutableDictionary(),
                 new Dictionary<MapTier, PlateRules>
                 {
                     [MapTier.Small] = new((6, 8), (8, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 25, BirthTerrain: true, BirthGap: 3),
-                    [MapTier.Large] = new((6, 8), (13, 13), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 47, BirthTerrain: false, BirthGap: 1),
+                    [MapTier.Large] = new((8, 15), (13, 13), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 47, BirthTerrain: false, BirthGap: 1),
                 }.ToImmutableDictionary()),
         }.ToImmutableDictionary();
 
