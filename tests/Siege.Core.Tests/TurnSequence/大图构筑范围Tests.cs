@@ -75,13 +75,13 @@ public class 大图构筑范围Tests
             Assert.Equal(match.Map.Width * match.Map.Height, match.EditScopeFor(p).Count);
         }
 
-        Assert.True(playable.Count >= 12000);
+        Assert.True(playable.Count >= 2300);   // large-60：校验器大图行的可落子下限
     }
 
     [Fact]
     public void 构筑期内越出旗心的暂放被拒()
     {
-        // 第 1 大回合：当前玩家在自己 13×13 内暂放被接受；在别人旗心（相距 ≥ 60）暂放被拒。
+        // 第 1 大回合：当前玩家在自己 13×13 内暂放被接受；在别人旗心（相距 ≥ 旗距）暂放被拒。
         MatchFlow match = StartedLarge();
         PlayerId mover = match.CurrentPlayer!.Value;
         PlayerId other = All.First(p => p != mover);
@@ -92,6 +92,6 @@ public class 大图构筑范围Tests
         Coord far = match.Flags.FlagCellOf(other)!.Value;
         Assert.Contains(own, batch.Context.LegalRange);
         Assert.DoesNotContain(far, batch.Context.LegalRange);
-        Assert.True(FlagRules.Distance(own, far) >= 60);
+        Assert.True(FlagRules.Distance(own, far) >= FlagRules.FlagGap);
     }
 }

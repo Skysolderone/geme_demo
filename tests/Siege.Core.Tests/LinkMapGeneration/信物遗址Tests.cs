@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/specs/link-map-generation —— Requirement: 大图信物遗址（relic-sites 裁决 6 / 7）；map-definition —— Scenario: 信物遗址清单读写往返。
-/// 种子 1–20 × 2 / 3 / 4 人的大图：稀有 ⌈n/2⌉ + 普通 n+2 处、两两切比雪夫距离 ≥ 20、每处高度 0（低地，追加裁决 13）、可落子且八邻可落子、不重复、同标识同清单、独立子流；
+/// 种子 1–20 × 2 / 3 / 4 人的大图：稀有 1 + 普通 3 处（large-60）、两两切比雪夫距离 ≥ 10、每处高度 0（低地，追加裁决 13）、可落子且八邻可落子、不重复、同标识同清单、独立子流；
 /// 地图文件往返含遗址；小图清单为空、导出文件没有该段且与引入遗址之前逐字节相同（<c>link:1:4</c> 导出文件的 SHA-256 钉在本类）；校验器守数量 / 位置 / 距离 / 小图为空。
 /// </summary>
 public class 信物遗址Tests(ITestOutputHelper output)
@@ -39,7 +39,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
     {
         foreach (int players in new[] { 2, 3, 4 })
         {
-            int rare = (players + 1) / 2, common = players + 2;
+            int rare = RelicSites.RareCount(players), common = RelicSites.CommonCount(players);   // large-60：不分人数恒 1 + 3
             for (ulong seed = 1; seed <= 20; seed++)
             {
                 MapData map = LinkMapGenerator.Generate(seed, players, MapTier.Large);
@@ -60,7 +60,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
                 {
                     for (int j = i + 1; j < sites.Length; j++)
                     {
-                        Assert.True(Chebyshev(sites[i].Cell, sites[j].Cell) >= 20, $"{map.Id} 遗址 {sites[i]} 与 {sites[j]} 相距 {Chebyshev(sites[i].Cell, sites[j].Cell)} < 20。");
+                        Assert.True(Chebyshev(sites[i].Cell, sites[j].Cell) >= RelicSites.UncalibratedSiteGap, $"{map.Id} 遗址 {sites[i]} 与 {sites[j]} 相距 {Chebyshev(sites[i].Cell, sites[j].Cell)} < {RelicSites.UncalibratedSiteGap}。");
                     }
                 }
 
@@ -143,17 +143,17 @@ public class 信物遗址Tests(ITestOutputHelper output)
 
         // 位置：挪到岸边 / 岩石旁、不可落子格、重复。
         Coord shore = large.AllCoords().First(c => large.IsPlayable(c) && !Inland(large, c));
-        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = shore }) }));
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = shore }) }));
         Coord rock = large.Obstacles.First(c => c.X > 10 && c.Y > 10);
-        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = rock }) }));
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = rock }) }));
         // 追加裁决 13：挪到 h ≥ 1 的可落子格（平台顶 / 坡道，八邻都可落子）也不合位置规则。
         Coord high = large.AllCoords().First(c => Inland(large, c) && large.HeightAt(c) > 0);
-        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = high }) }));
-        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = sites[6].Cell }) }));
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = high }) }));
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = sites[^2].Cell }) }));
 
         // 距离：把一处挪到另一处旁边（挪到的格本身合位置规则）。
-        Coord near = large.AllCoords().First(c => Inland(large, c) && Chebyshev(c, sites[0].Cell) is > 0 and < 20);
-        string[] gap = Codes(large with { RelicSites = sites.SetItem(7, sites[7] with { Cell = near }) });
+        Coord near = large.AllCoords().First(c => Inland(large, c) && large.HeightAt(c) == 0 && Chebyshev(c, sites[0].Cell) > 0 && Chebyshev(c, sites[0].Cell) < RelicSites.UncalibratedSiteGap);
+        string[] gap = Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = near }) });
         Assert.Contains("RELIC_SITE_GAP", gap);
         Assert.DoesNotContain("RELIC_SITE_GROUND", gap);
 
@@ -161,7 +161,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
         Coord flag = Siege.Core.Match.FlagRules.LegalFlagCells(large)[0];
         MapData seated = Siege.Core.Match.FlagRules.Seat(large, [flag]);
         Assert.Empty(Codes(seated));
-        Assert.Contains("RELIC_SITE_IN_BIRTH", Codes(seated with { RelicSites = sites.SetItem(7, sites[7] with { Cell = flag }) }));
+        Assert.Contains("RELIC_SITE_IN_BIRTH", Codes(seated with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = flag }) }));
 
         // 小图：清单必须为空。
         MapData small = MapCatalog.Resolve("link:1:4");

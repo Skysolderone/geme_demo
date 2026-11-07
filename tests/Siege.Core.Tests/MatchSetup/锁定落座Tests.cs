@@ -100,7 +100,7 @@ public class 锁定落座Tests
         Assert.Equal("Large", root["MapTier"]!.GetValue<string>());
         Assert.Equal(MapFile.Digest(match.Board.BaseMap), root["MapDigest"]!.GetValue<string>());
         Assert.Equal(match.Flags.LockedCells.Select(c => c.ToNotation()), root["Players"]!.AsArray().OrderBy(p => p!["BirthZone"]!.GetValue<int>()).Select(p => p!["FlagCell"]!.GetValue<string>()));
-        Assert.Equal(60, root["RoundCap"]!.GetValue<int>());
+        Assert.Equal(100, root["RoundCap"]!.GetValue<int>());
 
         MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
         Assert.Equal(MapFile.Digest(match.Board.BaseMap), MapFile.Digest(restored.Board.BaseMap));
@@ -167,7 +167,7 @@ public class 锁定落座Tests
         MatchFlow match = StartedLarge();
         MatchPublicView view = match.Publish();
         Assert.Equal(MapTier.Large, view.Tier);
-        Assert.Equal(60, view.RoundCap);
+        Assert.Equal(100, view.RoundCap);
         Assert.True(view.RoundCapIsDefault);
         Assert.Equal("link:1:4:l", view.MapId);
         Assert.Equal(4, view.Board.BaseMap.BirthZones.Length);

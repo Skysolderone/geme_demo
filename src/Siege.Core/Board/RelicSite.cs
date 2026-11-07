@@ -42,14 +42,14 @@ public readonly record struct RareSiteZone(Coord Origin, int Width, int Height)
 /// </summary>
 public static class RelicSites
 {
-    /// <summary>稀有遗址数 = ⌈开局人数 / 本常量⌉，<b>未校准的初值 2</b>（裁决 7：4 人 2 处）。</summary>
-    public const int UncalibratedRareDivisor = 2;
+    /// <summary>稀有遗址数，不分人数，<b>未校准的初值 1</b>（large-60，2026-11-07：大图缩到 60×60 后由 ⌈n/2⌉ 改为固定 1 处）。</summary>
+    public const int UncalibratedRareSites = 1;
 
-    /// <summary>普通遗址数 = 开局人数 + 本常量，<b>未校准的初值 2</b>（裁决 7：4 人 6 处）。</summary>
-    public const int UncalibratedCommonOverPlayers = 2;
+    /// <summary>普通遗址数，不分人数，<b>未校准的初值 3</b>（large-60：由 n + 2 改为固定 3 处）。</summary>
+    public const int UncalibratedCommonSites = 3;
 
-    /// <summary>任意两处遗址的最小切比雪夫距离，<b>未校准的初值 20</b>（裁决 6）。</summary>
-    public const int UncalibratedSiteGap = 20;
+    /// <summary>任意两处遗址的最小切比雪夫距离，<b>未校准的初值 10</b>（裁决 6 原为 20；large-60 随地图缩到 60×60 改为 10）。</summary>
+    public const int UncalibratedSiteGap = 10;
 
     /// <summary>
     /// 旗心与任一遗址的最小切比雪夫距离（裁决 9）：= 出生平台半径 6 + 1 = 7，锁定时物化的 13×13 出生平台因此永远盖不住遗址。几何推出的规则值，不是校准量。
@@ -57,9 +57,9 @@ public static class RelicSites
     public const int FlagClearance = ((LinkMapGenerator.LargeBirthPlateSide - 1) / 2) + 1;
 
     /// <summary>
-    /// 稀有遗址区域的边长（relic-zones 裁决 2），<b>未校准的初值 20</b>。MUST NOT 大于 <see cref="UncalibratedSiteGap"/>：块内任意两格相距 ≤ 边长 − 1 &lt; 遗址间距，一块里因此至多一处稀有遗址。
+    /// 稀有遗址区域的边长（relic-zones 裁决 2），<b>未校准的初值 10</b>（原 20；large-60 随地图缩小）。MUST NOT 大于 <see cref="UncalibratedSiteGap"/>：块内任意两格相距 ≤ 边长 − 1 &lt; 遗址间距，一块里因此至多一处稀有遗址。
     /// </summary>
-    public const int UncalibratedRareZoneSide = 20;
+    public const int UncalibratedRareZoneSide = 10;
 
     /// <summary>稀有遗址 <paramref name="site"/> 所在的区域：边长 <see cref="UncalibratedRareZoneSide"/> 的网格块，裁到 <paramref name="width"/> × <paramref name="height"/> 画布内。</summary>
     public static RareSiteZone RareZoneOf(Coord site, int width, int height)
@@ -80,11 +80,11 @@ public static class RelicSites
         return RareZones(map.RelicSites, map.Width, map.Height);
     }
 
-    /// <summary>人数为 <paramref name="players"/> 时的稀有遗址数 ⌈n / 2⌉。</summary>
-    public static int RareCount(int players) => (players + UncalibratedRareDivisor - 1) / UncalibratedRareDivisor;
+    /// <summary>人数为 <paramref name="players"/> 时的稀有遗址数（large-60 起不分人数，恒 <see cref="UncalibratedRareSites"/>）。</summary>
+    public static int RareCount(int players) => UncalibratedRareSites;
 
-    /// <summary>人数为 <paramref name="players"/> 时的普通遗址数 n + 2。</summary>
-    public static int CommonCount(int players) => players + UncalibratedCommonOverPlayers;
+    /// <summary>人数为 <paramref name="players"/> 时的普通遗址数（large-60 起不分人数，恒 <see cref="UncalibratedCommonSites"/>）。</summary>
+    public static int CommonCount(int players) => UncalibratedCommonSites;
 
     /// <summary>切比雪夫距离（横纵相隔格数取大者）：遗址间距与遗址到旗心距离的口径。只做坐标算术，不经邻接枚举。</summary>
     public static int Distance(Coord a, Coord b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));

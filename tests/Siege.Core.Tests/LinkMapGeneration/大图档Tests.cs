@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/specs/link-map-generation —— Requirement: 档位 / 大图档布局（big-map 裁决 3 / 11 / 12，D1 / D2）。
-/// 种子 1–20 × 2 / 3 / 4 人的大图：外接矩形 150×150（画布 154×154）、可落子格在校验器大图行的区间内、非可落子占外接矩形 25%–35%、出生座位 0、中立平台 14–18、
+/// 种子 1–20 × 2 / 3 / 4 人的大图：外接矩形 60×60（画布 64×64，large-60）、可落子格在校验器大图行的区间内、非可落子占外接矩形 25%–35%、出生座位 0、中立平台 5–8（15 / 10 / 8 三档）、
 /// 全图可落子格沿气边连通（校验通过）、合规旗格 ≥ 可落子格的 45%（relic-zones 前为 50%）；三段标识 = <c>:s</c>；大图与小图不同构。
 /// 单张生成 ≤ 1 s（Release）的计时断言在 <see cref="种子1到20的大图单张生成在预算内"/>（relic-sites 追加裁决 14：Perf 门控，与 <c>Category=Perf</c> 同机制，快速全集不跑、预算不放宽）。
 /// </summary>
@@ -72,8 +72,11 @@ public class 大图档Tests(ITestOutputHelper output)
 
                 int legal = FlagRules.LegalFlagCells(map).Length;
                 int flagShare = legal * 100 / count;
-                // relic-zones 裁决 3 起稀有遗址区域外扩 6 圈整块禁插（每块约 32×32），合规旗格占比整体下移约 3 个百分点（11-04 实测 60 张图最低 49%），下限由 50% 调到 45%。
-                Assert.True(flagShare >= 45, $"{id} 合规旗格 {legal} / 可落子 {count} = {flagShare}%，低于 45%。");
+                // large-60：60×60 上三档高台的禁插圈占去大半，合规旗格占比实测 19%–29%（种子 1–20 × 2 / 3 / 4 人），下限 15%。
+                Assert.True(flagShare >= 15, $"{id} 合规旗格 {legal} / 可落子 {count} = {flagShare}%，低于 15%。");
+                // large-60 追加裁决 3：四角预留旗位恒为合规旗格，两两相距 ≥ 旗距——任何人数都插得下。
+                Assert.All(LinkMapGenerator.LargeReservedFlags, f => Assert.True(FlagRules.IsLegalFlagCell(map, f), $"{id} 预留旗位 {f.ToNotation()} 不合规：{FlagRules.FlagCellProblem(map, f)}"));
+                Assert.All(LinkMapGenerator.LargeReservedFlags, f => Assert.All(LinkMapGenerator.LargeReservedFlags.Where(g => g != f), g => Assert.True(FlagRules.Distance(f, g) >= FlagRules.FlagGap)));
 
                 playable.Add(count);
                 shares.Add(share);

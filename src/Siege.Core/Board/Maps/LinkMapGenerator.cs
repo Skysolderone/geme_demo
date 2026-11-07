@@ -73,10 +73,10 @@ public static partial class LinkMapGenerator
     /// <summary>平台主题（D3 / 裁决 R3）：河流 / 林地 / 栅栏阵 / 混合四选一、可重复；不再出现高台。</summary>
     internal static readonly ImmutableArray<BoardTheme> IslandThemes = [BoardTheme.River, BoardTheme.Forest, BoardTheme.Palisade, BoardTheme.Mixed];
 
-    // ---------- 大图档（big-map 裁决 3 / 12，D2）：不分人数统一 150×150 的大陆，不预置出生座位 ----------
+    // ---------- 大图档（big-map 裁决 3 / 12，D2；large-60 2026-11-07 由 150 缩到 60）：不分人数统一 60×60 的大陆，不预置出生座位 ----------
 
-    /// <summary>大图外接矩形边长（裁决 3：不随人数变化；画布 150 + 2 × <see cref="Margin"/> = 154）。</summary>
-    public const int LargeIslandSide = 150;
+    /// <summary>大图外接矩形边长（裁决 3：不随人数变化；large-60 用户裁决由 150 缩到 60，画布 60 + 2 × <see cref="Margin"/> = 64）。</summary>
+    public const int LargeIslandSide = 60;
 
     /// <summary>
     /// 大图中立平台的三档（plate-tiers，2026-11-06 用户裁决，替换原 14–18 块 6–8 边长）：方形边长与该档块数区间——15×15 1–2 块、10×10 2–3 块、8×8 2–3 块，不分人数。
@@ -92,32 +92,32 @@ public static partial class LinkMapGenerator
     public const int LargePlateMinSide = 8;
     public const int LargePlateMaxSide = 15;
 
-    /// <summary>大图的河道数区间（D2：6–9 条，布局流抽一次）。</summary>
-    public const int LargeRiverMin = 6;
-    public const int LargeRiverMax = 9;
+    /// <summary>大图的河道数区间（D2 原 6–9 条；large-60 按面积缩到 2–3 条，布局流抽一次）。</summary>
+    public const int LargeRiverMin = 2;
+    public const int LargeRiverMax = 3;
 
-    /// <summary>大图河道主线在走满这么多格之前绕过平台崖下接着走（小图 <see cref="RiverReach"/> 18 按边长比例放大）。</summary>
-    internal const int LargeRiverReach = 60;
+    /// <summary>大图河道主线在走满这么多格之前绕过平台崖下接着走（小图 <see cref="RiverReach"/> 18 按边长 60 / 45 放大）。</summary>
+    internal const int LargeRiverReach = 24;
 
-    /// <summary>大图四角切角的直角边区间与海湾的深度 / 沿边长度 / 间隔区间、每条边保留的原岸线长度（按边长比例放大；段 A 追加裁决 20）。</summary>
-    public const int LargeCornerCutMin = 12;
-    public const int LargeCornerCutMax = 24;
-    public const int LargeBayMinDepth = 3;
-    public const int LargeBayMaxDepth = 10;
-    public const int LargeBayMinLength = 10;
-    public const int LargeBayMaxLength = 36;
-    internal const int LargeBayGapMin = 2;
-    internal const int LargeBayGapMax = 6;
-    internal const int LargeReservedShore = 8;
+    /// <summary>大图四角切角的直角边区间与海湾的深度 / 沿边长度 / 间隔区间、每条边保留的原岸线长度（large-60：小图值按边长 60 / 45 放大）。</summary>
+    public const int LargeCornerCutMin = 5;
+    public const int LargeCornerCutMax = 9;
+    public const int LargeBayMinDepth = 1;
+    public const int LargeBayMaxDepth = 5;
+    public const int LargeBayMinLength = 4;
+    public const int LargeBayMaxLength = 12;
+    internal const int LargeBayGapMin = 1;
+    internal const int LargeBayGapMax = 3;
+    internal const int LargeReservedShore = 4;
 
-    /// <summary>大图湖泊 / 岩区的格数区间（D2 按面积放大：湖 6–16、岩区 3–8；段 A 追加裁决 20）。</summary>
-    public const int LargeLakeMin = 6;
-    public const int LargeLakeMax = 16;
+    /// <summary>大图湖泊 / 岩区的格数区间（large-60：湖 4–10、岩区 3–6，接近小图）。</summary>
+    public const int LargeLakeMin = 4;
+    public const int LargeLakeMax = 10;
     public const int LargeRockClusterMin = 3;
-    public const int LargeRockClusterMax = 8;
+    public const int LargeRockClusterMax = 6;
 
     /// <summary>
-    /// 大图非可落子格占<b>外接矩形</b>（150×150，不是掩码内岛面）的目标区间（段 A 追加裁决 20：大陆的海岸虚空计入分母，可落子约 1.5 万 ≈ 67%）；硬上限沿用 <see cref="MaxNonPlayablePercent"/>。
+    /// 大图非可落子格占<b>外接矩形</b>（60×60，不是掩码内岛面）的目标区间（段 A 追加裁决 20：大陆的海岸虚空计入分母；large-60 实测可落子约 2450–2550 ≈ 69%）；硬上限沿用 <see cref="MaxNonPlayablePercent"/>。
     /// </summary>
     public const int LargeTargetNonPlayableMin = 29;
     public const int LargeTargetNonPlayableMax = 32;
@@ -126,13 +126,33 @@ public static partial class LinkMapGenerator
     internal const int LargeMaxClusterAttempts = 40000;
 
     /// <summary>大图岛缘零星岩石数的基数与随机幅度（小图为 2 + NextInt(人数)）。</summary>
-    internal const int LargeEdgeRockBase = 10;
-    internal const int LargeEdgeRockSpread = 10;
+    internal const int LargeEdgeRockBase = 3;
+    internal const int LargeEdgeRockSpread = 4;
 
-    /// <summary>大图自由插旗（裁决 2 / 4 / 5，D3 / D4）：任意两旗切比雪夫距离下限、锁定时物化的出生平台边长（旗心半径 6）与出生圈边长（旗心半径 4）。</summary>
-    public const int LargeFlagGap = 60;
+    /// <summary>大图自由插旗（裁决 2 / 4 / 5，D3 / D4）：任意两旗切比雪夫距离下限（原 60，large-60 改 20）、锁定时物化的出生平台边长（旗心半径 6）与出生圈边长（旗心半径 4）。</summary>
+    public const int LargeFlagGap = 20;
     public const int LargeBirthPlateSide = 13;
     public const int LargeBirthRingSide = 9;
+
+    /// <summary>
+    /// 四角预留旗位（large-60 追加裁决 3）：旗心距岛外接矩形四角各 <see cref="LargeReservedFlagInset"/> 格。以旗心为中心的 13×13（<see cref="LargeReservedPlates"/>）不放河道、湖泊与岩区，
+    /// 中立平台与它隔 ≥ <see cref="PlateGap"/>，信物遗址（稀有遗址按区域）与旗心切比雪夫距离 ≥ <see cref="RelicSites.FlagClearance"/>——四处旗位因此恒为合规旗格（出生圈 9×9 全可落子），
+    /// 两两相距 39 ≥ <see cref="LargeFlagGap"/>，任何人数都插得下。插旗仍然自由：预留只保证角上有地方，不限制玩家插在哪里，也不消费随机。
+    /// </summary>
+    internal const int LargeReservedFlagInset = 10;
+
+    /// <summary>四处预留旗心（画布坐标，西南、东南、西北、东北）。</summary>
+    internal static readonly ImmutableArray<Coord> LargeReservedFlags =
+    [
+        new(Margin + LargeReservedFlagInset, Margin + LargeReservedFlagInset),
+        new(Margin + LargeIslandSide - 1 - LargeReservedFlagInset, Margin + LargeReservedFlagInset),
+        new(Margin + LargeReservedFlagInset, Margin + LargeIslandSide - 1 - LargeReservedFlagInset),
+        new(Margin + LargeIslandSide - 1 - LargeReservedFlagInset, Margin + LargeIslandSide - 1 - LargeReservedFlagInset),
+    ];
+
+    /// <summary>四处预留旗位的 13×13 方域（与锁定时物化的出生平台同形）。</summary>
+    internal static readonly ImmutableArray<BoardPlate> LargeReservedPlates =
+        [.. LargeReservedFlags.Select(f => new BoardPlate(new Coord(f.X - ((LargeBirthPlateSide - 1) / 2), f.Y - ((LargeBirthPlateSide - 1) / 2)), LargeBirthPlateSide, LargeBirthPlateSide, BoardPlateKind.Birth))];
 
     /// <summary>
     /// 一档的几何常量（big-map D2 / implement 段 A 第 2 条）：小图取类顶部的既有常量，大图取 <c>Large*</c> 常量。小图路径上每一次随机消费都经同样的常量，取值与引入档位之前相同。
@@ -150,7 +170,7 @@ public static partial class LinkMapGenerator
         (int Min, int Max) TargetNonPlayable,
         int MaxClusterAttempts)
     {
-        /// <summary>小图：按人数的既有浮空岛几何；大图：150×150。</summary>
+        /// <summary>小图：按人数的既有浮空岛几何；大图：60×60。</summary>
         internal (int Width, int Height) IslandSize(int players) =>
             Tier == MapTier.Small ? LinkMapGenerator.IslandSize(players) : (LargeIslandSide, LargeIslandSide);
 
@@ -434,10 +454,14 @@ public static partial class LinkMapGenerator
         ImmutableArray<BoardPlate> Plates,
         ImmutableArray<BoardTerrain> Boards,
         ImmutableHashSet<Coord> Ramps,
-        ImmutableHashSet<Coord> RampOutlets)
+        ImmutableHashSet<Coord> RampOutlets,
+        ImmutableArray<BoardPlate> Reserved)
     {
         /// <summary>该格是否在某块平台的外接矩形内。</summary>
         internal bool InPlate(Coord c) => Plates.Any(p => p.Contains(c));
+
+        /// <summary>该格是否在大图四角预留旗位的 13×13 内（<see cref="LargeReservedPlates"/>；小图恒为 <c>false</c>）：不放河道、湖泊与岩区。</summary>
+        internal bool InReserved(Coord c) => Reserved.Any(p => p.Contains(c));
     }
 
     /// <summary>低地一侧的结果：河道深水格（含加宽）、河道上的预置桥、岛缘林地与零星岩石；map-coastline：湖泊（未架桥深水团）与岩区（岩石团）。</summary>
@@ -503,7 +527,7 @@ public static partial class LinkMapGenerator
             }
         }
 
-        return new PlateLayout([.. plates], [.. boards], ramps.ToImmutable(), outlets.ToImmutable());
+        return new PlateLayout([.. plates], [.. boards], ramps.ToImmutable(), outlets.ToImmutable(), g.Tier == MapTier.Large ? LargeReservedPlates : []);
     }
 
     /// <summary>
@@ -551,7 +575,7 @@ public static partial class LinkMapGenerator
 
     /// <summary>
     /// 大图的中立平台落位（plate-tiers）：按 <see cref="LargePlateTiers"/> 的次序逐档先抽块数（该档区间内均匀），再逐块 <see cref="ScatterPlate"/>；
-    /// 任何一块放不下即返回 <c>null</c>（整张布局在同一条流上重抽）。结果按左下角先行后列排序。大图没有出生座位。
+    /// 每块与四角预留旗位（<see cref="LargeReservedPlates"/>）同样隔 ≥ <see cref="PlateGap"/>。任何一块放不下即返回 <c>null</c>（整张布局在同一条流上重抽）。结果按左下角先行后列排序。大图没有出生座位。
     /// </summary>
     private static List<BoardPlate>? PlaceLargePlates(Island island, RandomStream rng)
     {
@@ -561,7 +585,7 @@ public static partial class LinkMapGenerator
             int count = min + rng.NextInt(max - min + 1);
             for (int k = 0; k < count; k++)
             {
-                if (ScatterPlate(island, neutral, side, side, rng) is not { } plate)
+                if (ScatterPlate(island, [.. LargeReservedPlates, .. neutral], side, side, rng) is not { } plate)
                 {
                     return null;
                 }
@@ -577,7 +601,7 @@ public static partial class LinkMapGenerator
     internal const int LargePlateTries = 40;
 
     /// <summary>
-    /// 大图的平台落位（段 A 追加裁决 20）：不用小图的"贴紧"候选（在 150×150 上会让平台沿岛边与彼此连成一串、中部空无一物），改为在合法原点范围内均匀抽原点，
+    /// 大图的平台落位（段 A 追加裁决 20）：不用小图的"贴紧"候选（在大陆上会让平台沿岛边与彼此连成一串、中部空无一物），改为在合法原点范围内均匀抽原点，
     /// 与全部已放平台间隔 ≥ <see cref="PlateGap"/> 即落下；连抽 <see cref="LargePlateTries"/> 次都撞上即放弃这一块（调用方按下限判定成败）。
     /// </summary>
     private static BoardPlate? ScatterPlate(Island island, List<BoardPlate> placed, int width, int height, RandomStream rng)
@@ -776,7 +800,7 @@ public static partial class LinkMapGenerator
             Coord side = Step(here, Directions[left ? Left(heading) : Right(heading)], 1);
             bool roll = coast.NextInt(RiverWidenOdds) != 0;
             if (!roll || bridges.Contains(here)
-                || !island.Contains(side) || island.OnEdge(side) || layout.InPlate(side) || layout.RampOutlets.Contains(side) || others.Contains(side) || river.Contains(side) || sides.Contains(side)
+                || !island.Contains(side) || island.OnEdge(side) || layout.InPlate(side) || layout.InReserved(side) || layout.RampOutlets.Contains(side) || others.Contains(side) || river.Contains(side) || sides.Contains(side)
                 || layout.Plates.Any(p => UnderCliff(p, side))
                 || bridges.Any(b => Adjacency.AreAdjacent(b, side))
                 || others.Any(w => Adjacency.AreAdjacent(w, side))
@@ -802,7 +826,7 @@ public static partial class LinkMapGenerator
     private static List<Coord>? DrawRiver(Island island, PlateLayout layout, HashSet<Coord> water, RandomStream rng, TierGeometry g)
     {
         int reach = g.RiverReach;
-        bool Open(Coord c) => island.Contains(c) && !layout.InPlate(c) && !layout.RampOutlets.Contains(c) && !water.Contains(c)
+        bool Open(Coord c) => island.Contains(c) && !layout.InPlate(c) && !layout.InReserved(c) && !layout.RampOutlets.Contains(c) && !water.Contains(c)
             && !water.Any(w => Adjacency.AreAdjacent(w, c));
         bool Cliff(Coord c) => layout.Plates.Any(p => UnderCliff(p, c));
         List<Coord> starts = [.. island.Cells().Where(c => island.OnEdge(c) && Open(c) && !Cliff(c))];

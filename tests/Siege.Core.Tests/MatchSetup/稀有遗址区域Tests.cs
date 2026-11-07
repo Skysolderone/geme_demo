@@ -43,6 +43,9 @@ public class 稀有遗址区域Tests
     [Fact]
     public void 区域外扩6圈整块禁插_文案只说区域不带坐标()
     {
+        // large-60：60×60 上稀有区域四周常被高台禁插圈先挡下，"因区域被拒"与"恰 7 格合规"两条样本改为跨全部地图合计，不再要求每张图都有。
+        int inZone = 0;
+        bool ringLegal = false;
         foreach (string id in Ids)
         {
             MapData map = MapCatalog.Resolve(id);
@@ -50,7 +53,6 @@ public class 稀有遗址区域Tests
             foreach (RelicSite site in map.RelicSites.Where(s => s.Tier == RelicTier.Rare))
             {
                 RareSiteZone zone = RelicSites.RareZoneOf(site.Cell, map.Width, map.Height);
-                int inZone = 0;
                 for (int y = Math.Max(0, zone.Origin.Y - 6); y < Math.Min(map.Height, zone.Origin.Y + zone.Height + 6); y++)
                 {
                     for (int x = Math.Max(0, zone.Origin.X - 6); x < Math.Min(map.Width, zone.Origin.X + zone.Width + 6); x++)
@@ -68,12 +70,14 @@ public class 稀有遗址区域Tests
                     }
                 }
 
-                Assert.True(inZone > 0, $"{id}：区域 {zone} 周围没有任何格是因区域被拒的，测不到区域文案。");
             }
 
             // 区域外恰 7 格的一圈上：凡其余判据都满足的格合规（规则是 ≥ 7 而不是 > 7）——取一处能找到这种格的区域即可。
-            Assert.Contains(RelicSites.RareZones(map), zone => Ring(map, zone, 7).Any(legal.Contains));
+            ringLegal |= RelicSites.RareZones(map).Any(zone => Ring(map, zone, 7).Any(legal.Contains));
         }
+
+        Assert.True(inZone > 0, "所有样本图的稀有区域周围都没有因区域被拒的格，测不到区域文案。");
+        Assert.True(ringLegal, "所有样本图的稀有区域外恰 7 格一圈上都没有合规格。");
     }
 
     [Fact]

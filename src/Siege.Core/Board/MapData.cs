@@ -53,7 +53,7 @@ public sealed record MapData
     public ImmutableArray<BoardPlate> Boards { get; init; } = [];
 
     /// <summary>
-    /// 信物遗址清单（relic-sites 裁决 6 / 7），缺省为空。大图由生成器用独立子流 <c>map-link-relic-sites</c> 写入稀有 ⌈n/2⌉ + 普通 n+2 处（两两切比雪夫距离 ≥ 20，只在可落子格、不贴岸线与障碍）；
+    /// 信物遗址清单（relic-sites 裁决 6 / 7），缺省为空。大图由生成器用独立子流 <c>map-link-relic-sites</c> 写入稀有 1 + 普通 3 处（large-60；两两切比雪夫距离 ≥ 10，只在可落子格、不贴岸线与障碍）；
     /// 小图 MUST 为空（导出文件不写该段，逐字节不变）。消费方：大图信物刷新 / 掉落只落空着的遗址格（<c>PieceRelics.RelicSpawner</c>）、旗心与任一遗址 ≥ 7（<c>Match.FlagRules</c>）、
     /// 校验器查数量 / 档位 / 距离 / 位置；气、提子、覆盖、势力与 AI 不读它（裁决 11）。落座图经 <c>with</c> 原样保留。
     /// </summary>
