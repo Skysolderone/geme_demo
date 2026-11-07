@@ -54,12 +54,12 @@ public class 大图跑局与回放Tests
         Assert.Equal(4, log.Header.Flags!.Count);
         // relic-sites 裁决 6 / 8：首部另记遗址清单（格:档位，稀有在前），与落座图的清单一致。
         Assert.Equal(baseMapSites(), log.Header.RelicSites);
-        Assert.Equal(8, log.Header.RelicSites!.Count);
-        Assert.Equal(2, log.Header.RelicSites.Count(s => s.EndsWith(":Rare", StringComparison.Ordinal)));
+        Assert.Equal(RelicSites.RareCount(4) + RelicSites.CommonCount(4), log.Header.RelicSites!.Count);   // large-60：1 + 3
+        Assert.Equal(RelicSites.RareCount(4), log.Header.RelicSites.Count(s => s.EndsWith(":Rare", StringComparison.Ordinal)));
         static List<string> baseMapSites() => [.. MapCatalog.Resolve("link:7:4:l").RelicSites.Select(s => $"{s.Cell.ToNotation()}:{s.Tier}")];
         Assert.Equal(4, log.Header.ZoneCount);
         Assert.Equal([0, 1, 2, 3], log.Header.Zones);
-        Assert.Equal(60, log.Header.Config.RoundCap);
+        Assert.Equal(100, log.Header.Config.RoundCap);   // large-60：大图缺省上限同小图 100
         Assert.Equal(session.Match.Board.BaseMap.PlayableCount, log.Header.PlayableCells);
         Assert.Equal(MapFile.Digest(session.Match.Board.BaseMap), log.Header.MapDigest);   // 落座图的摘要
         Assert.Equal(4, log.Header.Boards!.Count);

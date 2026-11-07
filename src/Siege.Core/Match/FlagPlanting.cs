@@ -32,10 +32,10 @@ public sealed record MatchOptions
     /// <summary>小图的大回合上限安全网缺省值（cycle-stop 裁决 D4：简单难度自然终局最长 94 个大回合，安全网只兜不收尾的局）。</summary>
     public const int DefaultRoundCap = 100;
 
-    /// <summary>大图的缺省对局时长（big-map 裁决 6：60 大回合到点按势力结算，沿用上限安全网机制）。</summary>
-    public const int DefaultRoundCapLarge = 60;
+    /// <summary>大图的缺省对局时长（big-map 裁决 6 原为 60；large-60，2026-11-07：大图缩到 60×60 后沿用小图上限 <see cref="DefaultRoundCap"/>），到点按势力结算，沿用上限安全网机制。</summary>
+    public const int DefaultRoundCapLarge = DefaultRoundCap;
 
-    /// <summary>按地图档位取大回合上限的缺省值（big-map D6）：小图 <see cref="DefaultRoundCap"/> 100、大图 <see cref="DefaultRoundCapLarge"/> 60。</summary>
+    /// <summary>按地图档位取大回合上限的缺省值（big-map D6）：小图 <see cref="DefaultRoundCap"/> 100、大图 <see cref="DefaultRoundCapLarge"/>（large-60 起同为 100）。</summary>
     public static int DefaultRoundCapFor(MapTier tier) => tier == MapTier.Large ? DefaultRoundCapLarge : DefaultRoundCap;
 
     /// <summary>

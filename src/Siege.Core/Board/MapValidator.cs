@@ -95,13 +95,13 @@ public static class MapValidator
     /// 平台清单规则：平台（座位与中立平台）边长 6–8、座位恰 8×8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个、任意两座位间距 ≥ 25。
     /// </para>
     /// <para>
-    /// big-map D2（2026-11-01）：链接行按<b>档位</b>（<see cref="MapData.Tier"/>）分成两组预算与两组清单规则，小图一组一字不改。大图：外接矩形恒 150×150、画布 154×154、
-    /// 中立平台 5–8 块（plate-tiers：15×15 / 10×10 / 8×8 三档，边长区间 8–15）、可落子格区间 14500–16760（种子 1–20 × 2 / 3 / 4 人实测 15271–15961，下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十；种子 1–200 × 4 人的扩大扫描见 <c>大图档Tests</c> 的慢测试）；
+    /// big-map D2（2026-11-01）：链接行按<b>档位</b>（<see cref="MapData.Tier"/>）分成两组预算与两组清单规则，小图一组一字不改。大图：外接矩形恒 60×60、画布 64×64（large-60，2026-11-07 由 150 缩小）、
+    /// 中立平台 5–8 块（plate-tiers：15×15 / 10×10 / 8×8 三档，边长区间 8–15）、可落子格区间 2300–2680（large-60 种子 1–20 × 2 / 3 / 4 人实测 2437–2552，下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十）；
     /// 基图不预置出生座位（出生区 0），锁定时物化的落座图恰 n 个出生区——
     /// 预算行的出生区数区间写成 (0, n)，"出生棋盘数 = 出生区数"由两档共用的 <c>BIRTH_BOARD_MISMATCH</c> 守住。清单规则分流（design D2 末段）：
     /// 只对小图生效——出生区 = 出生棋盘 3×3 核心区、出生棋盘与中立平台同样是带主题 / 抬高 / 坡道的地形平台（<see cref="PlateRules.BirthTerrain"/>）、座位 8×8、座位间距 25；
     /// 大图的出生棋盘是 13×13 的低地平台（<see cref="PlateRules.BirthSide"/> 13、不带主题、不查核心区与平台地形），出生区 ⊆ 该平台 ∩ 可落子，
-    /// 出生棋盘两两间距 ≥ 47（旗间距 60 − 13，<see cref="PlateRules.SeatGap"/>）、与中立平台至少隔 1 格（<see cref="PlateRules.BirthGap"/> 1 = 合规旗格的 <c>FlagRules.PlateClearance</c>，坡道朝外格保持低地；小图沿用 3）。
+    /// 出生棋盘两两间距 ≥ 7（旗间距 20 − 13，large-60 起；原 60 − 13 = 47，<see cref="PlateRules.SeatGap"/>）、与中立平台至少隔 1 格（<see cref="PlateRules.BirthGap"/> 1 = 合规旗格的 <c>FlagRules.PlateClearance</c>，坡道朝外格保持低地；小图沿用 3）。
     /// 两档都生效——整岛气边连通、中立平台两两间隔 ≥ 3、每块中立平台的全部平台规则、新地表只在中间带、可落子格区间、画布尺寸、出生区容量与出生区内无新地表、必死口袋。
     /// </para>
     /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、豁免理由、必死口袋。
@@ -123,15 +123,15 @@ public static class MapValidator
                     }.ToImmutableDictionary(),
                     [MapTier.Large] = new Dictionary<int, Budget>
                     {
-                        [2] = new(14500, 16760, (0, 2), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
-                        [3] = new(14500, 16760, (0, 3), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
-                        [4] = new(14500, 16760, (0, 4), null, (5, 8), Island: (150, 150), Canvas: (154, 154)),
+                        [2] = new(2300, 2680, (0, 2), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
+                        [3] = new(2300, 2680, (0, 3), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
+                        [4] = new(2300, 2680, (0, 4), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
                     }.ToImmutableDictionary(),
                 }.ToImmutableDictionary(),
                 new Dictionary<MapTier, PlateRules>
                 {
                     [MapTier.Small] = new((6, 8), (8, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 25, BirthTerrain: true, BirthGap: 3),
-                    [MapTier.Large] = new((8, 15), (13, 13), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 47, BirthTerrain: false, BirthGap: 1),
+                    [MapTier.Large] = new((8, 15), (13, 13), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 7, BirthTerrain: false, BirthGap: 1),
                 }.ToImmutableDictionary()),
         }.ToImmutableDictionary();
 
@@ -666,8 +666,8 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 信物遗址清单（relic-sites 裁决 6 / 7 / 9）：小图 MUST 为空（<c>RELIC_SITES_FORBIDDEN</c>）；大图稀有恰 ⌈n/2⌉、普通恰 n+2（<c>RELIC_SITE_COUNT</c>），
-    /// 每处都满足 <see cref="RelicSites.IsSiteGround"/>（可落子、高度 0 且八邻可落子，追加裁决 13）且不重复（<c>RELIC_SITE_GROUND</c>），两两切比雪夫距离 ≥ 20（<c>RELIC_SITE_GAP</c>），
+    /// 信物遗址清单（relic-sites 裁决 6 / 7 / 9）：小图 MUST 为空（<c>RELIC_SITES_FORBIDDEN</c>）；大图稀有恰 1、普通恰 3（large-60；<c>RELIC_SITE_COUNT</c>），
+    /// 每处都满足 <see cref="RelicSites.IsSiteGround"/>（可落子、高度 0 且八邻可落子，追加裁决 13）且不重复（<c>RELIC_SITE_GROUND</c>），两两切比雪夫距离 ≥ <see cref="RelicSites.UncalibratedSiteGap"/>（<c>RELIC_SITE_GAP</c>），
     /// 不在任何出生棋盘内（<c>RELIC_SITE_IN_BIRTH</c>——落座图也过这条校验；合规旗格与遗址 ≥ 7 保证 13×13 盖不住遗址，这里是兜底）。
     /// </summary>
     private static void ValidateRelicSites(MapData map, MapTier tier, ImmutableArray<MapValidationFailure>.Builder f)

@@ -360,7 +360,7 @@ public class 选图视图模型Tests
         // large-default 裁决 2 / 3：小图显示名带"旧模式"、大图显示名不变；尺寸提示先大后小；小图开头说明从 Hud 内联文案搬入 Labels、原文不变（座位盲选口径）。
         Assert.Equal("小（浮空岛，旧模式）", Labels.TierName(MapTier.Small));
         Assert.StartsWith("大（", Labels.TierName(MapTier.Large), StringComparison.Ordinal);
-        Assert.Equal(["大（150×150）", "小（浮空岛，旧模式）"], MapSelectModel.TierOptions.Select(Labels.TierName));
+        Assert.Equal(["大（60×60）", "小（浮空岛，旧模式）"], MapSelectModel.TierOptions.Select(Labels.TierName));
         Assert.StartsWith("大：", Labels.TierHint, StringComparison.Ordinal);
         Assert.True(Labels.TierHint.IndexOf("大：", StringComparison.Ordinal) < Labels.TierHint.IndexOf("小：", StringComparison.Ordinal));
         Assert.Contains("旧模式", Labels.TierHint, StringComparison.Ordinal);

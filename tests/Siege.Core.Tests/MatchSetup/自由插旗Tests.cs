@@ -14,8 +14,8 @@ namespace Siege.Core.Tests.MatchSetup;
 /// </summary>
 /// <remarks>
 /// 变异验证（段 A 实跑，mutate.py，备份 → 改 → 跑本类 → 逐字节还原 → 刷新时间戳）：
-/// M-F1 <c>FlagRules.Fallback</c> 改派时不要求与已确认旗间距 ≥ 60（<c>gap &gt;= FlagGap</c> → <c>gap &gt;= 0</c>，只取离原旗最近的合规格）→ 本类红 4、绿 2
-/// （「四面太近的旗按先后改派」「AI盲选锁定后两两间距不小于60」「AI盲选不扰动首回合顺序」「锁定前旗格不可见」：改派后的旗间距 &lt; 60 或落座图 SEAT_GAP 47 校验不过）。
+/// M-F1 <c>FlagRules.Fallback</c> 改派时不要求与已确认旗间距 ≥ FlagGap（<c>gap &gt;= FlagGap</c> → <c>gap &gt;= 0</c>，只取离原旗最近的合规格）→ 本类红 4、绿 2
+/// （「四面太近的旗按先后改派」「AI盲选锁定后两两间距不小于旗距」「AI盲选不扰动首回合顺序」「锁定前旗格不可见」：改派后的旗间距 &lt; FlagGap 或落座图 SEAT_GAP 校验不过）。
 /// 未做（只列出、未实跑）：按玩家编号而非插旗先后确认、盲选改用 setup 子流、合规判据去掉"不在平台内"。
 /// </remarks>
 public class 自由插旗Tests
@@ -33,7 +33,7 @@ public class 自由插旗Tests
     {
         // D3 / 追加裁决 19：可落子、高度 0、非桥、不在平台内；旗心 13×13 在画布内且不压中立平台；9×9 出生圈内可落子 ≥ 40；relic-sites 裁决 9：与任一信物遗址切比雪夫距离 ≥ 7。
         ImmutableArray<Coord> legal = FlagRules.LegalFlagCells(Large);
-        Assert.True(legal.Length * 2 >= Large.PlayableCount, $"合规旗格 {legal.Length} 不足可落子 {Large.PlayableCount} 的一半。");
+        Assert.True(legal.Length * 100 >= Large.PlayableCount * 15, $"合规旗格 {legal.Length} 不足可落子 {Large.PlayableCount} 的 15%（large-60：60×60 上三档高台与禁插圈占去大半，实测 19%–29%）。");
         Assert.Equal(legal, legal.OrderBy(c => c.Y).ThenBy(c => c.X));   // 先行后列
 
         // 测试内独立算式逐格复核（不调 IsLegalFlagCell）：整张图每一格的"合规"判定与 LegalFlagCells 一致。
@@ -44,12 +44,12 @@ public class 自由插旗Tests
             bool inside = c.X >= 6 && c.Y >= 6 && c.X + 6 < Large.Width && c.Y + 6 < Large.Height;
             // 13×13 与任何中立平台外接矩形至少隔 1 格（追加裁决 19）。
             bool clear = Large.Boards.All(p => c.X + 7 < p.Origin.X || p.Origin.X + p.Width < c.X - 6 || c.Y + 7 < p.Origin.Y || p.Origin.Y + p.Height < c.Y - 6);
-            // 与任一普通遗址切比雪夫距离 ≥ 7（relic-sites 裁决 9）；与任一稀有遗址所在的 20×20 网格块（裁到画布内）切比雪夫距离 ≥ 7（relic-zones 裁决 3）。
+            // 与任一普通遗址切比雪夫距离 ≥ 7（relic-sites 裁决 9）；与任一稀有遗址所在的 10×10 网格块（large-60，原 20×20）（裁到画布内）切比雪夫距离 ≥ 7（relic-zones 裁决 3）。
             bool apart = Large.RelicSites.Where(s => s.Tier == RelicTier.Common).All(s => Math.Max(Math.Abs(c.X - s.Cell.X), Math.Abs(c.Y - s.Cell.Y)) >= 7)
                 && Large.RelicSites.Where(s => s.Tier == RelicTier.Rare).All(s =>
                 {
-                    int x0 = s.Cell.X / 20 * 20, y0 = s.Cell.Y / 20 * 20;
-                    int x1 = Math.Min(x0 + 19, Large.Width - 1), y1 = Math.Min(y0 + 19, Large.Height - 1);
+                    int x0 = s.Cell.X / 10 * 10, y0 = s.Cell.Y / 10 * 10;   // large-60：区域边长 10
+                    int x1 = Math.Min(x0 + 9, Large.Width - 1), y1 = Math.Min(y0 + 9, Large.Height - 1);
                     return Math.Max(Math.Max(0, Math.Max(x0 - c.X, c.X - x1)), Math.Max(0, Math.Max(y0 - c.Y, c.Y - y1))) >= 7;
                 });
             int ring = 0;
@@ -82,7 +82,7 @@ public class 自由插旗Tests
     [Fact]
     public void 四面太近的旗按先后改派()
     {
-        // 验收：人为给出 4 个相距 < 60 的旗 → 锁定后按先后改派、结果确定且两两 ≥ 60。先插者保住原旗；后面每一面改派到"与已确认旗间距 ≥ 60 的合规格里离原旗最近者"。
+        // 验收：人为给出 4 个相距 < 旗距 的旗 → 锁定后按先后改派、结果确定且两两 ≥ 旗距（FlagRules.FlagGap）。先插者保住原旗；后面每一面改派到"与已确认旗间距 ≥ 旗距（FlagRules.FlagGap） 的合规格里离原旗最近者"。
         ImmutableArray<Coord> legal = FlagRules.LegalFlagCells(Large);
         Coord anchor = legal[legal.Length / 2];
         Coord[] near = [.. legal.Where(c => FlagRules.Distance(c, anchor) is > 5 and < 30).Take(3)];
@@ -118,16 +118,16 @@ public class 自由插旗Tests
         {
             for (int j = i + 1; j < confirmed.Length; j++)
             {
-                Assert.True(FlagRules.Distance(confirmed[i], confirmed[j]) >= 60, $"旗 {confirmed[i].ToNotation()} 与 {confirmed[j].ToNotation()} 相距 {FlagRules.Distance(confirmed[i], confirmed[j])} < 60。");
+                Assert.True(FlagRules.Distance(confirmed[i], confirmed[j]) >= FlagRules.FlagGap, $"旗 {confirmed[i].ToNotation()} 与 {confirmed[j].ToNotation()} 相距 {FlagRules.Distance(confirmed[i], confirmed[j])} < {FlagRules.FlagGap}。");
             }
         }
 
-        // "最近"用测试内独立算式复核：第 k 面改派旗到原旗的距离 ≤ 任何与前 k 面确认旗都 ≥ 60 的合规格到原旗的距离。
+        // "最近"用测试内独立算式复核：第 k 面改派旗到原旗的距离 ≤ 任何与前 k 面确认旗都 ≥ 旗距（FlagRules.FlagGap） 的合规格到原旗的距离。
         for (int k = 1; k < confirmed.Length; k++)
         {
             Coord original = plants[k].Item2;
             int actual = FlagRules.Distance(confirmed[k], original);
-            int best = legal.Where(c => confirmed.Take(k).All(q => FlagRules.Distance(c, q) >= 60)).Min(c => FlagRules.Distance(c, original));
+            int best = legal.Where(c => confirmed.Take(k).All(q => FlagRules.Distance(c, q) >= FlagRules.FlagGap)).Min(c => FlagRules.Distance(c, original));
             Assert.Equal(best, actual);
         }
 
@@ -138,9 +138,9 @@ public class 自由插旗Tests
     }
 
     [Fact]
-    public void AI盲选锁定后两两间距不小于60()
+    public void AI盲选锁定后两两间距不小于旗距()
     {
-        // 验收：4 名 AI 盲选（地图种子 1–20 × 对局种子 1–5）锁定后两两 ≥ 60；旗都是合规旗格；同种子重开两次相同。
+        // 验收：4 名 AI 盲选（地图种子 1–20 × 对局种子 1–5）锁定后两两 ≥ 旗距（FlagRules.FlagGap）；旗都是合规旗格；同种子重开两次相同。
         for (ulong mapSeed = 1; mapSeed <= 20; mapSeed++)
         {
             MapData map = MapCatalog.Resolve(LinkMapId.Format(mapSeed, 4, MapTier.Large));
@@ -163,7 +163,7 @@ public class 自由插旗Tests
                 {
                     for (int j = i + 1; j < flags.Length; j++)
                     {
-                        Assert.True(FlagRules.Distance(flags[i], flags[j]) >= 60, $"link:{mapSeed}:4:l 对局种子 {gameSeed}：旗 {flags[i].ToNotation()} 与 {flags[j].ToNotation()} 相距 {FlagRules.Distance(flags[i], flags[j])}。");
+                        Assert.True(FlagRules.Distance(flags[i], flags[j]) >= FlagRules.FlagGap, $"link:{mapSeed}:4:l 对局种子 {gameSeed}：旗 {flags[i].ToNotation()} 与 {flags[j].ToNotation()} 相距 {FlagRules.Distance(flags[i], flags[j])}。");
                     }
                 }
             }
@@ -182,7 +182,7 @@ public class 自由插旗Tests
         Assert.Equal(a.ActionOrder, b.ActionOrder);
         Assert.Equal(legal[0], a.Flags.FlagCellOf(P0));
         Assert.Equal(legal[^1], b.Flags.FlagCellOf(P0));
-        // 其余 AI 的抽样不随人工选择变：比 flag-pick 的原始抽样（锁定前，不经改派）；锁定后的旗格只在原抽样离人工旗 < 60 时才经改派而变。
+        // 其余 AI 的抽样不随人工选择变：比 flag-pick 的原始抽样（锁定前，不经改派）；锁定后的旗格只在原抽样离人工旗 < 旗距 时才经改派而变。
         ImmutableArray<(PlayerId Player, Coord Cell)> rawA = PrototypeZoneAssignment.AssignBlindCells(Large, TestMaps.Seed, All, (P0, legal[0]));
         ImmutableArray<(PlayerId Player, Coord Cell)> rawB = PrototypeZoneAssignment.AssignBlindCells(Large, TestMaps.Seed, All, (P0, legal[^1]));
         Assert.Equal(rawA.Where(c => c.Player != P0), rawB.Where(c => c.Player != P0));
@@ -192,13 +192,13 @@ public class 自由插旗Tests
 
         MatchFlow two = MatchFlow.Create(MapCatalog.Resolve("link:3:2:l"), TestMaps.Seed, [P0, P1], Options);
         two.PlantPrototype();
-        Assert.True(FlagRules.Distance(two.Flags.FlagCellOf(P0)!.Value, two.Flags.FlagCellOf(P1)!.Value) >= 60);
+        Assert.True(FlagRules.Distance(two.Flags.FlagCellOf(P0)!.Value, two.Flags.FlagCellOf(P1)!.Value) >= FlagRules.FlagGap);
     }
 
     [Fact]
     public void 人工插旗排在AI之前_不被盲选挤走()
     {
-        // D3：AI 盲选按 Players 次序排在人类之后——锁定时按插旗先后改派，先插者保住原旗。取 P0 的盲选旗格附近（< 60）的合规格给 P2 人工插旗：P2 保住原旗，P0 被改派；
+        // D3：AI 盲选按 Players 次序排在人类之后——锁定时按插旗先后改派，先插者保住原旗。取 P0 的盲选旗格附近（< 旗距）的合规格给 P2 人工插旗：P2 保住原旗，P0 被改派；
         // 人工指定者不抽、不消费 flag-pick：编号在它之前的 AI 抽样与无人工时相同（之后的 AI 顺延拿到下一次抽样，见 determinism.md flag-pick 行）。
         ImmutableArray<(PlayerId Player, Coord Cell)> blind = PrototypeZoneAssignment.AssignBlindCells(Large, TestMaps.Seed, All);
         Coord p0 = blind.Single(b => b.Player == P0).Cell;
@@ -266,7 +266,11 @@ public class 自由插旗Tests
         // 插旗入口：报文含"不是合规旗格"与原因（遗址点名）；其他原因的报文可分辨（平台格说平台，不说遗址）。
         MatchFlow match = CreateLarge();
         // 取一处"被拒的第一条判据就是遗址"的格（判据次序在前的平台 / 画布边缘会先挡下；遗址位置随生成口径变，不钉第 0 处）。
-        Coord onSite = Large.RelicSites.Where(s => s.Tier == RelicTier.Common).Select(s => s.Cell).First(c => FlagRules.FlagCellProblem(Large, c)!.Contains("遗址", StringComparison.Ordinal));
+        // large-60：普通遗址只剩 3 处，遗址格本身可能先被别的判据挡下，改在遗址 7 格内找。
+        Coord onSite = Large.RelicSites.Where(s => s.Tier == RelicTier.Common)
+            .SelectMany(s => Enumerable.Range(-6, 13).SelectMany(dy => Enumerable.Range(-6, 13).Select(dx => new Coord(s.Cell.X + dx, s.Cell.Y + dy))))
+            .Where(c => c.X >= 0 && c.Y >= 0 && c.X < Large.Width && c.Y < Large.Height)
+            .First(c => FlagRules.FlagCellProblem(Large, c)?.Contains("遗址", StringComparison.Ordinal) == true);
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Flags.PlantAt(P0, onSite));
         Assert.Contains($"{onSite.ToNotation()} 不是合规旗格", ex.Message, StringComparison.Ordinal);
         Assert.Contains("遗址", ex.Message, StringComparison.Ordinal);

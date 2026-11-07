@@ -15,7 +15,7 @@ namespace Siege.Core.Match;
 /// （不重叠落座图才过得了"出生棋盘不与平台重叠"的校验、构筑期的落子范围才不切进高台；隔 1 格是让中立平台坡道朝外的那格仍是"低地"而不是另一块棋盘的格——校验器 <c>PLATE_HEIGHT</c> 的口径）；
 /// 旗心与任一普通信物遗址切比雪夫距离 ≥ <see cref="SiteClearance"/>（relic-sites 裁决 9：13×13 出生平台不盖遗址），与任一稀有遗址<b>区域</b>（<see cref="RelicSites.RareZoneOf"/>）同样 ≥ <see cref="SiteClearance"/>（relic-zones 裁决 3）；
 /// 旗心 9×9（出生圈）内可落子格 ≥ <see cref="MinRingPlayable"/>（避免把出生圈压在海湾尖角上）。不合规的原因由 <see cref="FlagCellProblem"/> 给出文案，界面与终端据此提示。</para>
-/// <para><b>改派</b>（D3）：按插旗先后逐个确认——与已确认的每一面旗切比雪夫距离 ≥ <see cref="FlagGap"/> 即保留；否则改派到"与全部已确认旗间距 ≥ 60 的合规旗格里离原旗最近者"
+/// <para><b>改派</b>（D3）：按插旗先后逐个确认——与已确认的每一面旗切比雪夫距离 ≥ <see cref="FlagGap"/> 即保留；否则改派到"与全部已确认旗间距 ≥ FlagGap 的合规旗格里离原旗最近者"
 /// （切比雪夫距离，并列按先行后列取第一个）；一个都没有时改派到"到已确认旗的最小间距最大"的合规旗格（并列同样先行后列）。全程确定性、不消费随机。</para>
 /// <para><b>落座图</b>（D4，歧义 18）：出生区 z = 旗 z 心 9×9 ∩ 可落子，棋盘清单 = 每人一块 13×13 的出生棋盘（原点 = 旗 − (6, 6)、不带主题，按出生区编号）+ 既有中立平台；
 /// 地形、障碍不动，<see cref="MapData.MapVersion"/> 置 1 区分锁定前后。锁定后大图与小图对下游是同一种东西：<see cref="MapData.BirthBoard"/>（13×13）给构筑期范围，<see cref="MapData.BirthZones"/>（9×9）给归属色与座位投影。</para>
@@ -198,7 +198,7 @@ public static class FlagRules
         return [.. confirmed];
     }
 
-    /// <summary>与 <paramref name="confirmed"/> 全部间距 ≥ 60 的合规格里离 <paramref name="flag"/> 最近者；没有时取"最小间距最大"者。并列按 <paramref name="legal"/> 的次序取第一个。</summary>
+    /// <summary>与 <paramref name="confirmed"/> 全部间距 ≥ <see cref="FlagGap"/> 的合规格里离 <paramref name="flag"/> 最近者；没有时取"最小间距最大"者。并列按 <paramref name="legal"/> 的次序取第一个。</summary>
     private static Coord Fallback(IReadOnlyList<Coord> legal, List<Coord> confirmed, Coord flag)
     {
         if (legal.Count == 0)

@@ -297,7 +297,7 @@ public static partial class LinkMapGenerator
             }
         }
 
-        HashSet<Coord> lowland = [.. island.Cells().Where(c => !layout.InPlate(c) && !layout.RampOutlets.Contains(c) && !seatRing.Contains(c))];
+        HashSet<Coord> lowland = [.. island.Cells().Where(c => !layout.InPlate(c) && !layout.InReserved(c) && !layout.RampOutlets.Contains(c) && !seatRing.Contains(c))];
 
         bool Occupied(Coord c) => water.Contains(c) || lakes.Contains(c) || rockClusters.Contains(c);
         bool Land(Coord c) => island.Contains(c) && !layout.InPlate(c) && !lakes.Contains(c) && !rockClusters.Contains(c) && (!water.Contains(c) || bridges.Contains(c));

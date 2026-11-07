@@ -112,12 +112,12 @@ public class 信物遗址刷新Tests
         ImmutableArray<RelicSite> sites = board.Map.RelicSites;
         Assert.Equal(sites.OrderBy(s => s.Cell), RelicSpawner.SiteCandidates(board, Birth(board)));   // 空盘：全部遗址都是候选，按坐标字典序
 
-        // 一处稀有被棋子占、一处普通已有信物 → 两处都不在候选；其余 6 处仍在。
+        // 一处稀有被棋子占、一处普通已有信物 → 两处都不在候选；其余仍在（large-60：共 4 处，剩 2 处）。
         RelicSite occupied = sites.First(s => s.Tier == RelicTier.Rare);
         RelicSite taken = sites.First(s => s.Tier == RelicTier.Common);
         board.Place(occupied.Cell.ToNotation(), TestMaps.P0).Attach(taken.Cell.ToNotation(), Map(90, RelicKind.WarDrum));
         ImmutableArray<RelicSite> candidates = RelicSpawner.SiteCandidates(board, Birth(board));
-        Assert.Equal(6, candidates.Length);
+        Assert.Equal(sites.Length - 2, candidates.Length);
         Assert.DoesNotContain(occupied, candidates);
         Assert.DoesNotContain(taken, candidates);
 

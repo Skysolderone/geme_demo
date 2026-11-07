@@ -104,42 +104,42 @@ public class 大回合上限配置Tests
     }
 
     [Fact]
-    public void 大图缺省60_小图缺省100_显式优先()
+    public void 大图缺省同小图100_显式优先()
     {
-        // big-map 裁决 6 / D6：大图缺省对局时长 60 大回合、小图仍 100；显式给值优先；RoundCapIsDefault 供界面写"第 X / 60 大回合"。
+        // big-map 裁决 6 / D6 原为大图 60；large-60（2026-11-07）起大图缺省与小图同为 100；显式给值优先；RoundCapIsDefault 供界面写"第 X / 100 大回合"。
         Siege.Core.Board.MapData large = MapCatalog.Resolve("link:1:4:l");
-        Assert.Equal(60, MatchOptions.DefaultRoundCapLarge);
-        Assert.Equal(60, MatchOptions.DefaultRoundCapFor(Siege.Core.Board.MapTier.Large));
+        Assert.Equal(100, MatchOptions.DefaultRoundCapLarge);
+        Assert.Equal(100, MatchOptions.DefaultRoundCapFor(Siege.Core.Board.MapTier.Large));
         MatchFlow match = MatchFlow.Create(large, TestMaps.Seed, All, Options);
-        Assert.Equal(60, match.RoundCap);
+        Assert.Equal(100, match.RoundCap);
         Assert.True(match.RoundCapIsDefault);
-        Assert.Equal((60, true), (match.Publish().RoundCap, match.Publish().RoundCapIsDefault));
-        Assert.Equal(60, JsonNode.Parse(match.Serialize())!["RoundCap"]!.GetValue<int>());   // 存的是解析后的整数
+        Assert.Equal((100, true), (match.Publish().RoundCap, match.Publish().RoundCapIsDefault));
+        Assert.Equal(100, JsonNode.Parse(match.Serialize())!["RoundCap"]!.GetValue<int>());   // 存的是解析后的整数
 
-        MatchFlow explicitCap = MatchFlow.Create(large, TestMaps.Seed, All, Options with { RoundCap = 100 });
-        Assert.Equal(100, explicitCap.RoundCap);
+        MatchFlow explicitCap = MatchFlow.Create(large, TestMaps.Seed, All, Options with { RoundCap = 60 });
+        Assert.Equal(60, explicitCap.RoundCap);
         Assert.False(explicitCap.RoundCapIsDefault);
-        MatchFlow smallExplicit = Create(options: Options with { RoundCap = 60 });
-        Assert.Equal((60, false), (smallExplicit.RoundCap, smallExplicit.RoundCapIsDefault));
+        MatchFlow smallExplicit = Create(options: Options with { RoundCap = 40 });
+        Assert.Equal((40, false), (smallExplicit.RoundCap, smallExplicit.RoundCapIsDefault));
 
-        // 存档往返（大图）：显式 100 恢复后仍 100、不留痕、不算缺省；缺省 60 恢复后仍 60 且算缺省。
+        // 存档往返（大图）：显式 60 恢复后仍 60、不留痕、不算缺省；缺省 100 恢复后仍 100 且算缺省。
         explicitCap.PlantPrototype();
         MatchFlow restored = MatchFlow.Restore(large, explicitCap.Serialize());
-        Assert.Equal((100, false, false), (restored.RoundCap, restored.RoundCapIsDefault, restored.RoundCapBackfilled));
+        Assert.Equal((60, false, false), (restored.RoundCap, restored.RoundCapIsDefault, restored.RoundCapBackfilled));
         match.PlantPrototype();
         MatchFlow restoredDefault = MatchFlow.Restore(large, match.Serialize());
-        Assert.Equal((60, true, false), (restoredDefault.RoundCap, restoredDefault.RoundCapIsDefault, restoredDefault.RoundCapBackfilled));
+        Assert.Equal((100, true, false), (restoredDefault.RoundCap, restoredDefault.RoundCapIsDefault, restoredDefault.RoundCapBackfilled));
 
-        // 跑局层：配置不写上限 → 大图落成 60、小图落成 100 写进 config.json 与首部；--round-cap 显式给值原样生效。
+        // 跑局层：配置不写上限 → 大图落成 100、小图落成 100 写进 config.json 与首部；--round-cap 显式给值原样生效。
         RunConfig config = SimFixtures.Config(turnLimit: 1) with { MapId = "link:1:4:l" };
-        Assert.Equal(60, config.ResolvedFor(large).RoundCap);
+        Assert.Equal(100, config.ResolvedFor(large).RoundCap);
         Assert.Equal(100, SimFixtures.Config(turnLimit: 1).ResolvedFor(MapCatalog.Resolve("link:1:4")).RoundCap);
         MatchSession session = MatchSession.Create(config, 5);
-        Assert.Equal(60, session.Match.RoundCap);
-        Assert.Equal(60, session.Run().Header.Config.RoundCap);
+        Assert.Equal(100, session.Match.RoundCap);
+        Assert.Equal(100, session.Run().Header.Config.RoundCap);
         Assert.Equal(7, MatchSession.Create(config with { RoundCap = 7 }, 5).Match.RoundCap);
 
-        // 到点按势力结算（沿用上限安全网机制）：第 60 大回合结束时仍有人落子也结算。
+        // 到点按势力结算（沿用上限安全网机制）：第 100 大回合结束时仍有人落子也结算。
         MatchFlow capped = MatchFlow.Create(large, TestMaps.Seed, All, Options);
         capped.PlantPrototype();
         foreach (PlayerId p in All)
@@ -147,7 +147,7 @@ public class 大回合上限配置Tests
             capped.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        capped.AtRound(60, [P0, P1, P2, P3]).PlayRound(P0);
+        capped.AtRound(100, [P0, P1, P2, P3]).PlayRound(P0);
         Assert.Single(capped.Settlements);
         Assert.Equal(SettlementReason.RoundCap, capped.Settlements[0].Reason);
         Assert.Equal(MatchPhase.Ended, capped.Phase);

@@ -183,7 +183,8 @@ public class 大图候选预筛Tests
         // 搭桥候选：只对局部范围内、未进完整枚举的空格枚举搭桥目标（每格至多 4 个水邻），不再扫全图。
         Assert.NotNull(ai.LastBridgeSeed);
         Assert.True(ai.LastBridgeSeed!.Scored <= 4 * (focus.Count - ai.LastCandidateCells.Length), $"搭桥单点 {ai.LastBridgeSeed.Scored}，局部范围 {focus.Count}");
-        Assert.True(rehearsals < legalEmpty / 4, $"本人预演 {rehearsals} 次，合法空格 {legalEmpty}");
+        // large-60：60×60 上局部范围（己方 8 格）已占全图约三分之一，界线由 1/4 放到 1/2（150×150 时为 1/4）。
+        Assert.True(rehearsals < legalEmpty / 2, $"本人预演 {rehearsals} 次，合法空格 {legalEmpty}");
         // 专家前瞻：模拟对手经同一 Deploy 入口、以对手自己的棋子为锚；不预筛时每名模拟对手仅候选格上限的廉价预演就 ≥ 合法空格数。
         Assert.NotNull(ai.LastLookahead);
         Assert.Equal(LookaheadStatus.Applied, ai.LastLookahead!.Status);
