@@ -141,7 +141,7 @@ public sealed partial class Hud : CanvasLayer
         _showBanner = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx * 3);
         _showBanner.HorizontalAlignment = HorizontalAlignment.Center;
         _showBanner.VerticalAlignment = VerticalAlignment.Center;
-        _showBanner.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _showBanner.AddThemeColorOverride("font_outline_color", Ui.Ink);   // chibi-world 段 ③：纯黑 → 卡通墨色
         _showBanner.AddThemeConstantOverride("outline_size", 8);
         Ui.Anchor(_showBanner, 0.5f, 0.5f, -400f, -60f, 400f, 60f);
         _showBanner.Visible = false;

@@ -29,34 +29,7 @@ public sealed partial class SurfaceSwatch : Node3D
     /// <inheritdoc/>
     public override void _Ready()
     {
-        AddChild(new DirectionalLight3D
-        {
-            RotationDegrees = new Vector3(-52f, -38f, 0f),
-            LightColor = Color.Color8(255, 240, 208),
-            LightEnergy = 1.25f,
-            ShadowEnabled = true,
-            ShadowBlur = 1.6f,
-            ShadowOpacity = 0.55f,
-        });
-        AddChild(new DirectionalLight3D
-        {
-            RotationDegrees = new Vector3(-20f, 140f, 0f),
-            LightColor = Color.Color8(168, 190, 226),
-            LightEnergy = 0.35f,
-        });
-        AddChild(new WorldEnvironment
-        {
-            Environment = new global::Godot.Environment
-            {
-                BackgroundMode = global::Godot.Environment.BGMode.Color,
-                BackgroundColor = Color.Color8(206, 228, 246),
-                AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
-                AmbientLightColor = Color.Color8(186, 200, 222),
-                AmbientLightEnergy = 0.62f,
-                TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
-                TonemapWhite = 1.4f,
-            },
-        });
+        AddStudio(this);
 
         TerrainPalette palette = TerrainPalette.Current;
         (string Name, Color Color)[] swatches =
@@ -113,6 +86,39 @@ public sealed partial class SurfaceSwatch : Node3D
             Current = true,
         });
         GD.Print($"[surface-swatch] 色板 {palette.Name}：{palette.Intent}");
+    }
+
+    /// <summary>对照图的灯光与环境（与 <see cref="TerrainGallery"/> 相同；<see cref="MarkerSwatch"/> 共用）。</summary>
+    internal static void AddStudio(Node3D parent)
+    {
+        parent.AddChild(new DirectionalLight3D
+        {
+            RotationDegrees = new Vector3(-52f, -38f, 0f),
+            LightColor = Color.Color8(255, 240, 208),
+            LightEnergy = 1.25f,
+            ShadowEnabled = true,
+            ShadowBlur = 1.6f,
+            ShadowOpacity = 0.55f,
+        });
+        parent.AddChild(new DirectionalLight3D
+        {
+            RotationDegrees = new Vector3(-20f, 140f, 0f),
+            LightColor = Color.Color8(168, 190, 226),
+            LightEnergy = 0.35f,
+        });
+        parent.AddChild(new WorldEnvironment
+        {
+            Environment = new global::Godot.Environment
+            {
+                BackgroundMode = global::Godot.Environment.BGMode.Color,
+                BackgroundColor = Color.Color8(206, 228, 246),
+                AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
+                AmbientLightColor = Color.Color8(186, 200, 222),
+                AmbientLightEnergy = 0.62f,
+                TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
+                TonemapWhite = 1.4f,
+            },
+        });
     }
 
     /// <summary>一块铺满整格的地表平板（大图同款：CellSize 见方、TileHeight 厚，上表面在 <paramref name="top"/>）。</summary>

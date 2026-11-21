@@ -151,22 +151,27 @@ public sealed partial class Minimap : Control
 
         DrawRelicSites(this, _sites, PixelOf, _board is null ? 1f : Size.X / Math.Max(1, _board.Width), _board?.Width ?? 1, _board?.Height ?? 1);
 
+        // chibi-world 段 ③：出生区框、棋子点、视野框都先垫一层墨色（每边宽出 1 像素），再画原色；外框在金边外侧再描一圈 2 像素墨线（同 InkRimBox）。
         foreach ((Rect2 rect, Color color) in _zones)
         {
+            DrawRect(rect, Ui.Ink, false, 3.5f);
             DrawRect(rect, color, false, 1.5f);
         }
 
         foreach ((Vector2 at, Color color) in _pieces)
         {
+            DrawRect(new Rect2(at - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)), Ui.Ink);
             DrawRect(new Rect2(at - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), color);
         }
 
         if (_view.Size.X > 0f && _view.Size.Y > 0f)
         {
+            DrawRect(_view.Intersection(full), Ui.Ink, false, 3.5f);
             DrawRect(_view.Intersection(full), Colors.White, false, 1.5f);
         }
 
         DrawRect(full, Ui.PanelBorder, false, 1f);
+        DrawRect(full.Grow(InkRimBox.RimPx * 0.5f + 0.5f), Ui.Ink, false, InkRimBox.RimPx);
     }
 
     /// <summary>
@@ -189,7 +194,7 @@ public sealed partial class Minimap : Control
             Vector2 b = pixelOf(zone.Origin.X + zone.Width, zone.Origin.Y);
             var rect = new Rect2(a, b - a);
             canvas.DrawRect(rect, new Color(Visuals.RelicForecast, 0.22f));
-            canvas.DrawRect(rect, Visuals.GridInk, false, 3f);
+            canvas.DrawRect(rect, Visuals.OutlineInk, false, 3f);   // chibi-world 段 ③：底座墨 → 卡通墨色
             canvas.DrawRect(rect, Visuals.RelicForecast, false, 1.5f);
         }
 
@@ -202,7 +207,7 @@ public sealed partial class Minimap : Control
             }
 
             Vector2 at = pixelOf(site.Cell.X + 0.5f, site.Cell.Y + 0.5f);
-            canvas.DrawCircle(at, dot + 1f, Visuals.GridInk);
+            canvas.DrawCircle(at, dot + 1f, Visuals.OutlineInk);
             canvas.DrawCircle(at, dot, Colors.White);
         }
     }
