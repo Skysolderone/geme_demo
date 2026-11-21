@@ -226,6 +226,10 @@ public sealed partial class GameRoot : Node3D
             // --piece-gallery-factions：与 --piece-gallery 同用，改拍四阵营并排的对照图（chibi-pieces）。
             bool pieceGalleryFactions = args.Flag("piece-gallery-factions");
             string? uiGallery = args.Text("ui-gallery", "PNG 输出路径");
+            // --terrain-gallery=<PNG 路径>：不建局，拍一张 18 类地形装饰对照图后退出（chibi-world 段 ① 人工检查清单用，见 TerrainGallery）；
+            // --terrain-gallery-variants：与之同用，改拍全部档。
+            string? terrainGallery = args.Text("terrain-gallery", "PNG 输出路径");
+            bool terrainGalleryVariants = args.Flag("terrain-gallery-variants");
 
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
@@ -301,6 +305,15 @@ public sealed partial class GameRoot : Node3D
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
                 AddChild(new PieceGallery(pieceGallery, pieceGalleryFactions) { Name = "PieceGallery" });
+                return;
+            }
+
+            if (terrainGallery is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new TerrainGallery(terrainGallery, terrainGalleryVariants) { Name = "TerrainGallery" });
                 return;
             }
 

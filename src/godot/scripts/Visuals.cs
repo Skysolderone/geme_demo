@@ -190,6 +190,33 @@ public static class Visuals
         Metallic = 0f,
     };
 
+    /// <summary>卡通描边墨色（chibi-pieces / chibi-world 共用）：棋子与地形装饰的反向外壳都用这一色。</summary>
+    public static readonly Color OutlineInk = Color.Color8(28, 24, 30);
+
+    /// <summary>
+    /// 卡通分阶材质（chibi-pieces 起的单位风格，chibi-world 段 ① 起地形装饰共用）：<c>DiffuseMode = Toon</c>、粗糙度 0.22、无金属；
+    /// <paramref name="specular"/> 为真时开卡通高光（钢甲 / 晶体 / 水面），否则关高光。阵营相关的取色、顶点色与自发光由调用方再加。
+    /// </summary>
+    public static StandardMaterial3D Toon(Color albedo, bool specular = false) => new()
+    {
+        AlbedoColor = albedo,
+        Roughness = 0.22f,
+        Metallic = 0f,
+        DiffuseMode = BaseMaterial3D.DiffuseModeEnum.Toon,
+        SpecularMode = specular ? BaseMaterial3D.SpecularModeEnum.Toon : BaseMaterial3D.SpecularModeEnum.Disabled,
+    };
+
+    /// <summary>
+    /// 卡通描边材质：配反向外壳网格（本体沿法线外推）用——只画背面（<c>CullMode = Front</c>）、不受光、纯墨色。
+    /// 节点名约定 <c>Outline</c>（<see cref="PieceModels.IsOutline"/>，拾取跳过）；调用方另设 <c>CastShadow = Off</c>。
+    /// </summary>
+    public static StandardMaterial3D Outline(Color ink) => new()
+    {
+        AlbedoColor = ink,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        CullMode = BaseMaterial3D.CullModeEnum.Front,
+    };
+
     /// <summary>自发光材质（用于标记与高亮，保证在任何光照下都读得出来）。</summary>
     public static StandardMaterial3D Glow(Color albedo, float energy, bool translucent)
     {
