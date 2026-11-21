@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/core/testing.md", "reason": "表现层画面与读数验证、src/godot 不在 sln 的守门约定"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Godot 表现层代码质量约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "资产目录约定与 chibi-pieces glb 契约、回退链"}
+{"file": "art/chibi-pieces/README.md", "reason": "单位卡通风格的材质、描边、预算与拍图命令，装饰要与之一致"}
+{"file": ".trellis/tasks/archive/2026-11/11-21-chibi-pieces/design.md", "reason": "glb 契约、反向外壳描边、拾取与暂放处理的设计依据"}
