@@ -31,8 +31,6 @@ internal static class PieceModels
     private static readonly Dictionary<(BannerEmblem Emblem, float Size), ArrayMesh> EmblemMeshes = new();
     private static readonly HashSet<PieceSilhouette> ReportedFallbacks = new();
 
-    private static readonly Color OutlineInk = Color.Color8(28, 24, 30);
-
     // Cartoon emblems sit on the faction color itself. The shared cream ink vanishes on light faction colors
     // (gold), so those get a dark ink instead; the threshold sits between gold (luma 0.67) and the other three (~0.39).
     private static readonly Color DarkEmblemInk = Color.Color8(58, 40, 24);
@@ -527,16 +525,7 @@ internal static class PieceModels
             "Ink" => ink,
             _ => throw new System.ArgumentOutOfRangeException(nameof(slot), slot, "Unknown piece material slot."),
         };
-        var material = new StandardMaterial3D
-        {
-            AlbedoColor = color,
-            Roughness = 0.22f,
-            Metallic = 0f,
-            DiffuseMode = BaseMaterial3D.DiffuseModeEnum.Toon,
-            SpecularMode = slot is "Metal" or "Crystal"
-                ? BaseMaterial3D.SpecularModeEnum.Toon
-                : BaseMaterial3D.SpecularModeEnum.Disabled,
-        };
+        StandardMaterial3D material = Visuals.Toon(color, specular: slot is "Metal" or "Crystal");
         if (slot == "Enamel")
         {
             // Foot ring darkening (see FootTint); every other enamel vertex is white.
@@ -560,10 +549,6 @@ internal static class PieceModels
         return Color.FromHsv(h, Mathf.Min(1f, s * 1.12f), Mathf.Min(1f, v * 1.06f), color.A);
     }
 
-    private static StandardMaterial3D OutlineMaterial(int emphasisPercent) => new()
-    {
-        AlbedoColor = Visuals.Damp(OutlineInk, Mathf.Max(emphasisPercent, 60)),
-        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-        CullMode = BaseMaterial3D.CullModeEnum.Front,
-    };
+    private static StandardMaterial3D OutlineMaterial(int emphasisPercent) =>
+        Visuals.Outline(Visuals.Damp(Visuals.OutlineInk, Mathf.Max(emphasisPercent, 60)));
 }

@@ -121,6 +121,7 @@ public sealed partial class BoardView : Node3D
     private int _chunkUnloads;
     private int _chunkInstances;
     private int _chunkMultiMeshes;
+    private int _chunkUnbatched;
     private int _pickVersion;
     private PartBatchSet _parts = null!;
     private StandardMaterial3D? _slabMaterial;
@@ -192,6 +193,7 @@ public sealed partial class BoardView : Node3D
         _chunkDecorations.Clear();
         _chunkStats.Clear();
         _chunkMultiMeshes = 0;
+        _chunkUnbatched = 0;
         _chunkInstances = 0;
         _chunkCenter = null;
         _chunkCells = [];
@@ -207,6 +209,8 @@ public sealed partial class BoardView : Node3D
         _pickVersion++;
         int loadedBefore = TerrainParts.LoadedCount;
         int generatedBefore = TerrainParts.GeneratedCount;
+        int chibiBefore = TerrainParts.ChibiCount;
+        int chibiFallbackBefore = TerrainParts.ChibiFallbackCount;
         _zoneOwners = zoneOwners;
         _terrainKey = board.LayoutKey();
         _tileMaterials.Clear();
@@ -615,6 +619,7 @@ public sealed partial class BoardView : Node3D
         GD.Print($"[water] 深水 {deepCells} 格（架桥 {bridgedCells} 格）、河岸石沿 {bankLips} 件");
         GD.Print("[rim] 底座外圈石沿 0 件（map-surface 裁决 2 撤除）");
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
+        GD.Print(ChibiPartsLine(TerrainParts.ChibiCount - chibiBefore, TerrainParts.ChibiFallbackCount - chibiFallbackBefore));
         PartBatch[] batches = [.. _parts.Batches];
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_parts.MultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
             + $"未合批（逐格各建节点）{_parts.Unbatched} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(_slabMaterial is null ? 0 : 1)} 个");
@@ -876,7 +881,8 @@ public sealed partial class BoardView : Node3D
 
         _pickVersion++;
         GD.Print($"[chunks] 注视格 {focus.ToNotation()} → 区块 ({center.X}, {center.Y})：本次加载 {loaded}、卸载 {unloaded}，已加载 {_loadedChunks.Count} / {_chunkColumns * _chunkRows}，累计加载 {_chunkLoads}、卸载 {_chunkUnloads}；"
-            + $"当前已加载区块共 MultiMesh {_chunkMultiMeshes} 个、实例 {_chunkInstances} 个");
+            + $"当前已加载区块共 MultiMesh {_chunkMultiMeshes} 个、实例 {_chunkInstances} 个；区块里未合批的装饰累计 {_chunkUnbatched} 格");
+        GD.Print(ChibiPartsLine(TerrainParts.ChibiCount, TerrainParts.ChibiFallbackCount) + "（本进程累计）");
         return true;
     }
 
@@ -919,6 +925,7 @@ public sealed partial class BoardView : Node3D
             }
         }
 
+        _chunkUnbatched += parts.Unbatched;
         int multiMeshes = sink.Flush(chunk) + parts.MultiMeshes;
         int instances = sink.Instances + parts.Batches.Sum(b => b.Centers.Count * b.Parts.Length);
         _chunkStats[key] = (multiMeshes, instances);
@@ -1915,7 +1922,7 @@ public sealed partial class BoardView : Node3D
                 return;
             }
 
-            TerrainParts.CountLoaded();
+            TerrainParts.CountLoaded(kind, variant);
             batch.Centers.Add(center);
         }
 
@@ -2066,6 +2073,17 @@ public sealed partial class BoardView : Node3D
         }
 
         return $"rid {mesh.GetRid().Id}";
+    }
+
+    /// <summary>
+    /// 自证行（chibi-world 段 ①）：装饰放置件数里来自卡通 glb（<see cref="TerrainParts.ChibiDirectory"/>）的与回退旧样式的各几件，
+    /// 以及探测过但没有 glb 的档（列前 8 个）。目录在时应当"回退 0 件"；删掉目录即全部回退。
+    /// </summary>
+    private static string ChibiPartsLine(int chibi, int fallback)
+    {
+        IReadOnlyCollection<string> misses = TerrainParts.ChibiMisses;
+        string missed = misses.Count == 0 ? "无" : $"{misses.Count} 档（{string.Join(" ", misses.Take(8))}{(misses.Count > 8 ? " …" : string.Empty)}）";
+        return $"[terrain-chibi] 装饰：卡通 glb {chibi} 件、回退旧样式 {fallback} 件；缺 glb 的档 {missed}（{TerrainParts.ChibiDirectory}）";
     }
 
     /// <summary>信息层压暗时装饰整体缩小：常驻一套与各已加载区块的合批集一起缩放（缩放没变的那一套自己跳过）。</summary>
