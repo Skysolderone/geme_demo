@@ -18,6 +18,19 @@ public static class Ui
         FontNames = ["Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Sans-Serif"],
     };
 
+    /// <summary>
+    /// 标题字重（chibi-world 段 ③）：同一组中文字体的粗体（字重 700），只给 HUD 的标题行（<see cref="Heading"/>）与标题级以上字号（≥ <see cref="UiTheme.Title"/>）用。
+    /// 与棋盘 3D 标注共用的 <see cref="ChineseFont"/> 不动（坐标标注的字形被测试钉住）。
+    /// </summary>
+    public static readonly SystemFont ChineseBoldFont = new()
+    {
+        FontNames = ["Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Sans-Serif"],
+        FontWeight = 700,
+    };
+
+    /// <summary>界面描边墨色（chibi-world 段 ③）：主 / 次面板金边外侧的一圈墨线与文字描边，与单位、地形同一墨色（取自 <see cref="UiTheme.TextOutline"/>）。</summary>
+    public static Color Ink => Visuals.ToColor(UiTheme.TextOutline);
+
     public static Color Accent => Visuals.ToColor(UiTheme.Accent);
     // ---------- 主题类型名：只在这里写字符串（写错不会报错，按钮会静默落回默认样式） ----------
 
@@ -117,14 +130,16 @@ public static class Ui
         theme.SetFontSize(FontSizeItem, ButtonType, UiTheme.Small);
         theme.SetFontSize(FontSizeItem, "OptionButton", UiTheme.Body);
 
-        theme.SetStylebox("panel", PanelType, PanelBox(PanelTier.Primary, UiTheme.Space4));
+        // chibi-world 段 ③：主 / 次面板在金边外侧再描一圈墨线（InkRimBox）；提示条没有边框（钉值：提示条边框宽 0、透明），不描。
+        theme.SetStylebox("panel", PanelType, new InkRimBox(PanelBox(PanelTier.Primary, UiTheme.Space4)));
         foreach (PanelTier tier in Enum.GetValues<PanelTier>())
         {
             foreach (int padding in UiTheme.SpaceLadder)
             {
                 string variation = PanelVariationOf(tier, padding);
                 theme.SetTypeVariation(variation, PanelType);
-                theme.SetStylebox("panel", variation, PanelBox(tier, padding));
+                StyleBoxFlat box = PanelBox(tier, padding);
+                theme.SetStylebox("panel", variation, tier == PanelTier.Hint ? box : new InkRimBox(box));
             }
         }
 
@@ -263,6 +278,10 @@ public static class Ui
         var label = new Label { Text = text, MouseFilter = Control.MouseFilterEnum.Ignore };
         label.AddThemeColorOverride("font_color", color ?? InfoText);
         label.AddThemeFontSizeOverride("font_size", size ?? UiTheme.Body);
+        if ((size ?? UiTheme.Body) >= UiTheme.Title)
+        {
+            label.AddThemeFontOverride("font", ChineseBoldFont);   // chibi-world 段 ③：标题级以上字号用粗体
+        }
         if (wrap)
         {
             label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -271,8 +290,13 @@ public static class Ui
         return label;
     }
 
-    /// <summary>标题行（注释字号 + 金色）。</summary>
-    public static Label Heading(string text) => Text(text, PanelBorder, UiTheme.Caption);
+    /// <summary>标题行（注释字号 + 金色 + 粗体，chibi-world 段 ③ 加粗）。</summary>
+    public static Label Heading(string text)
+    {
+        Label label = Text(text, PanelBorder, UiTheme.Caption);
+        label.AddThemeFontOverride("font", ChineseBoldFont);
+        return label;
+    }
 
     /// <summary>压在棋盘上的一行提示（提示条一级的底、描边，横幅字号）。如回合摘要。</summary>
     public static Label HintBanner(string text, Color color)
@@ -308,7 +332,7 @@ public static class Ui
     public static (PanelContainer Panel, VBoxContainer Body) Panel(int margin = 8, int separation = 2)
     {
         var panel = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
-        panel.AddThemeStyleboxOverride("panel", PanelStyle(margin));
+        panel.AddThemeStyleboxOverride("panel", new InkRimBox(PanelStyle(margin)));
         var body = new VBoxContainer();
         body.AddThemeConstantOverride("separation", separation);
         panel.AddChild(body);
@@ -324,10 +348,8 @@ public static class Ui
         box.ContentMarginBottom = margin;
         box.BorderWidthLeft = UiTheme.BorderWidthPx + 1;
         box.BorderWidthTop = 2;
-        box.CornerRadiusTopLeft = 2;
-        box.CornerRadiusTopRight = 6;
-        box.CornerRadiusBottomLeft = 2;
-        box.CornerRadiusBottomRight = 4;
+        // chibi-world 段 ③：四角圆角统一取主题值（改前 2 / 6 / 2 / 4 不等）。
+        box.SetCornerRadiusAll(UiTheme.CornerRadiusPx);
         box.ShadowColor = new Color(0.015f, 0.025f, 0.035f, 0.66f);
         box.ShadowSize = 7;
         box.ShadowOffset = new Vector2(0f, 3f);
@@ -458,5 +480,42 @@ public sealed partial class EdgeStripBox : StyleBox
     {
         _body.Draw(toCanvasItem, rect);
         _strip.Draw(toCanvasItem, new Rect2(rect.Position.X, rect.End.Y - _stripPx, rect.Size.X, _stripPx));
+    }
+}
+
+/// <summary>
+/// 金边外侧再描一圈墨线的面板样式盒（chibi-world 段 ③）：先画原样式盒（底色、金边、阴影不变），再在外侧画一圈 <see cref="RimPx"/> 像素的墨色描边，
+/// 圆角随原样式盒各角加 <see cref="RimPx"/>。内容边距照抄原样式盒，所以面板里的排版、尺寸与改前相同；墨线画在面板矩形之外。
+/// </summary>
+public sealed partial class InkRimBox : StyleBox
+{
+    /// <summary>墨线宽（像素）。</summary>
+    public const int RimPx = 2;
+
+    private readonly StyleBoxFlat _inner;
+    private readonly StyleBoxFlat _rim;
+
+    public InkRimBox(StyleBoxFlat inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        _rim = new StyleBoxFlat { DrawCenter = false, BorderColor = Ui.Ink };
+        _rim.SetBorderWidthAll(RimPx);
+        _rim.SetExpandMarginAll(RimPx);
+        _rim.CornerRadiusTopLeft = inner.CornerRadiusTopLeft + RimPx;
+        _rim.CornerRadiusTopRight = inner.CornerRadiusTopRight + RimPx;
+        _rim.CornerRadiusBottomLeft = inner.CornerRadiusBottomLeft + RimPx;
+        _rim.CornerRadiusBottomRight = inner.CornerRadiusBottomRight + RimPx;
+        ContentMarginLeft = inner.ContentMarginLeft;
+        ContentMarginRight = inner.ContentMarginRight;
+        ContentMarginTop = inner.ContentMarginTop;
+        ContentMarginBottom = inner.ContentMarginBottom;
+    }
+
+    /// <inheritdoc/>
+    public override void _Draw(Rid toCanvasItem, Rect2 rect)
+    {
+        _inner.Draw(toCanvasItem, rect);
+        _rim.Draw(toCanvasItem, rect);
     }
 }

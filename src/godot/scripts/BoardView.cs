@@ -92,7 +92,6 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>棋盘格线墨条的容器（map-surface 裁决 1）：默认隐藏，信息层打开时 <see cref="Refresh"/> 整体显示；无棋盘清单的地图为 <c>null</c>。</summary>
     private Node3D? _plateGridLines;
-    private static Texture2D? _backdropTexture;
     private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
 
     /// <summary>
@@ -722,36 +721,11 @@ public sealed partial class BoardView : Node3D
             LightEnergy = 0.36f,
         });
 
-        // 新天空原画作为画布背景保持原始透视，避免把非全景插画拉成天空球。
-        const string backdropPath = "res://art/sky/floating-realm-panorama.png";
-        Texture2D? backdropTexture = _backdropTexture;
-        if (backdropTexture is null && ResourceLoader.Exists(backdropPath))
+        // 背景天空（chibi-world 段 ③）：画布背景，--sky=image（原画调色，保持原始透视、不拉成天空球）/ toon（代码绘制）。
+        // image 版缺图时退回下面的程序天空，与改前缺图时相同。
+        CanvasLayer? backdrop = SkyBackdrop.Build();
+        if (backdrop is not null)
         {
-            backdropTexture = GD.Load<Texture2D>(backdropPath);
-        }
-        // 直接从源码目录启动 Godot、尚未跑编辑器导入时才读取原始 PNG；
-        // 导出包优先使用上面的已导入纹理，不依赖原始文件。
-        if (backdropTexture is null && global::Godot.FileAccess.FileExists(backdropPath))
-        {
-            Image sourceImage = Image.LoadFromFile(backdropPath);
-            if (!sourceImage.IsEmpty())
-            {
-                backdropTexture = ImageTexture.CreateFromImage(sourceImage);
-            }
-        }
-        _backdropTexture = backdropTexture;
-        if (backdropTexture is not null)
-        {
-            var backdrop = new CanvasLayer { Name = "RealmBackdrop", Layer = -1 };
-            var backdropImage = new TextureRect
-            {
-                Texture = backdropTexture,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-            };
-            backdropImage.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-            backdrop.AddChild(backdropImage);
             AddChild(backdrop);
         }
 
@@ -759,10 +733,10 @@ public sealed partial class BoardView : Node3D
         {
             Environment = new global::Godot.Environment
             {
-                BackgroundMode = backdropTexture is null
+                BackgroundMode = backdrop is null
                     ? global::Godot.Environment.BGMode.Sky
                     : global::Godot.Environment.BGMode.Canvas,
-                Sky = backdropTexture is null
+                Sky = backdrop is null
                     ? new Sky
                     {
                         SkyMaterial = new ProceduralSkyMaterial
@@ -1260,10 +1234,11 @@ public sealed partial class BoardView : Node3D
         }
 
         Color color = legal ? Visuals.BirthHint : Visuals.Urgent;
-        Frame(at, FlagRules.RingReach, 0.08f, 0.05f, Visuals.Flat(color));
-        Frame(at, FlagRules.PlateReach, 0.035f, 0.02f, Visuals.Flat(new Color(color, 0.55f)));
+        // chibi-world 段 ③：不透明的 9×9 出生圈框垫墨色衬底；13×13 构筑范围是半透明细框，垫墨会把它整条压暗，不垫。
+        Frame(at, FlagRules.RingReach, 0.08f, 0.05f, Visuals.Flat(color), ink: true);
+        Frame(at, FlagRules.PlateReach, 0.035f, 0.02f, Visuals.Flat(new Color(color, 0.55f)), ink: false);
 
-        void Frame(Coord center, int reach, float width, float height, StandardMaterial3D material)
+        void Frame(Coord center, int reach, float width, float height, StandardMaterial3D material, bool ink)
         {
             const float half = BoardGeometry.CellSize * 0.5f;
             Vector3 a = BoardGeometry.Center(BoardGeometry.ClampToBoard(center.X - reach, center.Y - reach, _width, _height), _width, _height);
@@ -1273,6 +1248,14 @@ public sealed partial class BoardView : Node3D
             float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
             float y = a.Y + (height * 0.5f) + 0.01f;
             float spanX = maxX - minX + width, spanZ = maxZ - minZ + width;
+            if (ink)
+            {
+                _flagPreview!.AddChild(MarkerArt.InkSlab(new Vector3(spanX, height, width), new Vector3(midX, y, minZ)));
+                _flagPreview.AddChild(MarkerArt.InkSlab(new Vector3(spanX, height, width), new Vector3(midX, y, maxZ)));
+                _flagPreview.AddChild(MarkerArt.InkSlab(new Vector3(width, height, spanZ), new Vector3(minX, y, midZ)));
+                _flagPreview.AddChild(MarkerArt.InkSlab(new Vector3(width, height, spanZ), new Vector3(maxX, y, midZ)));
+            }
+
             _flagPreview!.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(spanX, height, width)), MaterialOverride = material, Position = new Vector3(midX, y, minZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             _flagPreview.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(spanX, height, width)), MaterialOverride = material, Position = new Vector3(midX, y, maxZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             _flagPreview.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(width, height, spanZ)), MaterialOverride = material, Position = new Vector3(minX, y, midZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
@@ -2942,25 +2925,14 @@ public sealed partial class BoardView : Node3D
             switch (cell.Relic)
             {
                 case RelicMarker.OnMap:
-                    var token = new Node3D { Name = "RelicToken", Position = center };
-                    token.AddChild(new MeshInstance3D
-                    {
-                        Mesh = new CylinderMesh { TopRadius = 0.125f, BottomRadius = 0.125f, Height = 0.026f, RadialSegments = 8 },
-                        MaterialOverride = Visuals.Matte(Color.Color8(88, 73, 68), 0.72f),
-                        Position = new Vector3(0f, 0.023f, 0f),
-                    });
-                    token.AddChild(new MeshInstance3D
-                    {
-                        Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.100f, Height = 0.115f, RadialSegments = 4 },
-                        MaterialOverride = Visuals.Glow(Visuals.RelicMark.Lightened(0.18f), 0.85f, false),
-                        Position = new Vector3(0f, 0.090f, 0f),
-                        RotationDegrees = new Vector3(0f, 45f, 0f),
-                    });
+                    // chibi-world 段 ③：底座卡通分阶、底座与晶石各套一层墨色外壳（段 ② 裁决 7：浅滩青与晶石青相近，靠墨线把轮廓勾出来）。
+                    Node3D token = MarkerArt.RelicToken(Visuals.RelicMark, ink: true);
+                    token.Position = center;
                     _overlay.AddChild(token);
                     AddRelicLabel(name, center + new Vector3(0f, 0.12f, 0.34f), Visuals.RelicMark);
                     break;
                 case RelicMarker.Forecast:
-                    AddRing(_overlay, cell.Coord, Visuals.RelicForecast, true, 0.032f);
+                    AddInkedRing(_overlay, cell.Coord, Visuals.RelicForecast, true, 0.032f);
                     AddRelicLabel(board.RelicForecastRound is { } round ? $"{name}·第{round}大回合" : name, center + new Vector3(0f, 0.12f, 0.34f), Visuals.RelicForecast);
                     break;
                 case RelicMarker.Held:
@@ -3126,7 +3098,7 @@ public sealed partial class BoardView : Node3D
             // 亮环随进度衰减：线宽由粗变细、透明度由实变淡。
             float fade = 1f - (permille / 1000f);
             var ring = new Node3D();
-            AddRing(ring, coord, Visuals.RelicMark, false, 0.05f, 0.05f + (0.07f * fade));
+            AddInkedRing(ring, coord, Visuals.RelicMark, false, 0.05f, 0.05f + (0.07f * fade));
             foreach (Node child in ring.GetChildren())
             {
                 Translucent(child, 0.2f + (0.8f * fade));
@@ -3403,7 +3375,7 @@ public sealed partial class BoardView : Node3D
             };
             foreach (Coord stone in group.Stones)
             {
-                AddRing(_overlay, stone, color, shape == GroupMarkShape.DashedRing, 0.024f);
+                AddInkedRing(_overlay, stone, color, shape == GroupMarkShape.DashedRing, 0.024f);
                 if (shape == GroupMarkShape.SolidRingWithEyeBadge)
                 {
                     AddEyeBadge(_overlay, stone, color);
@@ -3450,7 +3422,7 @@ public sealed partial class BoardView : Node3D
             // 信物层按下时在三种常驻标记之上再点亮格子：持物棋子按持有者阵营色、地图信物与预告中性色；预告是虚线环（tactical-layers「信物层」）。
             Color color = relic.Holder is { } holder ? Visuals.FactionColorOf(holder) : Visuals.Neutral;
             AddTint(relic.Coord, color, 0.5f);
-            AddRing(_overlay, relic.Coord, relic.IsForecast ? Visuals.RelicForecast : Visuals.RelicMark, relic.IsForecast, 0.032f);
+            AddInkedRing(_overlay, relic.Coord, relic.IsForecast ? Visuals.RelicForecast : Visuals.RelicMark, relic.IsForecast, 0.032f);
         }
     }
 
@@ -3490,7 +3462,7 @@ public sealed partial class BoardView : Node3D
         foreach (CellHighlight cell in preview.Highlights.Where(h => h.Kind == HighlightKind.ChosenEdit))
         {
             AddTint(cell.Coord, Visuals.EditChosen, 0.55f, _preview);
-            AddRing(_preview, cell.Coord, Visuals.EditChosen, false, 0.062f);
+            AddInkedRing(_preview, cell.Coord, Visuals.EditChosen, false, 0.062f);
         }
 
         // 候选目标：只画当前那一枚匠人的，半透明（HighlightStyle.EditTargetHint），明显弱于已选。
@@ -3511,7 +3483,7 @@ public sealed partial class BoardView : Node3D
                 }
 
                 AddTint(cell, Visuals.EditTarget, 0.30f, _preview);
-                AddRing(_preview, cell, Visuals.EditTarget, true, 0.046f);
+                AddInkedRing(_preview, cell, Visuals.EditTarget, true, 0.046f);
             }
         }
 
@@ -3523,7 +3495,7 @@ public sealed partial class BoardView : Node3D
             PreviewGhost(piece);
             _preview.AddChild(piece);
             AddTint(staged.Coord, Visuals.FactionColorOf(preview.Player).Lerp(Colors.White, 0.4f), 0.42f, _preview);
-            AddRing(_preview, staged.Coord, Visuals.FactionColorOf(preview.Player), false, 0.075f, 0.04f);
+            AddInkedRing(_preview, staged.Coord, Visuals.FactionColorOf(preview.Player), false, 0.075f, 0.04f);
         }
 
         foreach (CellHighlight highlight in preview.Highlights)
@@ -3532,21 +3504,21 @@ public sealed partial class BoardView : Node3D
             {
                 case HighlightStyle.DashedOutline:
                     // 预计提子：虚线轮廓，与暂放的实心发光在手法上就分得开（5.6）。
-                    AddRing(_preview, highlight.Coord, Visuals.Urgent, true, 0.05f);
+                    AddInkedRing(_preview, highlight.Coord, Visuals.Urgent, true, 0.05f);
                     break;
                 case HighlightStyle.WarningOutline:
-                    AddRing(_preview, highlight.Coord, Visuals.Danger, false, 0.056f);
-                    AddRing(_preview, highlight.Coord, Visuals.Danger, false, 0.076f);
+                    AddInkedRing(_preview, highlight.Coord, Visuals.Danger, false, 0.056f);
+                    AddInkedRing(_preview, highlight.Coord, Visuals.Danger, false, 0.076f);
                     break;
                 case HighlightStyle.RevealBadge:
                     AddBadge(highlight.Coord, Visuals.RelicForecast);
                     break;
                 case HighlightStyle.FailureOutline:
-                    AddCross(highlight.Coord, Visuals.Urgent);
+                    AddInkedCross(highlight.Coord, Visuals.Urgent);
                     break;
                 case HighlightStyle.LifeOutline:
                     // 活棋禁入 / 破坏活形涉及的活形棋串：与棋串读法的"已活"同形（实线环 + 悬浮眼徽记）。
-                    AddRing(_preview, highlight.Coord, Visuals.Alive, false, 0.066f);
+                    AddInkedRing(_preview, highlight.Coord, Visuals.Alive, false, 0.066f);
                     AddEyeBadge(_preview, highlight.Coord, Visuals.Alive);
                     break;
                 default:
@@ -3559,12 +3531,12 @@ public sealed partial class BoardView : Node3D
     {
         foreach (Coord coord in flash.Placed)
         {
-            AddRing(_preview, coord, Colors.White, false, 0.07f);
+            AddInkedRing(_preview, coord, Colors.White, false, 0.07f);
         }
 
         foreach (Coord coord in flash.Captured)
         {
-            AddCross(coord, Visuals.Urgent);
+            AddInkedCross(coord, Visuals.Urgent);
         }
 
         // 改造落成的一次可察觉反馈（visual-style-baseline「改造的可视表现」）：格目标亮环 + 亮底，边目标沿边立一道亮栏。
@@ -3578,7 +3550,7 @@ public sealed partial class BoardView : Node3D
             else
             {
                 AddTint(edit.Cell, Visuals.EditDone, 0.5f, _preview);
-                AddRing(_preview, edit.Cell, Visuals.EditDone, false, 0.09f);
+                AddInkedRing(_preview, edit.Cell, Visuals.EditDone, false, 0.09f);
             }
         }
     }
@@ -3625,11 +3597,21 @@ public sealed partial class BoardView : Node3D
         {
             return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
         }
+        Vector3 at = CenterOf(coord) + new Vector3(0f, 0.02f, 0f);
+        // chibi-world 段 ③：气点下垫一圈墨色衬底（半径外扩 MarkerArt.Rim）。
+        float inkRadius = (size * 0.5f) + MarkerArt.Rim;
+        _overlay.AddChild(new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = inkRadius, BottomRadius = inkRadius, Height = 0.016f, RadialSegments = 8 },
+            MaterialOverride = MarkerArt.InkFlat,
+            Position = at - new Vector3(0f, 0.003f, 0f),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
         _overlay.AddChild(new MeshInstance3D
         {
             Mesh = new CylinderMesh { TopRadius = size * 0.5f, BottomRadius = size * 0.5f, Height = 0.02f, RadialSegments = 8 },
             MaterialOverride = Visuals.Glow(color, 0.8f, false),
-            Position = CenterOf(coord) + new Vector3(0f, 0.02f, 0f),
+            Position = at,
         });
     }
 
@@ -3639,12 +3621,14 @@ public sealed partial class BoardView : Node3D
         {
             return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
         }
+        Vector3 at = CenterOf(coord) + new Vector3(0f, 0.92f + (height * 0.5f), 0f);
         _overlay.AddChild(new MeshInstance3D
         {
             Mesh = new BoxMesh { Size = new Vector3(0.10f, height, 0.10f) },
             MaterialOverride = Visuals.Glow(color, 0.9f, false),
-            Position = CenterOf(coord) + new Vector3(0f, 0.92f + (height * 0.5f), 0f),
+            Position = at,
         });
+        _overlay.AddChild(MarkerArt.HullOf(new BoxMesh { Size = new Vector3(0.10f, height, 0.10f) + (Vector3.One * 2f * MarkerArt.Hull) }, at));
     }
 
     private void AddBadge(Coord coord, Color color)
@@ -3653,12 +3637,15 @@ public sealed partial class BoardView : Node3D
         {
             return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
         }
+        Vector3 at = CenterOf(coord) + new Vector3(0f, 0.74f, 0f);
         _preview.AddChild(new MeshInstance3D
         {
             Mesh = new SphereMesh { Radius = 0.10f, Height = 0.20f, RadialSegments = 6, Rings = 3 },
             MaterialOverride = Visuals.Glow(color, 1.2f, false),
-            Position = CenterOf(coord) + new Vector3(0f, 0.74f, 0f),
+            Position = at,
         });
+        const float hull = 0.10f + MarkerArt.Hull;
+        _preview.AddChild(MarkerArt.HullOf(new SphereMesh { Radius = hull, Height = 2f * hull, RadialSegments = 6, Rings = 3 }, at));
     }
 
     /// <summary>已活标记的"眼"徽记：棋子上方悬浮一枚平放的圆环（形状通道，去色后仍与危险棋串的单环可分）。</summary>
@@ -3668,12 +3655,51 @@ public sealed partial class BoardView : Node3D
         {
             return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
         }
+        Vector3 at = CenterOf(coord) + new Vector3(0f, 1.02f, 0f);
         parent.AddChild(new MeshInstance3D
         {
             Mesh = new TorusMesh { InnerRadius = 0.07f, OuterRadius = 0.13f, Rings = 12, RingSegments = 6 },
             MaterialOverride = Visuals.Glow(color, 1.1f, false),
-            Position = CenterOf(coord) + new Vector3(0f, 1.02f, 0f),
+            Position = at,
         });
+        parent.AddChild(MarkerArt.HullOf(
+            new TorusMesh { InnerRadius = 0.07f - MarkerArt.Hull, OuterRadius = 0.13f + MarkerArt.Hull, Rings = 12, RingSegments = 6 }, at));
+    }
+
+    /// <summary>预演 / 落成反馈里的叉（chibi-world 段 ③）：先垫两条墨色衬底，再画 <see cref="AddCross"/>。禁手印记的叉不走这里（规格钉住近景外观不变）。</summary>
+    private void AddInkedCross(Coord coord, Color color)
+    {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
+        Vector3 center = CenterOf(coord) + new Vector3(0f, 0.045f, 0f);
+        for (int i = 0; i < 2; i++)
+        {
+            _preview.AddChild(MarkerArt.InkSlab(new Vector3(0.62f, 0.02f, 0.07f), center, new Vector3(0f, i == 0 ? 45f : -45f, 0f)));
+        }
+
+        AddCross(coord, color);
+    }
+
+    /// <summary>
+    /// 带墨色衬底的格子轮廓环（chibi-world 段 ③）：先垫一件 <see cref="MarkerArt.RingInk"/>（四周外扩一圈墨线，合成一个网格），再画 <see cref="AddRing"/>。
+    /// 禁手印记的方框不走这里（规格钉住近景外观不变），其余环（信物、预告、棋串读法、预演、落成反馈）都走这里。
+    /// </summary>
+    private void AddInkedRing(Node3D parent, Coord coord, Color color, bool dashed, float y, float thickness = 0.055f)
+    {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = MarkerArt.RingInk(dashed, thickness),
+            MaterialOverride = MarkerArt.InkFlat,
+            Position = CenterOf(coord) + new Vector3(0f, y, 0f),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        AddRing(parent, coord, color, dashed, y, thickness);
     }
 
     private void AddCross(Coord coord, Color color, Node3D? parent = null, float span = 0.62f, float stroke = 0.07f)
@@ -3703,24 +3729,8 @@ public sealed partial class BoardView : Node3D
         {
             return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
         }
-        Vector3 center = CenterOf(coord) + new Vector3(0f, y, 0f);
-        StandardMaterial3D material = Visuals.Flat(color);
-        const float half = BoardGeometry.TileSize * 0.5f;
-        float[] offsets = dashed ? [-0.30f, 0f, 0.30f] : [0f];
-        float length = dashed ? 0.20f : BoardGeometry.TileSize;
-        for (int side = 0; side < 4; side++)
-        {
-            bool horizontal = side is 0 or 1;
-            float sign = side is 0 or 2 ? 1f : -1f;
-            foreach (float offset in offsets)
-            {
-                Vector3 size = horizontal ? new Vector3(length, 0.02f, thickness) : new Vector3(thickness, 0.02f, length);
-                Vector3 position = horizontal
-                    ? center + new Vector3(offset, 0f, sign * half)
-                    : center + new Vector3(sign * half, 0f, offset);
-                parent.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = size }, MaterialOverride = material, Position = position });
-            }
-        }
+        // 摆法挪到 MarkerArt.Ring（--marker-swatch 共用），节点、尺寸与位置逐个不变。
+        MarkerArt.Ring(parent, CenterOf(coord) + new Vector3(0f, y, 0f), color, dashed, thickness);
     }
 
     private static void Translucent(Node node, float alpha)

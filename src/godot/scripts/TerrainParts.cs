@@ -805,11 +805,11 @@ public static class TerrainParts
 
     private static StandardMaterial3D? _runeMaterial;
 
-    /// <summary>符文环材质（全图共用一份）：白底哑光、打开顶点色，颜色全由 <see cref="RuneRingMesh"/> 的顶点色给出。</summary>
-    public static StandardMaterial3D RuneMaterial => _runeMaterial ??= VertexMaterial(Colors.White, 1f);
+    /// <summary>符文环材质（全图共用一份）：白底、打开顶点色，颜色全由 <see cref="RuneRingMesh"/> 的顶点色给出。chibi-world 段 ③：哑光改卡通分阶（<see cref="Visuals.ToonVertex"/>），与地块同一套。</summary>
+    public static StandardMaterial3D RuneMaterial => _runeMaterial ??= Visuals.ToonVertex(Colors.White);
 
     /// <summary>
-    /// 中立平台的符文环（map-restyle 段C）：贴在平台顶面的薄片——外圈紫晶色宽带、内圈古金细带、两带之间八道深石短刻与四枚开口朝外的 V 形符文、
+    /// 中立平台的符文环（map-restyle 段C）：贴在平台顶面的薄片——外圈紫晶色宽带、内圈古金细带、两带之间八道短刻与四枚开口朝外的 V 形符文（chibi-world 段 ③：深石色改墨色 Visuals.OutlineInk）、
     /// 中心一圈六边形紫晶细带，全是顶点着色的贴地 Ribbon（y 0.0035–0.0045：高于地砖角饰 0.0015、低于平台格线 0.006 与一切标记）。
     /// 半径由 BoardView 按平台尺寸给；每段只在 <paramref name="keep"/>（段中点相对平台中心的偏移）认为底下是本层平地时才建——河面 / 棋盘内岩石上方不留悬空碎段。
     /// 参数随平台变化，所以这一件不进 <see cref="All"/>、不导出快照。
@@ -849,7 +849,7 @@ public static class TerrainParts
         {
             float a = Mathf.Tau * k / 8f;
             var dir = new Vector3(MathF.Cos(a), 0f, MathF.Sin(a));
-            Polyline([(dir * (radius * 0.85f)) + new Vector3(0f, glyphY, 0f), (dir * (radius * 0.95f)) + new Vector3(0f, glyphY, 0f)], 0.04f, ArtDarkStone);
+            Polyline([(dir * (radius * 0.85f)) + new Vector3(0f, glyphY, 0f), (dir * (radius * 0.95f)) + new Vector3(0f, glyphY, 0f)], 0.04f, Visuals.OutlineInk);
         }
 
         for (int k = 0; k < 4; k++)
@@ -861,7 +861,7 @@ public static class TerrainParts
             Vector3 tip = (dir * (radius * 0.42f)) + lift;
             Vector3 left = (dir * (radius * 0.64f)) - (side * (radius * 0.08f)) + lift;
             Vector3 right = (dir * (radius * 0.64f)) + (side * (radius * 0.08f)) + lift;
-            Polyline([left, tip, right], 0.04f, ArtDarkStone);
+            Polyline([left, tip, right], 0.04f, Visuals.OutlineInk);
         }
 
         return LowPolyMesh.Merge(parts);

@@ -21,13 +21,16 @@ public static partial class UiTheme
     public static readonly Rgba ButtonBorder = PanelInset;
     public static readonly Rgba ButtonDisabledBorder = new(42, 51, 55);
     public static readonly Rgba ButtonDisabledText = new(135, 142, 141);
-    public static readonly Rgba TextOutline = new(0, 0, 0);
+    /// <summary>文字描边色（chibi-world 段 ③：纯黑改为与单位、地形共用的卡通墨色 28,24,30）。</summary>
+    public static readonly Rgba TextOutline = new(28, 24, 30);
 
     public const int MutedTextAlphaPermille = 620;
     public const int SelectedEdgeWidthPx = 2;
     public const int ViewerMarkWidthPx = 3;
-    public const int CornerRadiusPx = 3;
-    public const int HintCornerRadiusPx = 6;
+    /// <summary>面板 / 按钮圆角（chibi-world 段 ③：3 → 6，与卡通单位的圆润轮廓协调）。</summary>
+    public const int CornerRadiusPx = 6;
+    /// <summary>提示条圆角，须大于 <see cref="CornerRadiusPx"/>（chibi-world 段 ③：6 → 10）。</summary>
+    public const int HintCornerRadiusPx = 10;
     public const int ButtonPaddingXPx = 10;
     public const int ButtonPaddingYPx = Space2;
     public const int HintPaddingXPx = Space5;

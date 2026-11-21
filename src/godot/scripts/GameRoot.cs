@@ -240,8 +240,20 @@ public sealed partial class GameRoot : Node3D
 
             GD.Print($"[palette] 地块色板 {TerrainPalette.Current.Name}：{TerrainPalette.Current.Intent}");
 
+            // --sky=image|toon：对局背景天空（chibi-world 段 ③，两版待负责人看图选定，缺省 image = 原画调色）。须在建局之前定下，名字不认识即报错退出。
+            string? sky = args.Text("sky", "天空版本（image / toon）");
+            if (sky is not null && !SkyBackdrop.TrySelect(sky))
+            {
+                throw new System.FormatException($"--sky={sky} 无效：应为 image 或 toon。");
+            }
+
+            GD.Print($"[sky] 背景天空 {SkyBackdrop.Name}：{SkyBackdrop.Intent}");
+
             // --surface-swatch=<PNG 路径>：不建局，拍一张七种地表色块对照图（带高台侧面、领地着色与高差描边）后退出（chibi-world 段 ②，见 SurfaceSwatch）。
             string? surfaceSwatch = args.Text("surface-swatch", "PNG 输出路径");
+
+            // --marker-swatch=<PNG 路径>：不建局，拍一张信物标记在九种地表上的对照图（改前 / 改后 / 候选三行）后退出（chibi-world 段 ③，见 MarkerSwatch）。
+            string? markerSwatch = args.Text("marker-swatch", "PNG 输出路径");
 
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
@@ -335,6 +347,15 @@ public sealed partial class GameRoot : Node3D
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
                 AddChild(new SurfaceSwatch(surfaceSwatch) { Name = "SurfaceSwatch" });
+                return;
+            }
+
+            if (markerSwatch is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new MarkerSwatch(markerSwatch) { Name = "MarkerSwatch" });
                 return;
             }
 
@@ -998,6 +1019,10 @@ public sealed partial class GameRoot : Node3D
             ? groups.Groups.Count(g => g.Mark == GroupMark.Alive)
             : 0;
         GD.Print($"[life-shape] 截图取景：当前行动 {(_session.Match.CurrentPlayer is { } actor ? Labels.Player(actor) : "无")}，禁入格 {shotBoard.Cells.Count(c => c.Block == PlacementBlock.LifeForbidden)}，已活棋串 {alive}，棋串读法 {(_layers.Active == TacticalLayer.Board && _layers.Reading == BoardReading.Groups ? "开" : "关")}");
+
+        // chibi-world 段 ③ 取景自证：本帧视图模型里地图信物 / 预告 / 持物的格（取自 Presentation），方便挑一格拍信物标记近景。
+        string RelicCells(RelicMarker marker) => string.Join(" ", shotBoard.Cells.Where(c => c.Relic == marker).Select(c => $"{c.Coord.ToNotation()}({c.Surface})"));
+        GD.Print($"[relic-marks] 截图取景：地图信物 {RelicCells(RelicMarker.OnMap)}；预告 {RelicCells(RelicMarker.Forecast)}；持物 {RelicCells(RelicMarker.Held)}");
         if (_shotRecruitCollapsed)
         {
             CaptureRecruitPairWhenDrawn(_screenshotPath);
