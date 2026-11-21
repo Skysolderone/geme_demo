@@ -231,6 +231,18 @@ public sealed partial class GameRoot : Node3D
             string? terrainGallery = args.Text("terrain-gallery", "PNG 输出路径");
             bool terrainGalleryVariants = args.Flag("terrain-gallery-variants");
 
+            // --palette=A：地块 + 浮岛色板（chibi-world 段 ② 选定 A，候选 B / C 已删；留作以后调色的入口，缺省 A）。须在建局与一切画廊之前定下，套名不认识即报错退出。
+            string? palette = args.Text("palette", "色板套名（A）");
+            if (palette is not null && !TerrainPalette.TrySelect(palette))
+            {
+                throw new System.FormatException($"--palette={palette} 无效：现只有 A。");
+            }
+
+            GD.Print($"[palette] 地块色板 {TerrainPalette.Current.Name}：{TerrainPalette.Current.Intent}");
+
+            // --surface-swatch=<PNG 路径>：不建局，拍一张七种地表色块对照图（带高台侧面、领地着色与高差描边）后退出（chibi-world 段 ②，见 SurfaceSwatch）。
+            string? surfaceSwatch = args.Text("surface-swatch", "PNG 输出路径");
+
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
             AiDifficulty? difficulty = args.Value<AiDifficulty>(
@@ -314,6 +326,15 @@ public sealed partial class GameRoot : Node3D
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
                 AddChild(new TerrainGallery(terrainGallery, terrainGalleryVariants) { Name = "TerrainGallery" });
+                return;
+            }
+
+            if (surfaceSwatch is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new SurfaceSwatch(surfaceSwatch) { Name = "SurfaceSwatch" });
                 return;
             }
 

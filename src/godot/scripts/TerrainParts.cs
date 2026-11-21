@@ -446,20 +446,23 @@ public static class TerrainParts
         ("chest", "Shade") => Color.Color8(82, 64, 70),
         ("fence_x" or "fence_z" or "bridge", "Shade") => ChibiWoodDark,
         ("flower", "Bloom") => variant switch { 0 => ChibiBloomPink, 1 => ChibiBloomYellow, _ => ChibiBloomWhite },
-        (_, "Stone") => ChibiSlate,
-        (_, "Shade") => ChibiSlateDark,
-        (_, "Wood") => ChibiWood,
-        (_, "Leaf") => ChibiLeaf,
-        (_, "Moss") => ChibiMoss,
-        (_, "Water") => ChibiWater,
-        (_, "Crystal") => ChibiCrystal,
-        (_, "Gold") => ChibiGold,
-        (_, "Flame") => ChibiFlame,
-        (_, "Glow") => ChibiGlow,
-        (_, "Bloom") => ChibiBloomPink,
-        (_, "Bone") => ChibiBone,
+        (_, "Stone") => SlotColor(slot, ChibiSlate),
+        (_, "Shade") => SlotColor(slot, ChibiSlateDark),
+        (_, "Wood") => SlotColor(slot, ChibiWood),
+        (_, "Leaf") => SlotColor(slot, ChibiLeaf),
+        (_, "Moss") => SlotColor(slot, ChibiMoss),
+        (_, "Water") => SlotColor(slot, ChibiWater),
+        (_, "Crystal") => SlotColor(slot, ChibiCrystal),
+        (_, "Gold") => SlotColor(slot, ChibiGold),
+        (_, "Flame") => SlotColor(slot, ChibiFlame),
+        (_, "Glow") => SlotColor(slot, ChibiGlow),
+        (_, "Bloom") => SlotColor(slot, ChibiBloomPink),
+        (_, "Bone") => SlotColor(slot, ChibiBone),
         _ => Colors.Magenta,
     };
+
+    /// <summary>按槽取的缺省色：当前色板（段 ② 候选）若覆盖了这个槽就用覆盖值（段 ① 裁决 2：只改常量、不重新生成 glb）。种类专属色不经这里。</summary>
+    private static Color SlotColor(string slot, Color fallback) => TerrainPalette.Current.ChibiSlots.GetValueOrDefault(slot, fallback);
 
     /// <summary>
     /// 取单网格部件（地块用）的网格与自带材质：有资源就取资源里第一个 <see cref="MeshInstance3D"/> 的网格（计"资源"），没有就程序生成（计"程序生成"）。
@@ -479,7 +482,7 @@ public static class TerrainParts
         if (loaded is { } piece)
         {
             LoadedCount++;
-            return piece;
+            return Toonify(kind, variant, piece);
         }
 
         GeneratedCount++;
@@ -489,7 +492,175 @@ public static class TerrainParts
             GeneratedPieces[file] = generated;
         }
 
-        return generated;
+        return Toonify(kind, variant, generated);
+    }
+
+    // —— 段 ②（chibi-world）：地块卡通材质与高差描边。网格不重建（.tscn 快照照用），只把部件自带的哑光材质换成按色板取色的卡通材质，顶点色色带保留。
+
+    /// <summary>崖壁 / 缓坡 / 台面外框的描边宽（世界单位）：与单位描边（0.03）同一量级，近景约 3–4 像素。</summary>
+    public const float ReliefOutlineWidth = 0.035f;
+
+    /// <summary>浮岛外轮廓（阶梯断崖、垂岩）的描边宽：岛是远景里的大件，按远景每格约 25 像素定，远景约 2 像素。</summary>
+    public const float IslandOutlineWidth = 0.08f;
+
+    /// <summary>描边顶沿（朝下的那条压边）高出棱线的量：盖在棱线外侧、低于一切贴地标记（最低 +0.008）。</summary>
+    public const float OutlineLift = 0.004f;
+
+    private static readonly Dictionary<(string Kind, int Tier), StandardMaterial3D> ToonPieces = [];
+    private static readonly Dictionary<Mesh, ArrayMesh> Hulls = [];
+    private static StandardMaterial3D? _reliefOutline;
+    private static ArrayMesh? _edgeOutline;
+    private static ArrayMesh? _cornerOutline;
+
+    /// <summary>地块 / 浮岛描边共用的一份材质（<see cref="Visuals.Outline"/>，墨色同单位）：只画背面、不受光；全图所有高差描边按网格归并进同一批。</summary>
+    public static StandardMaterial3D ReliefOutline => _reliefOutline ??= Visuals.Outline(Visuals.OutlineInk);
+
+    /// <summary>
+    /// 自带材质的地块部件换成卡通材质（按 <see cref="TerrainPalette.Current"/> 取色，同种类同档共用一份，合批键不变）；由 BoardView 覆盖材质的部件
+    /// （地砖、衬底、亮条、台面边框）原样返回。
+    /// </summary>
+    private static Piece Toonify(Kind kind, int variant, Piece piece)
+    {
+        TerrainPalette palette = TerrainPalette.Current;
+        (Color Color, int Tier)? spec = kind.Name switch
+        {
+            "side_slope" => (palette.SlopeSide, 0),
+            "side_cliff" => (palette.CliffSide, 0),
+            "bank_lip" => (palette.BankFoam, 0),
+            "rim" => (palette.RimStone, 0),
+            "island_layer" => (palette.IslandTiers[Wrap(variant, 3)], Wrap(variant, 3)),
+            "island_spike" => Wrap(variant, IslandSpike.Variants) == 0 ? (palette.IslandTiers[2], 2) : (palette.IslandTiers[1], 1),
+            "cloud" => (palette.Cloud, 0),
+            _ => null,
+        };
+        if (spec is not { } s)
+        {
+            return piece;
+        }
+
+        if (!ToonPieces.TryGetValue((kind.Name, s.Tier), out StandardMaterial3D? material))
+        {
+            material = Visuals.ToonVertex(s.Color);
+            if (kind == Cloud)
+            {
+                // 云团：卡通分阶、半透明（α 取色板），不接收阴影（它们挂在岛底下，接收阴影会整片发黑）、不投影由 BoardView 设。
+                material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+                material.DisableReceiveShadows = true;
+            }
+
+            ToonPieces[(kind.Name, s.Tier)] = material;
+        }
+
+        return piece with { Material = material };
+    }
+
+    /// <summary>
+    /// 高差外缘描边件（一条格边一件）：网格里边沿 X 轴（±0.5）、外侧朝 −Z，原点在棱线中点。两部分，都用 <see cref="ReliefOutline"/>（只画背面）：
+    /// <list type="bullet">
+    /// <item>外壳竖墙：崖面沿外法线外推 <see cref="ReliefOutlineWidth"/>，从棱线上方一个描边宽一直落到两层之下（埋进低处地面）；正面朝外——朝相机的一侧被剔除，背向相机的远侧崖沿露出一线。</item>
+    /// <item>压边：棱线外侧一条宽 <see cref="ReliefOutlineWidth"/> 的水平带，正面朝下——俯视时画出来，朝相机的崖沿也有一道墨线。</item>
+    /// </list>
+    /// 只摆在"邻格更低"的格边上（BoardView 按邻格层数判），同高相邻的格之间没有这件，平地不出格线（裁决 4）。
+    /// </summary>
+    public static ArrayMesh EdgeOutlineMesh => _edgeOutline ??= BuildEdgeOutline();
+
+    /// <summary>凸角补件：两条外缘在凸角相接处缺的那一小方（压边一小块 + 外壳两小片），局部 +X 与 −Z 两个方向朝外，原点在角点（棱线高）。</summary>
+    public static ArrayMesh CornerOutlineMesh => _cornerOutline ??= BuildCornerOutline();
+
+    private static ArrayMesh BuildEdgeOutline()
+    {
+        const float t = ReliefOutlineWidth;
+        float bottom = -((2f * BoardGeometry.LayerHeight) + BoardGeometry.TileHeight);
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        OutlineQuad(tool, new Vector3(-0.5f, t, -t), new Vector3(0.5f, t, -t), new Vector3(0.5f, bottom, -t), new Vector3(-0.5f, bottom, -t), Vector3.Forward);
+        OutlineQuad(tool, new Vector3(-0.5f, OutlineLift, -t), new Vector3(0.5f, OutlineLift, -t), new Vector3(0.5f, OutlineLift, 0f), new Vector3(-0.5f, OutlineLift, 0f), Vector3.Down);
+        return tool.Commit();
+    }
+
+    private static ArrayMesh BuildCornerOutline()
+    {
+        const float t = ReliefOutlineWidth;
+        float bottom = -((2f * BoardGeometry.LayerHeight) + BoardGeometry.TileHeight);
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        OutlineQuad(tool, new Vector3(0f, t, -t), new Vector3(t, t, -t), new Vector3(t, bottom, -t), new Vector3(0f, bottom, -t), Vector3.Forward);
+        OutlineQuad(tool, new Vector3(t, t, -t), new Vector3(t, t, 0f), new Vector3(t, bottom, 0f), new Vector3(t, bottom, -t), Vector3.Right);
+        OutlineQuad(tool, new Vector3(0f, OutlineLift, -t), new Vector3(t, OutlineLift, -t), new Vector3(t, OutlineLift, 0f), new Vector3(0f, OutlineLift, 0f), Vector3.Down);
+        return tool.Commit();
+    }
+
+    /// <summary>描边四边形：按 <paramref name="front"/> 定绕序（Godot 从正面看顺时针），法线即 <paramref name="front"/>（描边不受光，法线只为完整）。</summary>
+    public static void OutlineQuad(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 front)
+    {
+        OutlineTri(tool, a, b, c, front);
+        OutlineTri(tool, a, c, d, front);
+    }
+
+    private static void OutlineTri(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 front)
+    {
+        bool counterClockwise = (b - a).Cross(c - a).Dot(front) > 0f;
+        foreach (Vector3 v in counterClockwise ? new[] { a, c, b } : new[] { a, b, c })
+        {
+            tool.SetNormal(front);
+            tool.AddVertex(v);
+        }
+    }
+
+    /// <summary>
+    /// 某网格的反向外壳（同网格只算一次）：顶点先按位置焊接、法线取各面按面积加权的平均（平直着色的硬边不再裂开），再沿平均法线外推
+    /// <paramref name="push"/>（按轴给：实例若非等比缩放，在这里按缩放的倒数补偿，外推后的世界厚度才均匀）。三角面绕序同本体，配 <see cref="ReliefOutline"/> 只画背面。
+    /// </summary>
+    public static ArrayMesh HullOf(Mesh mesh, Vector3 push)
+    {
+        ArgumentNullException.ThrowIfNull(mesh);
+        if (Hulls.TryGetValue(mesh, out ArrayMesh? cached))
+        {
+            return cached;
+        }
+
+        var triangles = new List<Vector3>();
+        for (int surface = 0; surface < mesh.GetSurfaceCount(); surface++)
+        {
+            global::Godot.Collections.Array arrays = mesh.SurfaceGetArrays(surface);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            int[] indices = arrays[(int)Mesh.ArrayType.Index].VariantType == Variant.Type.Nil ? [] : arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+            if (indices.Length == 0)
+            {
+                triangles.AddRange(vertices);
+            }
+            else
+            {
+                triangles.AddRange(indices.Select(i => vertices[i]));
+            }
+        }
+
+        static (int, int, int) Key(Vector3 p) => ((int)MathF.Round(p.X * 4096f), (int)MathF.Round(p.Y * 4096f), (int)MathF.Round(p.Z * 4096f));
+        var normals = new Dictionary<(int, int, int), Vector3>();
+        for (int i = 0; i + 2 < triangles.Count; i += 3)
+        {
+            Vector3 a = triangles[i], b = triangles[i + 1], c = triangles[i + 2];
+            // Godot 正面为顺时针：(c − a) × (b − a) 朝正面（外侧），模长即两倍面积——按面积加权。
+            Vector3 face = (c - a).Cross(b - a);
+            foreach (Vector3 p in new[] { a, b, c })
+            {
+                normals[Key(p)] = normals.GetValueOrDefault(Key(p)) + face;
+            }
+        }
+
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        foreach (Vector3 p in triangles)
+        {
+            Vector3 n = normals[Key(p)];
+            n = n.LengthSquared() > 1e-12f ? n.Normalized() : Vector3.Zero;
+            tool.SetNormal(n);
+            tool.AddVertex(p + (n * push));
+        }
+
+        ArrayMesh hull = tool.Commit();
+        Hulls[mesh] = hull;
+        return hull;
     }
 
     /// <summary>取节点树里第一个带网格的 <see cref="MeshInstance3D"/> 的网格与材质，然后释放节点（网格与材质是引用计数资源，留在缓存里）。</summary>
