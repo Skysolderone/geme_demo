@@ -123,7 +123,9 @@ public class 平衡分析方向Tests
         static string Hash(IEnumerable<MatchLog> logs)
         {
             string report = ReportWriter.Render(BalanceAnalyzer.Analyze([.. logs.Select(l => MatchLog.Parse(l.DeterministicText()))]));
-            string[] lines = report.Split('\n');
+            // report-hash-eol：ReportWriter 用 AppendLine，换行取 Environment.NewLine（Windows 上是 \r\n）。切行后先去掉每行末尾的 \r，
+            // 最后以 \n 拼回再求哈希，Windows 与 Mac 同值。报告文件本身的行尾不动。
+            string[] lines = [.. report.Split('\n').Select(l => l.TrimEnd('\r'))];
             int start = Array.FindIndex(lines, l => l.StartsWith("### 12. ", StringComparison.Ordinal));
             Assert.True(start > 0, "报告里没有第 12 项");
             int end = start;
@@ -184,8 +186,12 @@ public class 平衡分析方向Tests
         // seat-gap-25 段 A 重钉（地图变了：link:1:4 改为四角出生座位岛 + 中立平台；盲选座位互斥，样本座次与走法随之变；首部棋盘只列座位，按主题统计段随之变）；旧值 EC001B28… / 088551F5…。
         // map-coastline 重钉（地图变了：裁决 5 同标识出新图——link:1:4 改为不规则岸线 + 湖泊 / 岩区 / 加宽河道，可落子 1927 → 1368，平台不变；AI 未改，样本走法随之变）；旧值 64330608… / 903E5CD5…。
         // map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了，link:1:4 可落子 1368 → 1366；AI 未改，样本走法随之变）：旧值 96090C61… / EFD6EBA4…。
-        Assert.True("1EAADA2135410D536CF63EE37FB1847BDFDC16DEBCA0FD8CB86C14F5EB8E0AF7" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("E06C6A1CD84A4A7E88B73E5B7BB2BB4DC3550714A09AE33707CBC18FFB31D176" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // report-hash-eol 重钉（行尾归一，走法和报告内容都不变）：上一组值在 Windows 上钉下，每行末尾带着 AppendLine 写进去的 \r，Mac 上恒红；
+        // Hash 改为每行去掉末尾 \r 后以 \n 拼接，两平台同值。实跑核对：改前代码里把报告换成 \r\n 行尾（模拟 Windows），旧值照常通过。
+        // 变异（测试侧，Mac）：去掉 TrimEnd('\r') 归一并改用 "\r\n" 拼接 → 红 1（算出的正是旧值）；保留归一、把报告换成 \r\n 行尾 → 绿；
+        // 去掉归一、把报告换成 \r\n 行尾 → 红 1。旧值 1EAADA2135410D536CF63EE37FB1847BDFDC16DEBCA0FD8CB86C14F5EB8E0AF7 / E06C6A1CD84A4A7E88B73E5B7BB2BB4DC3550714A09AE33707CBC18FFB31D176。
+        Assert.True("F387CA259B4DF8294F3B2C50C537E18AC886186C4FFB15CE7D71E6E23A1CF906" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("0532B97EF24E69FDD851A6994828AC53BD2C0D5C4C2F319BBDCCA8E8B1CAA3F9" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>
