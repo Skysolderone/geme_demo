@@ -17,22 +17,34 @@ namespace Siege.Godot;
 /// </remarks>
 public sealed partial class PieceGallery : Node3D
 {
-    /// <summary>排列：两行各五枚，易混对相邻。</summary>
+    /// <summary>排列：两行各五枚，易混对相邻；最高的哨兵子放在下行正中，免得画面边缘的透视把交叉长矛拉歪。</summary>
     private static readonly PieceType[][] Rows =
     [
         [PieceType.Line, PieceType.Chain, PieceType.Fortress, PieceType.Boundary, PieceType.Basic],
-        [PieceType.Artisan, PieceType.Bannerman, PieceType.Multiplier, PieceType.Synergy, PieceType.Sentry],
+        [PieceType.Artisan, PieceType.Bannerman, PieceType.Sentry, PieceType.Multiplier, PieceType.Synergy],
     ];
 
     private const float Spacing = 1.15f;
     private const float RowGap = 1.7f;
+    /// <summary>四阵营对照图的排列：十种一行（易混对相邻），四个阵营各一行。</summary>
+    private static readonly PieceType[] FactionRow =
+    [
+        PieceType.Line, PieceType.Chain, PieceType.Fortress, PieceType.Boundary, PieceType.Basic,
+        PieceType.Artisan, PieceType.Bannerman, PieceType.Sentry, PieceType.Multiplier, PieceType.Synergy,
+    ];
+
+    private const float FactionRowGap = 1.25f;
     private readonly string _path;
+    private readonly bool _factions;
     private int _frame;
     private bool _pending;
 
-    public PieceGallery(string path)
+    /// <param name="path">PNG 输出路径。</param>
+    /// <param name="factions">true 时拍四阵营并排（<c>--piece-gallery-factions</c>）：四行 × 十种，不带名称标签。</param>
+    public PieceGallery(string path, bool factions = false)
     {
         _path = path;
+        _factions = factions;
     }
 
     /// <inheritdoc/>
@@ -70,9 +82,15 @@ public sealed partial class PieceGallery : Node3D
         // 地面：一块草地色平板，与对局可落子地砖同色。
         AddChild(new MeshInstance3D
         {
-            Mesh = new PlaneMesh { Size = new Vector2(Spacing * 6f, RowGap * 2.4f) },
+            Mesh = new PlaneMesh { Size = _factions ? new Vector2(Spacing * 12f, FactionRowGap * 6f) : new Vector2(Spacing * 6f, RowGap * 2.4f) },
             MaterialOverride = Visuals.Matte(Visuals.TilePlayable),
         });
+
+        if (_factions)
+        {
+            BuildFactionRows();
+            return;
+        }
 
         var owner = new PlayerId(0);
         for (int r = 0; r < Rows.Length; r++)
@@ -112,6 +130,34 @@ public sealed partial class PieceGallery : Node3D
         });
 
         GD.Print("[piece-gallery] 十种棋子（两行，易混对相邻）：" + string.Join(" / ", Rows.Select(row => string.Join("、", row.Select(Labels.Piece)))));
+    }
+
+    private void BuildFactionRows()
+    {
+        for (int f = 0; f < 4; f++)
+        {
+            float z = (f - 1.5f) * FactionRowGap;
+            for (int i = 0; i < FactionRow.Length; i++)
+            {
+                float x = (i - 4.5f) * Spacing;
+                Node3D piece = BoardView.BuildPiece(new Occupant(new PlayerId(f), FactionRow[i]), 100);
+                piece.Position = new Vector3(x, 0f, z);
+                AddChild(piece);
+            }
+        }
+
+        const float distance = 9.6f;
+        var focus = new Vector3(0f, 0.3f, 0.2f);
+        float pitch = Mathf.DegToRad(60f);
+        AddChild(new Camera3D
+        {
+            Fov = CameraPose.FovDegrees,
+            Position = focus + new Vector3(0f, distance * Mathf.Sin(pitch), distance * Mathf.Cos(pitch)),
+            RotationDegrees = new Vector3(-60f, 0f, 0f),
+            Current = true,
+        });
+
+        GD.Print("[piece-gallery] 四阵营并排（自上而下 红 / 蓝 / 金 / 紫，每行 " + string.Join("、", FactionRow.Select(Labels.Piece)) + "）");
     }
 
     /// <inheritdoc/>
