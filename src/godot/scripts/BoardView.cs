@@ -64,6 +64,12 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Vector3, BoxMesh> _boxMeshes = [];
     private readonly HashSet<Mesh> _tileMeshes = [];
     private readonly Dictionary<Coord, int> _levels = [];
+
+    // chibi-world 段 ②：岛面格（含障碍 / 深水）的层数——高差描边按邻格层数判外缘，虚空格不在表里（按 0 层算）；台面边框的卡通材质按色共用。
+    private readonly Dictionary<Coord, int> _groundLevels = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _frameMaterials = [];
+    private int _reliefEdges;
+    private int _reliefCorners;
     private Node3D _decoration = null!;
     private Node3D _batch = null!;
     private float? _batchScale;
@@ -221,6 +227,10 @@ public sealed partial class BoardView : Node3D
         _boxMeshes.Clear();
         _tileMeshes.Clear();
         _levels.Clear();
+        _groundLevels.Clear();
+        _frameMaterials.Clear();
+        _reliefEdges = 0;
+        _reliefCorners = 0;
         _batchScale = null;
         _runeRings = 0;
         _plateGridLines = null;
@@ -347,6 +357,11 @@ public sealed partial class BoardView : Node3D
             {
                 _levels[cell.Coord] = cell.Height;
             }
+
+            if (islandCells.Contains(cell.Coord))
+            {
+                _groundLevels[cell.Coord] = cell.Height;
+            }
         }
 
         // "建一格"（D9）：常驻路径紧接着对全部格按视图次序各调一遍——节点、计数与画面与改前的逐格循环逐位相同；流式路径存成委托，加载区块时只对该区块的格调用，
@@ -417,7 +432,9 @@ public sealed partial class BoardView : Node3D
             Color color = cell.Surface == Surface.Grass ? GrassPatchColor(GrassPatch(cell.Coord)) : SurfaceTileColorOf(cell.Surface) ?? Visuals.TilePlayable;
             if (playable && cell.Height > 0)
             {
-                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.98f, 0.96f, 1.0f), 0.30f).Lightened(0.06f);
+                // chibi-world 段 ②：高台面砖向色板的提亮色拉一点（改前 h=2 向淡紫白拉 30%，粉彩取向随裁决 5 撤掉）。
+                TerrainPalette palette = TerrainPalette.Current;
+                color = color.Lerp(palette.HighWash, cell.Height == 1 ? palette.HighWashLow : palette.HighWashHigh);
             }
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
@@ -582,6 +599,10 @@ public sealed partial class BoardView : Node3D
             {
                 EmitCell(cell, resident);
             }
+
+            // 常驻路径的地块节点仍逐格各建，高差描边却不逐格建节点（R2.4）：全图按网格归并成 MultiMesh（外缘一批、凸角一批）。
+            int reliefBatches = resident.Flush(tiles);
+            GD.Print($"[relief] 高差描边：外缘 {_reliefEdges} 段、凸角 {_reliefCorners} 个，归入 MultiMesh {reliefBatches} 个（常驻）");
         }
 
         // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内障碍格逐格画了几格（map-restyle 段C 起不只是岩石，各件见 [deco]）。
@@ -623,7 +644,7 @@ public sealed partial class BoardView : Node3D
         PartBatch[] batches = [.. _parts.Batches];
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_parts.MultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
             + $"未合批（逐格各建节点）{_parts.Unbatched} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(_slabMaterial is null ? 0 : 1)} 个");
-        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
+        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、台面边框卡通材质 {_frameMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
         // 自证行（map-restyle 段C；map-surface 裁决 4）：装饰套件各放了几格（草丛 / 小石块 / 小花在可落子格角，其余在不可落子格）、中立平台符文环几块。
         // 格角三类撒得密，只列前 6 格（近景截图对准用）；其余仍列全。
@@ -881,7 +902,7 @@ public sealed partial class BoardView : Node3D
 
         _pickVersion++;
         GD.Print($"[chunks] 注视格 {focus.ToNotation()} → 区块 ({center.X}, {center.Y})：本次加载 {loaded}、卸载 {unloaded}，已加载 {_loadedChunks.Count} / {_chunkColumns * _chunkRows}，累计加载 {_chunkLoads}、卸载 {_chunkUnloads}；"
-            + $"当前已加载区块共 MultiMesh {_chunkMultiMeshes} 个、实例 {_chunkInstances} 个；区块里未合批的装饰累计 {_chunkUnbatched} 格");
+            + $"当前已加载区块共 MultiMesh {_chunkMultiMeshes} 个、实例 {_chunkInstances} 个；区块里未合批的装饰累计 {_chunkUnbatched} 格；高差描边累计外缘 {_reliefEdges} 段、凸角 {_reliefCorners} 个");
         GD.Print(ChibiPartsLine(TerrainParts.ChibiCount, TerrainParts.ChibiFallbackCount) + "（本进程累计）");
         return true;
     }
@@ -1034,6 +1055,12 @@ public sealed partial class BoardView : Node3D
             Register(mesh, material, shadow: true, new Transform3D(Basis.Identity, position));
         }
 
+        /// <summary>
+        /// 一件高差描边（chibi-world 段 ②）：两条路径都只登记变换、不逐格建节点——常驻路径在全部格建完后整批 <see cref="Flush"/>，流式随区块 Flush。
+        /// 同网格的描边归入一个 MultiMesh（材质全图一份 <see cref="TerrainParts.ReliefOutline"/>、不投影）。
+        /// </summary>
+        public void Outline(Mesh mesh, Transform3D transform) => Register(mesh, TerrainParts.ReliefOutline, shadow: false, transform);
+
         /// <summary>河岸石沿：常驻走改前的 <see cref="AddBankLip"/> 节点；流式登记带朝向的变换（同一欧拉角 → 同一基）。</summary>
         public void Lip(TerrainParts.Piece piece, Vector3 position, Vector3 inward)
         {
@@ -1072,12 +1099,18 @@ public sealed partial class BoardView : Node3D
                     multi.SetInstanceTransform(i, transforms[i]);
                 }
 
-                into.AddChild(new MultiMeshInstance3D
+                var batch = new MultiMeshInstance3D
                 {
                     Multimesh = multi,
                     MaterialOverride = material,
                     CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
-                });
+                };
+                if (material == TerrainParts.ReliefOutline)
+                {
+                    batch.Name = PieceModels.OutlineName;   // 高差描边批（chibi-world 段 ②）：节点名沿用描边约定
+                }
+
+                into.AddChild(batch);
             }
 
             int count = _instances.Count;
@@ -1400,7 +1433,9 @@ public sealed partial class BoardView : Node3D
             }
         }
 
-        var ground = Visuals.Matte(Visuals.IslandRim, 1f);
+        // chibi-world 段 ②：岛面、断崖、根须改卡通分阶，颜色取色板（裁决 5，放弃淡紫石）。
+        TerrainPalette palette = TerrainPalette.Current;
+        var ground = Visuals.Toon(Visuals.IslandRim);
         island.AddChild(new MeshInstance3D { Name = "IslandSurface", Mesh = surface.Commit(), MaterialOverride = ground });
 
         // map-restyle 段B：岛缘从均匀收窄的锥体改成四层带外凸岩沿的阶梯状断崖（参考图的层叠平台式断崖）。
@@ -1453,6 +1488,14 @@ public sealed partial class BoardView : Node3D
             degree[keyB] = degree.GetValueOrDefault(keyB) + 1;
         }
 
+        // 岛外轮廓的反向外壳（chibi-world 段 ②，R2.3）：每段剖面的四边形沿该格角的斜接方向再外推一个描边宽（斜接保证转角处外壳也相接、不裂），
+        // 绕序同断崖（正面朝外），配只画背面的描边材质——背向相机的远侧岛沿、岛底收口露出一线；顶上多一圈从棱线上方一个描边宽落到岛面的外壳，
+        // 再沿棱线外侧压一条朝下的水平带（俯视可见，朝相机的岛沿也有墨线）。瀑布口（深水格的边）不描。全岛一个网格、一次绘制。
+        var hull = new SurfaceTool();
+        hull.Begin(Mesh.PrimitiveType.Triangles);
+        const float rim = TerrainParts.IslandOutlineWidth;
+        float crest = BoardGeometry.TopY - (_streaming ? 0f : 0.04f);
+        int hullSegments = 0;
         for (int i = 0; i < border.Count; i++)
         {
             (Vector3 a, Vector3 b, Vector3 outward, Coord cell, (int, int) keyA, (int, int) keyB) = border[i];
@@ -1469,12 +1512,31 @@ public sealed partial class BoardView : Node3D
                 Vector3 normal = ((outward * dDepth) + (Vector3.Up * dOut)).Normalized();
                 float shade = tones[r];
                 AddQuad(walls, upperA, upperB, lowerB, lowerA, normal, new Color(shade, shade, shade));
+                if (own > 0f)
+                {
+                    // 最后一圈（岛底收口）再往下推一个描边宽，岛底的轮廓也有一线。
+                    Vector3 sink = r + 2 == profile.Length ? Vector3.Down * rim : Vector3.Zero;
+                    AddQuad(hull, upperA + (miterA * rim), upperB + (miterB * rim), lowerB + (miterB * rim) + sink, lowerA + (miterA * rim) + sink, normal, Colors.Black);
+                }
+            }
+
+            if (own > 0f)
+            {
+                Vector3 crestA = new(a.X, crest, a.Z), crestB = new(b.X, crest, b.Z);
+                Vector3 upA = crestA + (Vector3.Up * rim), upB = crestB + (Vector3.Up * rim);
+                AddQuad(hull, upA + (miterA * rim), upB + (miterB * rim), new Vector3(b.X, top, b.Z) + (miterB * rim), new Vector3(a.X, top, a.Z) + (miterA * rim), outward, Colors.Black);
+                Vector3 lift = Vector3.Up * TerrainParts.OutlineLift;
+                TerrainParts.OutlineQuad(hull, crestA + lift, crestB + lift, crestB + lift + (miterB * rim), crestA + lift + (miterA * rim), Vector3.Down);
+                hullSegments++;
             }
         }
-        var cliff = Visuals.Matte(Color.Color8(178, 166, 194), 1f);
-        cliff.VertexColorUseAsAlbedo = true;
+        var cliff = Visuals.ToonVertex(palette.IslandCliff);
         cliff.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
         island.AddChild(new MeshInstance3D { Name = "IslandCliffs", Mesh = walls.Commit(), MaterialOverride = cliff });
+        if (hullSegments > 0)
+        {
+            island.AddChild(new MeshInstance3D { Name = PieceModels.OutlineName, Mesh = hull.Commit(), MaterialOverride = TerrainParts.ReliefOutline, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        }
 
         // Sparse roots are merged into one mesh, with their tops beneath the board.
         var roots = new List<(ArrayMesh, Transform3D)>();
@@ -1486,7 +1548,7 @@ public sealed partial class BoardView : Node3D
             roots.Add((LowPolyMesh.Beam(rootTop, rootEnd, 0.075f, 0.085f, 0.92f), Transform3D.Identity));
         }
         if (roots.Count > 0)
-            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(134, 108, 126), 1f) });
+            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.ToonVertex(palette.IslandRoot) });
 
         // Group repeated spikes by scene variant to bound draw calls.
         // 石笋改挂在岛底收口面之下（顶没进收口面，缩放 0.72 落在 0.82 → 0.62 两圈之间）：断崖的岩沿外凸之后，原先挂在上层侧壁的石笋会被整个遮住。
@@ -1501,7 +1563,14 @@ public sealed partial class BoardView : Node3D
                 transforms.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(0.38f, length, 0.38f)), place));
             }
             if (transforms.Count > 0)
-                AddInstanced("Spikes" + variant, TerrainParts.PieceOf(TerrainParts.IslandSpike, variant), transforms);
+            {
+                TerrainParts.Piece spike = TerrainParts.PieceOf(TerrainParts.IslandSpike, variant);
+                AddInstanced("Spikes" + variant, spike, transforms);
+
+                // 垂岩外壳（chibi-world 段 ②）：实例按 (0.38, 长, 0.38) 非等比缩放，外推量按缩放的倒数补偿（纵向按平均长 2 取），世界厚度约为岛沿描边的 3/4；同档一个 MultiMesh。
+                const float spikeRim = TerrainParts.IslandOutlineWidth * 0.75f;
+                AddInstanced(PieceModels.OutlineName, new TerrainParts.Piece(TerrainParts.HullOf(spike.Mesh, new Vector3(spikeRim / 0.38f, spikeRim / 2f, spikeRim / 0.38f)), TerrainParts.ReliefOutline), transforms);
+            }
         }
 
         // Low cloud rings remain under the island and away from the playing surface.
@@ -1542,9 +1611,12 @@ public sealed partial class BoardView : Node3D
             AddQuad(falls, upperA, upperB, upperB + Vector3.Down * 8f, upperA + Vector3.Down * 8f, outward, Colors.White);
             fallCount++;
         }
+        // 瀑布保留滚动条纹着色器（不受光、半透明，换成卡通材质会丢掉流动），只把水色换成色板的（chibi-world 段 ②）。
+        Visuals.Waterfall.SetShaderParameter("water", palette.Waterfall);
         if (fallCount > 0)
             island.AddChild(new MeshInstance3D { Name = "Waterfalls", Mesh = falls.Commit(), MaterialOverride = Visuals.Waterfall, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         GD.Print($"[waterfall] 岛缘水帘 {fallCount} 段");
+        GD.Print($"[outline] 岛外轮廓描边 {hullSegments} 段（1 个网格）、垂岩外壳 {TerrainParts.IslandSpike.Variants} 档；色板 {palette.Name}");
 
         Vector3 Shrink(Vector3 point, float factor, float depth)
         {
@@ -1616,11 +1688,21 @@ public sealed partial class BoardView : Node3D
     /// 侧面铺满整格（CellSize）、高一层，顶板 TileSize 见方、TileHeight 厚，衬底铺满整格、厚 <see cref="TerrainParts.LinerThickness"/>、位置不变。
     /// 顶板 / 衬底的材质仍是按底色共用的那一份（顶点色只当亮度系数），侧面用部件自带的土色 / 岩灰。
     /// </remarks>
-    private static readonly StandardMaterial3D SlopeMaterial = SideFallback(Visuals.SlopeSide);
-    private static readonly StandardMaterial3D CliffMaterial = SideFallback(Visuals.CliffSide);
+    private static StandardMaterial3D? _slopeMaterial;
+    private static StandardMaterial3D? _cliffMaterial;
+
+    // 色板（chibi-world 段 ②）在建局前才按 --palette= 定下，侧面退路材质随之延迟到第一次用时再建。
+    private static StandardMaterial3D SlopeMaterial => _slopeMaterial ??= SideFallback(Visuals.SlopeSide);
+
+    private static StandardMaterial3D CliffMaterial => _cliffMaterial ??= SideFallback(Visuals.CliffSide);
 
     private void AddTileStack(CellSink sink, Coord coord, Vector3 top, int level, StandardMaterial3D surface, Color color)
     {
+        if (level > 0)
+        {
+            AddReliefOutlines(sink, coord, top, level);
+        }
+
         for (int layer = 1; layer <= level; layer++)
         {
             float bandTop = BoardGeometry.TopYOf(layer) - BoardGeometry.TileHeight;
@@ -1649,6 +1731,44 @@ public sealed partial class BoardView : Node3D
 
         // 顶板：部件锚点在地砖上表面中心；变体只做细微色差（O-1），明暗棋盘格与出生区淡染仍靠底色。
         AddTilePiece(sink, TerrainParts.PieceOf(TerrainParts.TileTop, TileVariant(coord, 0)).Mesh, surface, top);
+    }
+
+    /// <summary>
+    /// 高差描边（chibi-world 段 ②，裁决 4 / R2.3）：只在"邻格更低"的格边摆一件 <see cref="TerrainParts.EdgeOutlineMesh"/>，两条相邻外缘都更低的格角补一件
+    /// <see cref="TerrainParts.CornerOutlineMesh"/>；同高相邻的格之间什么都不摆，平地不出格线。邻格层数取 <see cref="_groundLevels"/>（虚空按 0 层）。
+    /// 棱线高：大图面砖铺满整格，棱线即面砖上表面；小图面砖内收、格边露的是衬底，棱线取衬底顶（面砖上表面下 0.04）。
+    /// </summary>
+    private void AddReliefOutlines(CellSink sink, Coord coord, Vector3 top, int level)
+    {
+        float crest = top.Y - (sink.Batched ? 0f : 0.04f);
+        float half = BoardGeometry.CellSize * 0.5f;
+        bool Lower(Vector3 outward)
+        {
+            int x = coord.X + (int)outward.X, y = coord.Y - (int)outward.Z;
+            return x < 0 || y < 0 || x >= _width || y >= _height || _groundLevels.GetValueOrDefault(new Coord(x, y)) < level;
+        }
+
+        // 世界外法线（Coord 的 y 向上 = 世界 −Z）：东、北、西、南依次，每个方向转 90° 即下一条边。
+        Vector3[] outwards = [Vector3.Right, Vector3.Forward, Vector3.Left, Vector3.Back];
+        foreach (Vector3 outward in outwards)
+        {
+            if (!Lower(outward))
+            {
+                continue;
+            }
+
+            // 网格外侧朝 −Z：Facing(inward) 把局部 +Z 转到 inward，局部 −Z 即外法线。
+            sink.Outline(TerrainParts.EdgeOutlineMesh, new Transform3D(Facing(-outward), new Vector3(top.X, crest, top.Z) + (outward * half)));
+            _reliefEdges++;
+
+            // 凸角：本边与它在 Facing 局部 +X 一侧的那条边（外法线即局部 +X 方向）都更低。
+            var side = new Vector3(-outward.Z, 0f, outward.X);
+            if (Lower(side))
+            {
+                sink.Outline(TerrainParts.CornerOutlineMesh, new Transform3D(Facing(-outward), new Vector3(top.X, crest, top.Z) + ((outward + side) * half)));
+                _reliefCorners++;
+            }
+        }
     }
 
     /// <summary>放一件地块部件：常驻逐格一个节点（网格与材质共用）；流式登记到区块的 MultiMesh。</summary>
@@ -1728,6 +1848,18 @@ public sealed partial class BoardView : Node3D
         return material;
     }
 
+    /// <summary>台面边框（单块的边框条、连体的边框件 / 转角件）的卡通材质（chibi-world 段 ②）：同色共用一份，打开顶点色（倒角与阴刻线靠顶点色读出）。</summary>
+    private StandardMaterial3D FrameOf(Color color)
+    {
+        if (!_frameMaterials.TryGetValue(color, out StandardMaterial3D? material))
+        {
+            material = Visuals.ToonVertex(color);
+            _frameMaterials[color] = material;
+        }
+
+        return material;
+    }
+
     /// <summary>地块部件的变体号：按全图坐标散列（不按棋盘内坐标，接缝两侧的图案不断层），<paramref name="salt"/> 区分顶板与各层侧面，让它们的档位不同步。</summary>
     private static int TileVariant(Coord coord, int salt) =>
         (int)(LowPolyMesh.Hash(unchecked((coord.X * 73856093) ^ (coord.Y * 19349663)), 17 + salt) & 0x7FFFFFFFu);
@@ -1778,22 +1910,16 @@ public sealed partial class BoardView : Node3D
         float Lattice(int x, int y) => LowPolyMesh.Unit(unchecked((x * 73856093) ^ (y * 19349663)), salt);
     }
 
-    /// <summary>侧面部件资源不带材质时的退路：现有侧面色、打开顶点色。</summary>
-    private static StandardMaterial3D SideFallback(Color color)
-    {
-        StandardMaterial3D material = Visuals.Matte(color);
-        material.VertexColorUseAsAlbedo = true;
-        return material;
-    }
+    /// <summary>侧面部件资源不带材质时的退路：色板的侧面色、卡通分阶、打开顶点色（chibi-world 段 ②）。</summary>
+    private static StandardMaterial3D SideFallback(Color color) => Visuals.ToonVertex(color);
 
     /// <summary>某基色的面砖材质：同基色共用一份，并登记进压暗表（<see cref="Refresh"/> 按基色整批改色）。</summary>
     private StandardMaterial3D SurfaceOf(Color color)
     {
         if (!_surfaceMaterials.TryGetValue(color, out StandardMaterial3D? material))
         {
-            // 顶板网格的顶点色只当亮度系数（map-elements-v2 D1）：最终色 = 底色 × 顶点色，压暗表照常整批改底色。
-            material = Visuals.Matte(color);
-            material.VertexColorUseAsAlbedo = true;
+            // 顶板网格的顶点色只当亮度系数（map-elements-v2 D1）：最终色 = 底色 × 顶点色，压暗表照常整批改底色。chibi-world 段 ②：卡通分阶。
+            material = Visuals.ToonVertex(color);
             _surfaceMaterials[color] = material;
             _tileMaterials.Add((material, color));
         }
@@ -1806,8 +1932,7 @@ public sealed partial class BoardView : Node3D
     {
         if (!_linerMaterials.TryGetValue(color, out StandardMaterial3D? material))
         {
-            material = Visuals.Matte(LinerShade(color, layerOpen: false));
-            material.VertexColorUseAsAlbedo = true;
+            material = Visuals.ToonVertex(LinerShade(color, layerOpen: false));
             _linerMaterials[color] = material;
         }
 
@@ -2188,14 +2313,29 @@ public sealed partial class BoardView : Node3D
                 ? zoneColorOf(zone).Darkened(0.55f)
                 : isBirth ? Visuals.PlaceholderFrame : Visuals.PublicBoardFrame;
             float plateFrameWidth = isBirth ? 0.24f : 0.08f;
-            StandardMaterial3D frame = FlatOf(color);
+            // chibi-world 段 ②：台面外框改卡通分阶 + 反向外壳描边（每条边框一件外推的盒子，按块不按格，不增加逐格绘制）。
+            StandardMaterial3D frame = FrameOf(color);
             float y = top + (frameHeight * 0.5f);
             float spanX = maxX - minX + plateFrameWidth;
             float spanZ = maxZ - minZ + plateFrameWidth;
-            plateNode.AddChild(Strip(new Vector3(spanX, frameHeight, plateFrameWidth), new Vector3(midX, y, minZ), frame));
-            plateNode.AddChild(Strip(new Vector3(spanX, frameHeight, plateFrameWidth), new Vector3(midX, y, maxZ), frame));
-            plateNode.AddChild(Strip(new Vector3(plateFrameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ), frame));
-            plateNode.AddChild(Strip(new Vector3(plateFrameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
+            foreach ((Vector3 size, Vector3 at) in new[]
+            {
+                (new Vector3(spanX, frameHeight, plateFrameWidth), new Vector3(midX, y, minZ)),
+                (new Vector3(spanX, frameHeight, plateFrameWidth), new Vector3(midX, y, maxZ)),
+                (new Vector3(plateFrameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ)),
+                (new Vector3(plateFrameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ)),
+            })
+            {
+                plateNode.AddChild(Strip(size, at, frame));
+                plateNode.AddChild(new MeshInstance3D
+                {
+                    Name = PieceModels.OutlineName,
+                    Mesh = BoxOf(size + (Vector3.One * (2f * TerrainParts.ReliefOutlineWidth))),
+                    MaterialOverride = TerrainParts.ReliefOutline,
+                    Position = at,
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
 
             if (birthZone is int birth)
             {
@@ -2224,7 +2364,8 @@ public sealed partial class BoardView : Node3D
             }
 
             float top = BoardGeometry.TopYOf(0);
-            StandardMaterial3D frame = InlayOf(Visuals.PublicBoardFrame);
+            StandardMaterial3D frame = FrameOf(Visuals.PublicBoardFrame);
+            var frameHulls = new Dictionary<Mesh, List<Transform3D>>();   // chibi-world 段 ②：边框件 / 转角件的反向外壳，按网格归并成 MultiMesh
             int outline = 0, seams = 0;
             float lineY = top + (lineHeight * 0.5f);
 
@@ -2236,13 +2377,15 @@ public sealed partial class BoardView : Node3D
             void FramePiece(Coord cell, int salt, Vector3 at, bool alongX)
             {
                 TerrainParts.Piece piece = TerrainParts.PieceOf(TerrainParts.PlateFrame, TileVariant(cell, salt));
+                var transform = new Transform3D(alongX ? Basis.Identity : Facing(Vector3.Right), at);
                 root.AddChild(new MeshInstance3D
                 {
                     Mesh = piece.Mesh,
                     MaterialOverride = frame,
-                    Transform = new Transform3D(alongX ? Basis.Identity : Facing(Vector3.Right), at),
+                    Transform = transform,
                     CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 });
+                Hull(piece.Mesh, transform);
                 framePieces++;
             }
 
@@ -2253,13 +2396,27 @@ public sealed partial class BoardView : Node3D
                     return;
                 }
 
+                Mesh corner = TerrainParts.PieceOf(TerrainParts.PlateCorner, 0).Mesh;
                 root.AddChild(new MeshInstance3D
                 {
-                    Mesh = TerrainParts.PieceOf(TerrainParts.PlateCorner, 0).Mesh,
+                    Mesh = corner,
                     MaterialOverride = frame,
                     Position = new Vector3(x, top, z),
                     CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 });
+                Hull(corner, new Transform3D(Basis.Identity, new Vector3(x, top, z)));
+            }
+
+            void Hull(Mesh mesh, Transform3D transform)
+            {
+                ArrayMesh hull = TerrainParts.HullOf(mesh, Vector3.One * TerrainParts.ReliefOutlineWidth);
+                if (!frameHulls.TryGetValue(hull, out List<Transform3D>? list))
+                {
+                    list = [];
+                    frameHulls[hull] = list;
+                }
+
+                list.Add(transform);
             }
 
             // 横边（Coord 的南 / 北边 → 世界 +Z / −Z）：同一行的连续格合成一条。dy = −1 南边、+1 北边。
@@ -2324,7 +2481,18 @@ public sealed partial class BoardView : Node3D
 
             // 自证行（board-link-mode F.4，供自检与截图核对"接缝无边框"）：组内棋盘、外轮廓边框段数（中性色）、接缝格线段数；接缝上没有任何边框段。
             GD.Print($"[plates] 连体棋盘（出生区 {string.Join("+", Enumerable.Range(0, plates.Length).Where(i => groups[i] == group && ZoneOfPlate(plates[i]) is not null).Select(i => BirthZoneLabel.Number(ZoneOfPlate(plates[i])!.Value)))}，{cells.Count} 格）：外轮廓边框 {outline} 段，接缝格线 {seams} 段，接缝边框 0 段");
-            GD.Print($"[frame] 连体外轮廓边框件 {framePieces} 件、转角件 {corners.Count} 件（按 {outline} 段逐格边摆放）");
+            foreach ((Mesh hull, List<Transform3D> transforms) in frameHulls)
+            {
+                var multi = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = hull, InstanceCount = transforms.Count };
+                for (int i = 0; i < transforms.Count; i++)
+                {
+                    multi.SetInstanceTransform(i, transforms[i]);
+                }
+
+                root.AddChild(new MultiMeshInstance3D { Name = PieceModels.OutlineName, Multimesh = multi, MaterialOverride = TerrainParts.ReliefOutline, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            }
+
+            GD.Print($"[frame] 连体外轮廓边框件 {framePieces} 件、转角件 {corners.Count} 件（按 {outline} 段逐格边摆放）；描边外壳 MultiMesh {frameHulls.Count} 个");
 
             // 某格朝 (dx, dy) 一侧：外轮廓（邻格不在组内）→ 边框；接缝（邻格在组内另一块棋盘上）→ 格线；同一块棋盘内部 → 不画（内部格线已画）。
             int? Kind(Coord c, int dx, int dy)
@@ -2588,7 +2756,7 @@ public sealed partial class BoardView : Node3D
             // 流式：全图一份水体材质（常驻路径逐格各建一份，这里不必）、两件实例进区块 MultiMesh。
             if (_waterMaterial is null)
             {
-                _waterMaterial = Visuals.Matte(color, 0.55f);
+                _waterMaterial = Visuals.Toon(color, specular: true);
                 _tileMaterials.Add((_waterMaterial, color));
             }
 
@@ -2598,7 +2766,7 @@ public sealed partial class BoardView : Node3D
             return;
         }
 
-        StandardMaterial3D material = Visuals.Matte(color, 0.55f);
+        StandardMaterial3D material = Visuals.Toon(color, specular: true);   // chibi-world 段 ②：卡通分阶 + 卡通高光（同装饰的水洼）
         Node3D parent = sink.Tiles;
         parent.AddChild(new MeshInstance3D
         {
