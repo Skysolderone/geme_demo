@@ -3556,7 +3556,12 @@ public sealed partial class BoardView : Node3D
 
     private static void PreviewGhost(Node node)
     {
-        if (node is MeshInstance3D instance && instance.MaterialOverride is StandardMaterial3D material)
+        if (PieceModels.IsOutline(node))
+        {
+            // 卡通棋子的描边外壳：随暂放棋形一起变淡（半透明、浅墨色）。外壳只画背面，透明通道里被本体挡住的部分不会透出来。
+            PieceModels.GhostOutline((MeshInstance3D)node);
+        }
+        else if (node is MeshInstance3D instance && instance.MaterialOverride is StandardMaterial3D material)
         {
             // The merged silhouette has several overlapping material slots. Alpha blending
             // hides its upper body behind the plinth in Godot's transparent pass, so give

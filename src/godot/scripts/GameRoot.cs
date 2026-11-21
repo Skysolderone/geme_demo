@@ -223,6 +223,8 @@ public sealed partial class GameRoot : Node3D
 
             // --piece-gallery=<PNG 路径>：不建局，拍一张十种棋子轮廓对照图后退出（more-pieces-relics 段 D 人工检查清单用，见 PieceGallery）。
             string? pieceGallery = args.Text("piece-gallery", "PNG 输出路径");
+            // --piece-gallery-factions：与 --piece-gallery 同用，改拍四阵营并排的对照图（chibi-pieces）。
+            bool pieceGalleryFactions = args.Flag("piece-gallery-factions");
             string? uiGallery = args.Text("ui-gallery", "PNG 输出路径");
 
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
@@ -298,7 +300,7 @@ public sealed partial class GameRoot : Node3D
                 SetProcess(false);
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
-                AddChild(new PieceGallery(pieceGallery) { Name = "PieceGallery" });
+                AddChild(new PieceGallery(pieceGallery, pieceGalleryFactions) { Name = "PieceGallery" });
                 return;
             }
 

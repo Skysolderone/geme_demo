@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/core/testing.md", "reason": "表现层画面与读数验证、src/godot 不在 sln 的守门约定"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Godot 表现层代码质量约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "资产与脚本目录约定"}
+{"file": "art/more-pieces/README.md", "reason": "三组易混对的人工检查判据与拍图命令"}
