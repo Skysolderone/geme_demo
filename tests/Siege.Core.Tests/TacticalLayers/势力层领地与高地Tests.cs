@@ -102,10 +102,10 @@ public class 势力层领地与高地Tests
 
         Assert.Equal((0, 0, 2, 2), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.PositionBonus));
         Assert.Equal((truth.LineBonus, truth.SynergyBonus, truth.HighGroundBonus, truth.Power), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.Power));
-        // 段 A 改写：文案顺序随公式改为"（基础 + 加值）× 倍率"；无倍增子，军势 ⌊(2 + 2) × 1⌋ = 4（新旧同值）。
-        Assert.Equal(4, truth.Power);
-        Assert.Equal("（基础 2 + 位置加值 2（连珠 0 / 协同 0 / 高地 2））× 1 = 4", group.Power.FormulaText);
-        Assert.Equal("2+2 = 4", group.Power.ShortFormulaText);   // settlement-show-callouts 裁决 1：短算式与完整算式同一处生成、只列非零项
+        // 段 A 改写：文案顺序随公式改为"（基础 + 加值）× 倍率"；无倍增子，军势 ⌊(2 + 2) × 1⌋ = 4（新旧同值）。terrain-bonus：两枚都在 h=2，基础各 1 + 2 → 6，军势 ⌊(6 + 2) × 1⌋ = 8。
+        Assert.Equal(8, truth.Power);
+        Assert.Equal("（基础 6 + 位置加值 2（连珠 0 / 协同 0 / 高地 2））× 1 = 8", group.Power.FormulaText);
+        Assert.Equal("6+2 = 8", group.Power.ShortFormulaText);   // settlement-show-callouts 裁决 1：短算式与完整算式同一处生成、只列非零项
 
         // more-pieces-relics 段 D 改写：视图扩为七项来源（段 A 待决 5），恒等式随之改为七项；本盘面只有普通子，四项新来源为 0、文案不列。
         Assert.Equal((0, 0, 0, 0), (group.Power.BannerBonus, group.Power.ChainBonus, group.Power.SentryBonus, group.Power.BoundaryBonus));

@@ -281,7 +281,7 @@ public class 盘面派生量优化对照Tests
         new(c, board.Map.TerrainAt(c), board.Map.BirthZoneOf(c), board.OccupantAt(c));
 
     private static bool RefGivesLiberty(GameBoard board, Coord c) =>
-        RefCell(board, c).IsPlayableEmpty && board.Map.SurfaceAt(c) != Surface.Shallows;
+        RefCell(board, c).IsPlayableEmpty && board.Map.SurfaceAt(c) != Surface.Shallows && !board.Map.TerrainData.IsUnbridgedDeepWater(c);   // terrain-bonus：空的未架桥深水不是气
 
     private static Group? RefGroupAt(GameBoard board, Coord c)
     {

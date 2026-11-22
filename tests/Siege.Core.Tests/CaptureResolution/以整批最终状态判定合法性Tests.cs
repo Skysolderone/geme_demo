@@ -324,30 +324,6 @@ public class 以整批最终状态判定合法性Tests
     }
 
     [Fact]
-    public void 搭桥漏眼被拒()
-    {
-        // A 的环围出 6 格眼空间 B2–D3，右侧 E3 是未架桥深水（墙）。B 的匠人落 F3 给 E3 搭桥：空区连到 E3、贴到 F3 的 B 子，不再封闭 → A 无眼。
-        GameBoard board = LifeShapeFixtures.Grid(
-        [
-            ".......",
-            ".......",
-            "00000..",
-            "0...~..",
-            "0...0..",
-            "00000..",
-        ]);
-        LifeShapeReport before = LifeShapeReport.Analyze(board);
-        Assert.Equal(LifeState.Alive, before.LifeOf("A1"));
-        Assert.Equal(["B2,C2,D2,B3,C3,D3"], before.EyeSpacesOf("A1"));
-
-        RehearsalResult result = Rehearse(board, B, BatchFixtures.Artisan("F3", TerrainEdit.Bridge(TestMaps.At("E3"))));
-
-        Assert.False(result.IsLegal);
-        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
-        Assert.Equal(LifeState.Dead, LifeShapeReport.Analyze(result.ProjectedBoard!).LifeOf("A1"));
-    }
-
-    [Fact]
     public void 围死活形被拒()
     {
         // design D4：A 一字两眼，外气已被 B（B3–D3）填满，A3 / E3 与 A 串之间有既有栅栏。B 一批落两枚匠人：A3 立 A1–A2、E3 立 E1–E2，
@@ -399,53 +375,6 @@ public class 以整批最终状态判定合法性Tests
 
         Assert.True(result.IsLegal, result.Failure?.Message);
         Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(result.ProjectedBoard!).LifeOf("A1"));
-    }
-
-    [Fact]
-    public void 提子后恢复活形的批次合法()
-    {
-        // 规格顺序：第 5 步（提子）在第 6 步（破坏活形）之前，第 6 步看的是提子后的盘面。
-        // fence-eye-rule 改写夹具：栅栏不再能隔开眼与棋子，原"立栅让 A 失去眼 A2"的做法失效，改为"搭桥漏眼 + 同批提子补眼"。
-        // A 串 B2–B3–B4–C4–D4–E4–E3–E2–F3，眼 B1（A1 岩石、C1 未架桥深水）与 F2（F1 岩石）→ 两眼活形。
-        // C 的孤子 D1：C1–D1 之间是既有栅栏，D2 是高 2 的崖（无气边），唯一的气是 E1。C2 / D2 / C3 / D3 是高 2 的台地，不贴任何棋子。
-        // B 一批两枚匠人：C2 给 C1 搭桥、D2 立 D1–E1。放置 + 改造后、提子前：C1 成了空格，{B1, C1} 沿眼边贴到 C 的 D1（栅栏不挡眼边）→ 不封闭，
-        // A 只剩眼 F2 → 未定；第 5 步 D1 无气被提，B1–C1–D1–E1 连成一条只贴 A 的 4 格直线（C2 / D2 与它们是崖）→ 眼值 2 → 回到已确定活形 → 批次合法。
-        GameBoard board = LifeShapeFixtures.Grid(
-            [
-                "#0000#",
-                "#0..00",
-                "#0..0.",
-                "#.~2.#",
-            ],
-            heights: [("C2", 2), ("D2", 2), ("C3", 2), ("D3", 2)],
-            fences: [("C1", "D1")]);
-        Placement[] batch =
-        [
-            BatchFixtures.Artisan("C2", TerrainEdit.Bridge(TestMaps.At("C1"))),
-            Fence("D2", "D1", "E1"),
-        ];
-        LifeShapeReport before = LifeShapeReport.Analyze(board);
-        Assert.Equal(LifeState.Alive, before.LifeOf("B2"));
-        Assert.Equal(["B1", "F2"], before.EyeSpacesOf("B2"));
-        Assert.Equal(["E1"], board.LibertiesOf(board.GroupAt(TestMaps.At("D1"))!).Notations());
-
-        // 夹具几何上确实经过"提子前未定"：手工复现第 3–4 步
-        GameBoard placed = board.Clone();
-        foreach (Placement p in batch)
-        {
-            placed.Place(p.Coord, B, p.Type);
-        }
-
-        placed.ApplyTerrainEdits(batch.Select(p => p.Edit!.Value));
-        Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(placed).LifeOf("B2"));
-
-        RehearsalResult result = Rehearse(board, B, batch);
-
-        Assert.True(result.IsLegal, result.Failure?.Message);
-        Assert.Equal(["D1"], result.Captures.Select(s => s.Coord).Notations());
-        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
-        Assert.Equal(LifeState.Alive, after.LifeOf("B2"));
-        Assert.Equal(["B1,C1,D1,E1", "F2"], after.EyeSpacesOf("B2"));
     }
 
     [Fact]

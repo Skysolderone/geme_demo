@@ -132,7 +132,7 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
         // 规格 Scenario「与完整预演一致」：中盘局面由固定种子的单局 AI 对局推进得到（几十个小回合以内，不跑批量）。
         // 每个检查点对当前行动玩家各对照三种暂放：空、一枚合法暂放、一枚禁手暂放（有的话；整批不合法 → 不预筛的路径）。
         // 变异（红数为三个测试类合计）：M-P3 预筛漏掉"自身有气"→ 红 10、M-P6 基准不合法仍预筛 → 红 6、M-C2 候选不排除已暂放的格 → 红 10，本测试都在其中。
-        // M-P1 / M-P2 / M-P4 在 AI 下出来的局面里碰不到（提子后同形、不提子同形、暂放立栅造眼都太罕见），各由下面一条专门的局面守住。
+        // M-P1 / M-P2 在 AI 下出来的局面里碰不到（提子后同形、不提子同形都太罕见），各由下面一条专门的局面守住。M-P4（预筛去掉"不在他人眼空间里"）terrain-bonus 起无守门局面：合法批次削不掉已确定活形的原有眼（空深水不再是墙，原"搭桥拆眼"夹具失效），批内新造的眼被落子破坏时原有眼值仍 ≥ 2，该条款成为保守条款，原专门测试「与完整预演一致_暂放搭桥造出他人的新眼」已删。
         // M-P5（预筛去掉"不贴他人已确定活形棋串"）→ 红 0：等价变异——这一条是 D3 的保守条款，安全性已由"不在他人眼空间里"保证，见 ForbiddenMoves 的说明。
         var clock = Stopwatch.StartNew();
         MatchFlow match = Played(mapId, seed, firstTurns, out MatchRunner runner, skipProtection);
@@ -261,53 +261,6 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
 
         Assert.Equal(16, broken);
         Assert.Equal(0, harmless);
-    }
-
-    [Fact]
-    public void 与完整预演一致_暂放搭桥造出他人的新眼()
-    {
-        // 预筛"不在结算后盘面上他人的眼空间里"这一条的守门局面（fence-eye-rule 改名，原「…_暂放立栅造出他人的新眼」：栅栏不再造眼，改由暂放的搭桥造出新眼）。
-        // P0 的竖串 A1–A5 原有两个单格眼 B5（C5 岩石、B4 是高 2 的崖）与 B1（B2 岩石、C1 未架桥深水）→ 已确定活形。
-        // C3–D3 是一块被岩石、深水 B3 与高 2 台地围住的空区，不贴任何棋子 → 不封闭、不是眼，不在 P1 的禁入格里。
-        // P1 暂放两枚匠人：B4（台地，与 B3 是崖）给 B3 搭桥 → {B3, C3, D3} 只沿眼边贴 P0 的 A3 → 成了 P0 的新眼（3 格，眼值 1）；
-        // D1 给 C1 搭桥 → 眼 B1 连到 C1、贴上 P1 的 D1，不再封闭。暂放自身合法：P0 串有 B5 + 新眼 = 2。
-        // 再落 C3 或 D3（四邻没有任何敌子、能呼吸，只有"在他人眼空间里"这一条不安静）：新眼贴上 P1 的棋子不再封闭，P0 串只剩 B5 → 破坏活形。
-        // 变异 M-P4（预筛去掉"不在他人眼空间里"）→ C3 / D3 被当成安静候选漏报，红 1（本测试；fence-eye-rule 改写夹具后重做，见任务 implement.md）。
-        GameBoard board = LifeShapeFixtures.Grid(
-            [
-                "0.#...",
-                "0.....",
-                "0~..#.",
-                "0###..",
-                "0.~...",
-            ],
-            heights: [("B4", 2), ("C4", 2), ("D4", 2), ("E4", 2), ("F4", 2), ("D5", 2), ("E5", 2), ("F5", 2)]);
-        LifeShapeReport before = LifeShapeReport.Analyze(board);
-        Assert.Equal(LifeState.Alive, before.LifeOf("A1"));
-        Assert.Equal(["B1", "B5"], before.EyeSpacesOf("A1"));
-        Assert.Null(before.EyeSpaceAt(TestMaps.At("C3")));
-        IReadOnlySet<Coord> range = RangeOf(board, P1);
-        Assert.Contains(TestMaps.At("C3"), range);
-        Assert.Contains(TestMaps.At("D3"), range);
-        Placement[] staged =
-        [
-            BatchFixtures.Artisan("B4", TerrainEdit.Bridge(TestMaps.At("B3"))),
-            BatchFixtures.Artisan("D1", TerrainEdit.Bridge(TestMaps.At("C1"))),
-        ];
-        RehearsalResult alone = BatchRehearsal.Rehearse(board, BatchFixtures.Context(board, P1, range: range), staged, new BoardHistory());
-        Assert.True(alone.IsLegal, alone.Failure?.Message);
-        LifeShapeReport settled = LifeShapeReport.Analyze(alone.ProjectedBoard!);
-        Assert.Equal(2, settled.GroupLifeAt(TestMaps.At("A1"))!.EyeValueSum);
-        Assert.Equal(["B3,C3,D3", "B5"], settled.EyeSpacesOf("A1"));
-
-        (int candidates, int full, int forbidden) = AssertSame("搭桥造出新眼", board, P1, range, staged, new BoardHistory());
-
-        ForbiddenMoveReport report = ForbiddenMoves.Query(board, P1, range, staged, new BoardHistory());
-        Assert.Equal((ForbiddenMoveKind.BreaksLife, (PlayerId?)P0), (report.At(TestMaps.At("C3"))!.Kind, report.At(TestMaps.At("C3"))!.LifeOwner));
-        Assert.Equal((ForbiddenMoveKind.BreaksLife, (PlayerId?)P0), (report.At(TestMaps.At("D3"))!.Kind, report.At(TestMaps.At("D3"))!.LifeOwner));
-        Assert.Equal(["C3", "D3"], report.Moves.Select(m => m.Coord).Notations());
-        Assert.Equal(2, forbidden);
-        Assert.True(full < candidates);
     }
 
     [PerfTheory]

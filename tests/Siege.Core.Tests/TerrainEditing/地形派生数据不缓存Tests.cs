@@ -16,7 +16,7 @@ namespace Siege.Core.Tests.TerrainEditing;
 public class 地形派生数据不缓存Tests
 {
     [Fact]
-    public void 合法落子范围含本局新架的桥()
+    public void 合法落子范围含未架桥深水与本局新架的桥()
     {
         // 排查项 ①（曾经是缓存，已改）：MatchFlow 原先在建局时把可落子格算进 _playableCells 字段，
         // 地形可变之后它是过期数据——本局架出来的桥永远进不了合法落子范围。现改为每次按 Board 现算。
@@ -27,16 +27,16 @@ public class 地形派生数据不缓存Tests
         Coord water = TestMaps.At("G7");   // 棋盘 0 中部（原 9×9 合成图的中心 E5）
         MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G7", Surface.DeepWater)])).AtRound(5);
 
-        Assert.DoesNotContain(water, match.LegalRangeFor(TestMaps.P0));
+        Assert.Contains(water, match.LegalRangeFor(TestMaps.P0));   // terrain-bonus：未架桥深水本就可落子
 
         match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(water)]);
 
         Assert.Contains(water, match.LegalRangeFor(TestMaps.P0));
 
-        // 反面：范围里只多了这一格，没有把别的格子一起放进来。
+        // 反面：架桥不增减合法范围（terrain-bonus 起深水本就在内）。
         MatchFlow twin = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G7", Surface.DeepWater)])).AtRound(5);
         Assert.Equal(
-            twin.LegalRangeFor(TestMaps.P0).Count + 1,
+            twin.LegalRangeFor(TestMaps.P0).Count,
             match.LegalRangeFor(TestMaps.P0).Count);
     }
 

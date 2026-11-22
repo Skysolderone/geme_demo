@@ -391,8 +391,8 @@ public class 空区与封闭眼空间Tests
                 ".........",
             ],
             heights: [("F5", 2)]);
-        Assert.Equal(["E6"], open.EyeNeighbors(e5).Notations());
-        Assert.Equal(["E6"], open.LibertyNeighbors(e5).Notations());
+        Assert.Equal(["D5", "E6"], open.EyeNeighbors(e5).Notations());
+        Assert.Equal(["D5", "E6"], open.LibertyNeighbors(e5).Notations());
     }
 
     internal static string LifeShapeSource([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")

@@ -92,14 +92,14 @@ public class 势力明细Tests
         Assert.Equal(14, group.PositionBonus);
         Assert.Equal(6, group.LineBonus);
         Assert.Equal(8, group.SynergyBonus);
-        Assert.Equal(12 + 14, group.Power);   // terrain-bonus：第 2 行 h=1，六枚基础军势各 1 + 1 → 12
+        Assert.Equal(6 + 14, group.Power);
     }
 
     [Fact]
     public void 位置加值三来源可溯源()
     {
         // 规格 Scenario「位置加值可溯源」（scoring-sites：三部分）：位置加值 14 = 连珠 6（B2-C2-D2 长度 3）+ 协同 4（协同子 E2 × 其他类型 {连珠, 普通} 2 种 × 2）
-        // + 高地 4（第 2 行 h=1，B2 / C2 / D2 / E2 各压制正下方 h=0 的 P1 棋子，F2 / G2 下方无敌子）。军势 = 基础 6 + 14 = 20。
+        // + 高地 4（第 2 行 h=1，B2 / C2 / D2 / E2 各压制正下方 h=0 的 P1 棋子，F2 / G2 下方无敌子）。军势 = 基础 12（terrain-bonus：h=1 各 +1）+ 14 = 26。
         // 变异验证 M-S7（段 A2）：Evaluate 把 highGroundBonus 并进 LineBonus 字段 → 红，含本测试。
         TerrainData terrain = TestMaps.Terrain(heights: [("B2", 1), ("C2", 1), ("D2", 1), ("E2", 1), ("F2", 1), ("G2", 1)]);
         GameBoard board = TestMaps.Blank(terrain, size: 9)
@@ -111,7 +111,7 @@ public class 势力明细Tests
 
         Assert.Equal((6, 4, 4), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus));
         Assert.Equal(14, group.PositionBonus);
-        Assert.Equal(6 + 14, group.Power);
+        Assert.Equal(12 + 14, group.Power);   // terrain-bonus：第 2 行 h=1，六枚基础军势各 1 + 1 → 12
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public class 势力明细Tests
     {
         // more-pieces-relics 规格 power-score「位置加值可溯源」（七部分）：位置加值 14 拆成连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，七者之和为 14。
         // 第 6 行 C6 旗手（本串 C6、D6 各挂一件望台 → 3 × 2 = 6，relic-redesign R23；望台只扩大覆盖、不进军势）、D6 铁链（6 子棋串 → 5）、E6 哨兵（E7 有敌子 → 2）、F6 界碑、G6 / H6 普通子；
-        // 界碑 F6 的空邻格 F5 由 A 独占（+1），F7 同时被 E7 的敌子覆盖、为争议格（0）。连珠 / 协同 / 高地均为 0。军势 = 基础 6 + 14 = 20。
+        // 界碑 F6 的空邻格 F5 由 A 独占（+1），F7 同时被 E7 的敌子覆盖、为争议格（0）。连珠 / 协同 / 高地均为 0。军势 = 基础 12（terrain-bonus：h=1 各 +1）+ 14 = 26。
         GameBoard board = TestMaps.Blank()
             .Place("C6", TestMaps.P0, PieceType.Bannerman).Place("D6", TestMaps.P0, PieceType.Chain).Place("E6", TestMaps.P0, PieceType.Sentry)
             .Place("F6", TestMaps.P0, PieceType.Boundary).Place("G6", TestMaps.P0).Place("H6", TestMaps.P0)

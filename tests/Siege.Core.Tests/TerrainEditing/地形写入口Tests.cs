@@ -17,20 +17,19 @@ public class 地形写入口Tests
         size: 9);
 
     [Fact]
-    public void 架桥后两格同串()
+    public void 架桥使空深水格成为气()
     {
-        // terrain「架桥产生气边」：深水格架桥后成为可落子格，与相邻同高可落子格之间产生气边。
+        // terrain「架桥使空深水格成为气」（terrain-bonus）：未架桥深水本就有气边，但空着时不是气；架桥后气边不变、该格成为气。
         GameBoard board = Board();
         board.Place(TestMaps.At("C4"), TestMaps.P0, PieceType.Basic);
-        Assert.Empty(board.LibertyNeighbors(TestMaps.At("D4")));
+        Coord[] edgesBefore = [.. board.LibertyNeighbors(TestMaps.At("D4"))];
+        Assert.Contains(TestMaps.At("C4"), edgesBefore);
+        Assert.DoesNotContain(TestMaps.At("D4"), board.LibertiesOf(board.GroupAt(TestMaps.At("C4"))!));
 
         board.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("D4"))]);
-        board.Place(TestMaps.At("D4"), TestMaps.P0, PieceType.Basic);
 
-        // 气边、棋串、气全部按新地形重算：C4 与 D4 成为同一条棋串。
-        Assert.Contains(TestMaps.At("C4"), board.LibertyNeighbors(TestMaps.At("D4")));
-        Group group = board.GroupAt(TestMaps.At("C4"))!;
-        Assert.Equal(["C4", "D4"], group.Stones.Notations());
+        Assert.Equal(edgesBefore.Order(), board.LibertyNeighbors(TestMaps.At("D4")).Order());
+        Assert.Contains(TestMaps.At("D4"), board.LibertiesOf(board.GroupAt(TestMaps.At("C4"))!));
     }
 
     [Fact]

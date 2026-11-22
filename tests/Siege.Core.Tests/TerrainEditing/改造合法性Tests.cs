@@ -298,38 +298,26 @@ public class 改造合法性Tests
     }
 
     [Fact]
-    public void 当批不能站上新桥也不能拿它当跳板()
+    public void 当批可以站上本批要架桥的深水格()
     {
-        // D-D：全部合法性按批次开始前的地形判定。本批新架的桥 MUST NOT 在同一批次内作为落点或改造目标。
+        // terrain-bonus（用户裁决 2026-11-22「允许」）：深水本就可落子，合法性按批次开始前的地形判定，
+        // 所以本批要架桥的深水格同批即可作落点，也可作匠人落点继续向外架桥；搭桥目标有子同样合法。
         GameBoard board = Forested();
         StagedBatch batch = Batch(board);
         Assert.Null(batch.Stage(TestMaps.At("C4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))));
+        Assert.Null(batch.Stage(TestMaps.At("D4"), PieceType.Basic));
+        Assert.True(BatchFixtures.Driver(board).Confirm(batch.Context, batch.Placements).Confirmed);
+        Assert.True(board.Map.HasBridge(TestMaps.At("D4")));
+        Assert.NotNull(board[TestMaps.At("D4")].Occupant);
 
-        // ① 不能往本批新架的桥上落子。
-        Assert.Equal(BatchFailureKind.Unplayable, batch.Stage(TestMaps.At("D4"), PieceType.Basic)!.Kind);
-
-        // ② 也不能把它当作下一次改造的落点（同样因为此刻仍不可落子）。
-        Assert.Equal(
-            BatchFailureKind.Unplayable,
-            batch.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Fence(TestMaps.At("D4"), TestMaps.At("D3")))!.Kind);
-
-        // ③ 下一批次可以：结算后 D4 成为合法落点。
-        SettlementDriver driver = BatchFixtures.Driver(board);
-        Assert.True(driver.Confirm(batch.Context, batch.Placements).Confirmed);
-        Assert.Null(Batch(board).Stage(TestMaps.At("D4"), PieceType.Basic));
-
-        // ④「下一批次可以使用」的后半句：也可以以新桥为起点继续向外架桥（T-4 宽河分批次逐格架）。
-        // 需要一条两格宽的河，Forested() 只有一格，另起一份地形。
+        // 两格宽的河：匠人同批站在要架桥的 D4 上，再给 E4 架桥。
         GameBoard river = TestMaps.Blank(
             TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("E4", Surface.DeepWater)]), size: 9);
         StagedBatch first = Batch(river);
         Assert.Null(first.Stage(TestMaps.At("C4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))));
-
-        // 本批次里 E4 还不是 D4 的合法跳板——匠人根本站不上 D4。
-        Assert.Equal(BatchFailureKind.Unplayable, first.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4")))!.Kind);
-
+        Assert.Null(first.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4"))));
         Assert.True(BatchFixtures.Driver(river).Confirm(first.Context, first.Placements).Confirmed);
-        Assert.Null(Batch(river).Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4"))));
+        Assert.True(river.Map.HasBridge(TestMaps.At("E4")));
     }
 
     [Fact]
