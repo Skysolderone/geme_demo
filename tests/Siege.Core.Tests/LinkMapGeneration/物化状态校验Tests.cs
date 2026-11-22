@@ -43,7 +43,7 @@ public class 物化状态校验Tests
         return map with { TerrainData = new TerrainData(t.Heights.SetItems(heights.Select(h => KeyValuePair.Create(h.Cell, h.Height))), t.Surfaces, t.Bridges, t.Fences) };
     }
 
-    private static Coord[] Ramps(MapData map, BoardPlate plate) => [.. plate.Cells().Where(c => map.IsPlayable(c) && map.HeightAt(c) == 1)];
+    private static Coord[] Ramps(MapData map, BoardPlate plate) => [.. plate.Cells().Where(c => map.IsLand(c) && map.HeightAt(c) == 1)];
 
     [Theory]
     [InlineData(1ul, 2)]
@@ -71,7 +71,7 @@ public class 物化状态校验Tests
     {
         // D7：低地是棋盘之外的可落子格、低地上有深水河道，主题可重复——这些在旧规则下分别报 SCENERY_CELL_PLAYABLE / BOARD_MAP_DEEP_WATER / BOARD_THEME_INVALID，现在合法。
         MapData map = Base;
-        Assert.Contains(map.AllCoords(), c => map.IsPlayable(c) && !map.Boards.Any(p => p.Contains(c)));
+        Assert.Contains(map.AllCoords(), c => map.IsLand(c) && !map.Boards.Any(p => p.Contains(c)));
         Assert.Contains(map.AllCoords(), c => map.SurfaceAt(c) == Surface.DeepWater && !map.Boards.Any(p => p.Contains(c)));
         MapData repeated = Enumerable.Range(1, 20).Select(s => LinkMapGenerator.Generate((ulong)s, 2)).First(m => m.Boards.GroupBy(p => p.Theme).Any(g => g.Count() > 1));
         Assert.True(MapValidator.Validate(repeated).IsValid);
@@ -113,7 +113,7 @@ public class 物化状态校验Tests
         Assert.Contains(Failures(fewer), f => f.Code == "PLATE_HEIGHT" && f.Message.Contains("有 1 个坡道", StringComparison.Ordinal));
 
         // ② 中间带一格降到 0。
-        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsPlayable(c));
+        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsLand(c));
         Assert.Contains(Failures(WithHeights(map, (middle, 0))), f => f.Code == "PLATE_HEIGHT" && f.Coords.SequenceEqual([middle]));
 
         // ③ 坡道朝外的低地格改成深水（不可落子）。
@@ -212,7 +212,7 @@ public class 物化状态校验Tests
         Assert.NotNull(plate.Theme);   // 中立平台带主题（基图合规）
         Assert.Contains(Failures(map with { Boards = map.Boards.SetItem(index, plate with { Theme = null }) }), f => f.Code == "PLATE_THEME" && f.Coords.SequenceEqual([plate.Origin]));
         Assert.Contains(Failures(map with { Boards = map.Boards.SetItem(index, plate with { Theme = BoardTheme.Plateau }) }), f => f.Code == "PLATE_THEME" && f.Message.Contains("高台", StringComparison.Ordinal));
-        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsPlayable(c));
+        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsLand(c));
         Assert.Contains(Failures(WithHeights(map, (middle, 0))), f => f.Code == "PLATE_HEIGHT" && f.Coords.SequenceEqual([middle]) && f.Message.Contains("公共棋盘", StringComparison.Ordinal));
         Coord core = plate.CoreCells().First();
         Assert.Contains(Failures(WithHeights(map, (core, 1))), f => f.Code == "BIRTH_CORE_NOT_FLAT" && f.Coords.SequenceEqual([core]));
@@ -227,7 +227,7 @@ public class 物化状态校验Tests
         BoardPlate plate = map.Boards[0];
         MapData sealedOff = WithHeights(map, [.. Ramps(map, plate).Select(r => (r, 2))]);
         MapValidationFailure split = Assert.Single(Failures(sealedOff), f => f.Code == "ISLAND_LIBERTY_SPLIT");
-        Assert.Equal(plate.Cells().Where(sealedOff.IsPlayable).Order(), split.Coords);
+        Assert.Equal(plate.Cells().Where(sealedOff.IsLand).Order(), split.Coords);
         Assert.Contains(Failures(sealedOff), f => f.Code == "PLATE_HEIGHT");   // 同时坡道数为 0
         Assert.Empty(MapValidator.LibertySplit(map));
     }
@@ -238,7 +238,7 @@ public class 物化状态校验Tests
         // ISLAND_EXTENT（验收的核心断言）：把岛最南一行全部改成障碍，可落子区外接矩形变成 W×(H−1) → 拒。
         // seat-gap-25 E1：2 人岛改为 45×33（原 map-expand-25 的 30×30 → 30×29）。
         MapData map = Base;
-        int bottom = map.AllCoords().Where(map.IsPlayable).Min(c => c.Y);
+        int bottom = map.AllCoords().Where(map.IsLand).Min(c => c.Y);
         MapData cut = map with { Obstacles = map.Obstacles.Union(map.AllCoords().Where(c => c.Y == bottom)) };
         MapValidationFailure extent = Assert.Single(Failures(cut), f => f.Code == "ISLAND_EXTENT");
         Assert.Contains("45×32", extent.Message, StringComparison.Ordinal);
@@ -303,9 +303,9 @@ public class 物化状态校验Tests
         Dictionary<Coord, Coord> outlets = Outlets(map, plate);
         Coord ramp = outlets.Keys.First();
         Assert.Contains(outlets[ramp], Adjacency.LibertyNeighbors(map, ramp));
-        Coord wall = plate.Cells().First(c => plate.OnRim(c) && map.IsPlayable(c) && map.HeightAt(c) == 2 && c.Y == plate.Origin.Y && c.X > plate.Origin.X && c.X < plate.Origin.X + plate.Width - 1 && map.IsPlayable(new Coord(c.X, c.Y - 1)));
+        Coord wall = plate.Cells().First(c => plate.OnRim(c) && map.IsLand(c) && map.HeightAt(c) == 2 && c.Y == plate.Origin.Y && c.X > plate.Origin.X && c.X < plate.Origin.X + plate.Width - 1 && map.IsLand(new Coord(c.X, c.Y - 1)));
         var below = new Coord(wall.X, wall.Y - 1);
-        Assert.True(map.IsPlayable(below) && map.HeightAt(below) == 0);
+        Assert.True(map.IsLand(below) && map.HeightAt(below) == 0);
         Assert.True(Adjacency.AreAdjacent(wall, below));
         Assert.DoesNotContain(below, Adjacency.LibertyNeighbors(map, wall));
     }

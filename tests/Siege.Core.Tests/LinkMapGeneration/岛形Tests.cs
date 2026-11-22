@@ -67,10 +67,10 @@ public class 岛形Tests(ITestOutputHelper output)
         {
             MapData map = gen.Map;
             HashSet<Coord> face = 浮空岛布局Tests.IslandOf(map);
-            int nonPlayable = face.Count(c => !map.IsPlayable(c));
+            int nonPlayable = face.Count(c => !map.IsLand(c));
             Assert.True(nonPlayable * 100 >= 25 * face.Count && nonPlayable * 100 <= 35 * face.Count,
                 $"link:{seed}:{players}：非可落子 {nonPlayable} / 岛面 {face.Count}");
-            Assert.All(map.AllCoords().Where(map.IsPlayable), c => Assert.Contains(c, face));   // 可落子格都在岛面上（分子分母同一片）
+            Assert.All(map.AllCoords().Where(map.IsLand), c => Assert.Contains(c, face));   // 可落子格都在岛面上（分子分母同一片）
             permille.Add(nonPlayable * 1000 / face.Count);
         }
 
@@ -190,13 +190,13 @@ public class 岛形Tests(ITestOutputHelper output)
                 }
             }
 
-            Coord[] outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(c => map.IsPlayable(c) && map.HeightAt(c) == 1).Select(c => Outward(p, c)!.Value))];
+            Coord[] outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(c => map.IsLand(c) && map.HeightAt(c) == 1).Select(c => Outward(p, c)!.Value))];
             Assert.NotEmpty(outlets);
             Assert.All(guarded, c => Assert.True(mask.Contains(c) || InCornerCut(c, size, gen.CornerCuts), $"{at}：保护区格 {c.ToNotation()} 被海湾咬掉"));
             Coord[] kept = [.. map.Boards.SelectMany(p => p.Cells()), .. outlets];
             Assert.All(kept, c => Assert.True(mask.Contains(c), $"{at}：平台 / 坡道朝外格 {c.ToNotation()} 不在岛上"));
             Assert.All(kept, c => Assert.False(gen.Lakes.Contains(c) || gen.RockClusters.Contains(c), $"{at}：平台 / 坡道朝外格 {c.ToNotation()} 被湖泊 / 岩区占用"));
-            Assert.All(outlets, c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0, $"{at}：坡道朝外格 {c.ToNotation()} 不是可落子低地"));
+            Assert.All(outlets, c => Assert.True(map.IsLand(c) && map.HeightAt(c) == 0, $"{at}：坡道朝外格 {c.ToNotation()} 不是可落子低地"));
         }
     }
 

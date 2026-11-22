@@ -33,14 +33,14 @@ public class 自由插旗Tests
     {
         // D3 / 追加裁决 19：可落子、高度 0、非桥、不在平台内；旗心 13×13 在画布内且不压中立平台；9×9 出生圈内可落子 ≥ 40；relic-sites 裁决 9：与任一信物遗址切比雪夫距离 ≥ 7。
         ImmutableArray<Coord> legal = FlagRules.LegalFlagCells(Large);
-        Assert.True(legal.Length * 100 >= Large.PlayableCount * 15, $"合规旗格 {legal.Length} 不足可落子 {Large.PlayableCount} 的 15%（large-60：60×60 上三档高台与禁插圈占去大半，实测 19%–29%）。");
+        Assert.True(legal.Length * 100 >= Large.LandCount * 15, $"合规旗格 {legal.Length} 不足可落子 {Large.LandCount} 的 15%（large-60：60×60 上三档高台与禁插圈占去大半，实测 19%–29%）。");
         Assert.Equal(legal, legal.OrderBy(c => c.Y).ThenBy(c => c.X));   // 先行后列
 
         // 测试内独立算式逐格复核（不调 IsLegalFlagCell）：整张图每一格的"合规"判定与 LegalFlagCells 一致。
         var set = legal.ToHashSet();
         foreach (Coord c in Large.AllCoords())
         {
-            bool ground = Large.IsPlayable(c) && Large.HeightAt(c) == 0 && !Large.HasBridge(c) && !Large.Boards.Any(p => p.Contains(c));
+            bool ground = Large.IsLand(c) && Large.HeightAt(c) == 0 && !Large.HasBridge(c) && !Large.Boards.Any(p => p.Contains(c));
             bool inside = c.X >= 6 && c.Y >= 6 && c.X + 6 < Large.Width && c.Y + 6 < Large.Height;
             // 13×13 与任何中立平台外接矩形至少隔 1 格（追加裁决 19）。
             bool clear = Large.Boards.All(p => c.X + 7 < p.Origin.X || p.Origin.X + p.Width < c.X - 6 || c.Y + 7 < p.Origin.Y || p.Origin.Y + p.Height < c.Y - 6);
@@ -58,7 +58,7 @@ public class 自由插旗Tests
                 for (int dx = -4; dx <= 4; dx++)
                 {
                     int x = c.X + dx, y = c.Y + dy;
-                    ring += x >= 0 && y >= 0 && x < Large.Width && y < Large.Height && Large.IsPlayable(new Coord(x, y)) ? 1 : 0;
+                    ring += x >= 0 && y >= 0 && x < Large.Width && y < Large.Height && Large.IsLand(new Coord(x, y)) ? 1 : 0;
                 }
             }
 

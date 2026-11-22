@@ -127,7 +127,7 @@ public class 地形派生数据不缓存Tests
 
         Assert.True(map.TerrainData.IsUnbridgedDeepWater(TestMaps.At("E5")));
         Assert.False(bridged.TerrainData.IsUnbridgedDeepWater(TestMaps.At("E5")));
-        Assert.Equal(map.PlayableCount + 1, bridged.PlayableCount);
+        Assert.Equal(map.LandCount + 1, bridged.LandCount);   // terrain-bonus：深水本就可落子，架桥改变的是陆地口径
     }
 
     [Fact]

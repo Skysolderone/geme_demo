@@ -101,11 +101,11 @@ public class 气边Tests
     [Fact]
     public void 不可落子格没有气边()
     {
-        // 障碍与未架桥深水自身不发出气边，桥格发出
+        // 障碍自身不发出气边；未架桥深水（terrain-bonus 起可落子）与桥格都发出
         GameBoard board = 地形齐全的盘面();
 
         Assert.Empty(board.LibertyNeighbors(TestMaps.At("C3")));
-        Assert.Empty(board.LibertyNeighbors(TestMaps.At("E5")));
+        Assert.NotEmpty(board.LibertyNeighbors(TestMaps.At("E5")));
         Assert.NotEmpty(board.LibertyNeighbors(TestMaps.At("E6")));
     }
 

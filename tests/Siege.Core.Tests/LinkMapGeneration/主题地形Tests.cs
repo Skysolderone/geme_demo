@@ -36,8 +36,8 @@ public class 主题地形Tests(ITestOutputHelper output)
     {
         string at = $"{plate.Theme} {plate.Width}×{plate.Height} 流种子 {seed}";
         HashSet<Coord> barrier = BarrierRegion(plate, map);
-        Assert.All(plate.Cells().Where(c => plate.OnRim(c) && !barrier.Contains(c)), c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest, $"{at} 外圈 {c}"));
-        Assert.All(plate.CoreCells(), c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) == Surface.Grass, $"{at} 核心区 {c}"));
+        Assert.All(plate.Cells().Where(c => plate.OnRim(c) && !barrier.Contains(c)), c => Assert.True(map.IsLand(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest, $"{at} 外圈 {c}"));
+        Assert.All(plate.CoreCells(), c => Assert.True(map.IsLand(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) == Surface.Grass, $"{at} 核心区 {c}"));
         Assert.All(map.TerrainData.Fences, e => Assert.False(plate.OnRim(e.A) || plate.OnRim(e.B) || (plate.InCore(e.A) && plate.InCore(e.B)), $"{at} 栅栏 {e}"));
         Coord[] scattered = [.. board.Rocks.Where(r => !board.Cluster.Contains(r))];
         Assert.InRange(scattered.Length, 0, plate.Width == 6 && plate.Height == 6 ? 0 : 2);
@@ -50,7 +50,7 @@ public class 主题地形Tests(ITestOutputHelper output)
         var queue = new Queue<Coord>(reached);
         while (queue.Count > 0)
         {
-            foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()).Where(plate.Contains))
+            foreach (Coord n in Adjacency.LandLibertyNeighbors(map, queue.Dequeue()).Where(plate.Contains))
             {
                 if (reached.Add(n))
                 {
@@ -59,7 +59,7 @@ public class 主题地形Tests(ITestOutputHelper output)
             }
         }
 
-        Assert.All(plate.Cells().Where(map.IsPlayable), c => Assert.True(reached.Contains(c), $"{at}：{c} 从核心区沿气边走不到"));
+        Assert.All(plate.Cells().Where(map.IsLand), c => Assert.True(reached.Contains(c), $"{at}：{c} 从核心区沿气边走不到"));
     }
 
     /// <summary>
@@ -115,7 +115,7 @@ public class 主题地形Tests(ITestOutputHelper output)
             var queue = new Queue<Coord>(core);
             while (queue.Count > 0)
             {
-                foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()).Where(plate.Contains))
+                foreach (Coord n in Adjacency.LandLibertyNeighbors(map, queue.Dequeue()).Where(plate.Contains))
                 {
                     if ((withPassage || n != passage) && reached.Add(n))
                     {
@@ -129,7 +129,7 @@ public class 主题地形Tests(ITestOutputHelper output)
 
         Assert.DoesNotContain(Walk(withPassage: false), c => far.Contains(c));
         HashSet<Coord> open = Walk(withPassage: true);
-        Assert.All(far.Where(map.IsPlayable), c => Assert.Contains(c, open));
+        Assert.All(far.Where(map.IsLand), c => Assert.Contains(c, open));
         return (line, beyond, passage);
     }
 
@@ -199,7 +199,7 @@ public class 主题地形Tests(ITestOutputHelper output)
                 Assert.All(cluster, c => Assert.True(plate.InMiddleBand(c), $"{at}：{c} 不在中间带"));
                 Assert.Single(Clumps([.. cluster]));
                 bool lake = cluster.All(map.TerrainData.IsUnbridgedDeepWater);
-                bool rock = cluster.All(c => board.Rocks.Contains(c) && !map.IsPlayable(c) && map.SurfaceAt(c) != Surface.DeepWater);
+                bool rock = cluster.All(c => board.Rocks.Contains(c) && !map.IsLand(c) && map.SurfaceAt(c) != Surface.DeepWater);
                 Assert.True(lake ^ rock, $"{at}：湖泊 / 岩区不是同一种");
                 lakes += lake ? 1 : 0;
                 rockFields += rock ? 1 : 0;
@@ -320,7 +320,7 @@ public class 主题地形Tests(ITestOutputHelper output)
                 {
                     LinkMapGenerator.IslandGeneration g = LinkMapGenerator.GenerateDetailed(seed, players);
                     MapData map = g.Map;
-                    (minPlayable, maxPlayable) = (Math.Min(minPlayable, map.PlayableCount), Math.Max(maxPlayable, map.PlayableCount));
+                    (minPlayable, maxPlayable) = (Math.Min(minPlayable, map.LandCount), Math.Max(maxPlayable, map.LandCount));
                     (minPlates, maxPlates) = (Math.Min(minPlates, map.Boards.Length), Math.Max(maxPlates, map.Boards.Length));
                     int count = map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
                     neutral[count] = neutral.GetValueOrDefault(count) + 1;
@@ -375,7 +375,7 @@ public class 主题地形Tests(ITestOutputHelper output)
                     $"{theme.DisplayName()} {side}×{side}：高2 {Avg(r => r.Board.Heights.Count(kv => kv.Value == 2)):0.0} 高1 {Avg(r => r.Board.Heights.Count(kv => kv.Value == 1)):0.0} "
                     + $"深水 {Avg(r => r.Board.Surfaces.Count(kv => kv.Value == Surface.DeepWater)):0.0} 桥 {Avg(r => r.Board.Bridges.Count):0.0} 林地 {Avg(r => r.Board.Surfaces.Count(kv => kv.Value == Surface.Forest)):0.0} "
                     + $"栅栏边 {Avg(r => r.Board.Fences.Count):0.0} 岩石 {Avg(r => r.Board.Rocks.Count):0.0} "
-                    + $"可落子 {Avg(r => r.Map.PlayableCount):0.0} 重抽 {Avg(r => r.Board.Redraws):0.00}");
+                    + $"可落子 {Avg(r => r.Map.LandCount):0.0} 重抽 {Avg(r => r.Board.Redraws):0.00}");
                 Assert.Equal(StreamSeeds, rows.Count);
             }
         }
