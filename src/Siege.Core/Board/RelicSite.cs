@@ -96,7 +96,7 @@ public static class RelicSites
     public static bool IsSiteGround(MapData map, Coord c)
     {
         ArgumentNullException.ThrowIfNull(map);
-        if (!map.IsPlayable(c) || map.HeightAt(c) != 0)
+        if (!map.IsLand(c) || map.HeightAt(c) != 0)
         {
             return false;
         }
@@ -106,7 +106,7 @@ public static class RelicSites
             for (int dx = -1; dx <= 1; dx++)
             {
                 int x = c.X + dx, y = c.Y + dy;
-                if (x < 0 || y < 0 || x >= map.Width || y >= map.Height || !map.IsPlayable(new Coord(x, y)))
+                if (x < 0 || y < 0 || x >= map.Width || y >= map.Height || !map.IsLand(new Coord(x, y)))
                 {
                     return false;
                 }

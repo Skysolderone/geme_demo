@@ -73,6 +73,31 @@ public static class Adjacency
     }
 
     /// <summary>
+    /// 陆地气边（terrain-bonus 实现决策 I7）：<see cref="LibertyNeighbors"/> 只留两端都是陆地（<see cref="MapData.IsLand"/>：非未架桥深水）的边；<paramref name="c"/> 不是陆地时返回空。
+    /// 即深水可落之前的气边口径，<b>只</b>供地图生成与地图校验的连通性自检使用，使既有地图逐格不变；对局规则 MUST 走 <see cref="LibertyNeighbors"/>。
+    /// </summary>
+    public static ImmutableArray<Coord> LandLibertyNeighbors(MapData map, Coord c)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        if (!map.IsLand(c))
+        {
+            return ImmutableArray<Coord>.Empty;
+        }
+
+        ImmutableArray<Coord> all = LibertyNeighbors(map, c);
+        ImmutableArray<Coord>.Builder builder = ImmutableArray.CreateBuilder<Coord>(all.Length);
+        foreach (Coord n in all)
+        {
+            if (map.IsLand(n))
+            {
+                builder.Add(n);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
     /// 眼边导出（fence-eye-rule D1，裁决 F1 / F2 / F3）：<paramref name="c"/> 的几何邻居中，与 <paramref name="c"/> 之间存在眼边者——
     /// 两格都可落子（非障碍、非未架桥深水）∧ |Δh| &lt; <see cref="TerrainData.CliffDrop"/>（即 ≤ 1）。即气边去掉"之间无栅栏"一条：<b>不看栅栏</b>
     /// （预置栅栏与造出的栅栏同样不看）。对称关系。<b>只</b>供活形判定（空区、封闭、眼空间归属、方四）使用；气、棋串、提子一律走 <see cref="LibertyNeighbors"/>。
@@ -118,7 +143,7 @@ public static class Adjacency
     public static ImmutableArray<Coord> CoverageTargets(MapData map, Coord s, bool farReach)
     {
         ArgumentNullException.ThrowIfNull(map);
-        if (!map.IsPlayable(s) || map.SurfaceAt(s) == Surface.Marsh)
+        if (!map.IsPlayable(s) || map.SurfaceAt(s) is Surface.Marsh or Surface.Rock)
         {
             return ImmutableArray<Coord>.Empty;
         }
@@ -184,9 +209,10 @@ public static class Adjacency
         return builder.ToImmutable();
     }
 
-    /// <summary>目标格是否接收来自高度 <paramref name="sourceHeight"/> 的覆盖：可落子、非林地、不比来源高 <see cref="TerrainData.CliffDrop"/>。</summary>
+    /// <summary>目标格是否接收来自高度 <paramref name="sourceHeight"/> 的覆盖：可落子、非未架桥深水（terrain-bonus）、非林地、不比来源高 <see cref="TerrainData.CliffDrop"/>。</summary>
     private static bool Receives(MapData map, Coord target, int sourceHeight) =>
         map.IsPlayable(target)
+        && !map.TerrainData.IsUnbridgedDeepWater(target)
         && map.SurfaceAt(target) != Surface.Forest
         && map.HeightAt(target) - sourceHeight < TerrainData.CliffDrop;
 }

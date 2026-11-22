@@ -102,7 +102,7 @@ public class 禁入格Tests
     {
         TerrainData terrain = eastOfEye == "fence"
             ? TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)], fences: [("D4", "E4"), ("E3", "F3")])
-            : TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater), ("F3", Surface.DeepWater)], fences: [("D4", "E4")]);
+            : TestMaps.Terrain(heights: [("F3", 2)], surfaces: [("E5", Surface.DeepWater)], fences: [("D4", "E4")]);   // terrain-bonus：空深水不再是墙，对照改用崖壁
         MatchFlow match = LinkModeFixtures.PlainStarted(terrain)
             .AtRound(5, [TestMaps.P1, TestMaps.P0, TestMaps.P2, TestMaps.P3])
             .Stones(TestMaps.P0, "C4", "D4", "D3", "E4")
@@ -145,11 +145,11 @@ public class 禁入格Tests
     }
 
     [Fact]
-    public void 深水贴眼时禁入照旧()
+    public void 崖壁贴眼时禁入照旧()
     {
-        // 上一条的对照：同一局面，E3 东侧换成未架桥深水（墙，裁决 F2）→ E3 对 P0 封闭，主串 C3 + E3 两眼成活，两格对 P1 禁入，
+        // 上一条的对照：同一局面，E3 东侧换成 h=2 崖壁（墙，裁决 F2；terrain-bonus 前用的是未架桥深水，现已不是墙）→ E3 对 P0 封闭，主串 C3 + E3 两眼成活，两格对 P1 禁入，
         // 合法落子范围扣除、暂放 E3 报"活棋禁入"。说明上一条变绿靠的是"栅栏不是墙"，而不是禁入机制失效。
-        MatchFlow match = FencedEyeMatch("water");
+        MatchFlow match = FencedEyeMatch("cliff");
 
         LifeShapeReport life = LifeShapeReport.Analyze(match.Board);
         Assert.Equal(["C3", "E3"], life.EyeSpacesOf("C4"));

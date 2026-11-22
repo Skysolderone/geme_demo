@@ -77,7 +77,7 @@ public class 覆盖关系Tests
 
         Assert.Equal(TestMaps.P0, coverage.UniqueCoverer(TestMaps.At("H6")));
         Assert.Equal(CellCoverage.None, coverage.CoverageOf(TestMaps.At("G6")));
-        Assert.Equal(OwnershipKind.Obstacle, coverage.OwnershipOf(TestMaps.At("G6")).Kind);
+        Assert.Equal(OwnershipKind.Neutral, coverage.OwnershipOf(TestMaps.At("G6")).Kind);   // terrain-bonus：深水可落子，空着且不被覆盖 → 中立
         Assert.Equal(["F5", "E6", "H6", "F7"], board.CoverageTargets(TestMaps.At("F6")).Notations());
     }
 

@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.TerrainSpec;
 /// </remarks>
 public class 新地表判断唯一Tests
 {
-    private static readonly Regex NewSurface = new(@"Surface\.(Desert|Marsh|Crag|Shallows)\b", RegexOptions.None, TimeSpan.FromSeconds(5));
+    private static readonly Regex NewSurface = new(@"Surface\.(Desert|Marsh|Crag|Shallows|Rock)\b", RegexOptions.None, TimeSpan.FromSeconds(5));
 
     /// <summary>相对 <c>src/</c> 的路径（正斜杠）。</summary>
     private static readonly string[] Allowed =
@@ -23,6 +23,7 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/MapFile.cs",       // 映射：地表 ↔ 地图文件字符码
         "Siege.Core/Board/MapValidator.cs",  // 校验：出生区内无新地表（map-definition「地图静态校验规则」第 6 条；MapValidator 内注释沿用旧编号第 9 条）；链接档清单"新地表只在中间带、每块至多 4 格"（link-map-surfaces D4）
         "Siege.Core/Board/Maps/LinkMapGenerator.Surfaces.cs",  // 生成：链接档中间带新地表投放的主题 ↔ 地表配对表与各自的候选条件（link-map-surfaces D2），只写地图数据、不判规则
+        "Siege.Core/Scoring/TerrainEffects.cs",       // 规则：terrain-bonus 地形军势修正表（唯一一份）
         "Siege.Core/Scoring/PowerCalculator.cs",      // 规则：段 1 荒漠——独占计分谓词 ScoresTerritory
         "Siege.Core/Board/Adjacency.cs",              // 规则：段 2 沼泽源、段 3 岩台远格（覆盖关系唯一实现）
         "Siege.Core/Board/GameBoard.MapTables.cs",    // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty（board-link-mode 裁决 P7：派生表抽成 partial 文件，谓词随之搬入）
@@ -33,11 +34,11 @@ public class 新地表判断唯一Tests
     ];
 
     [Fact]
-    public void 地表枚举恰为八种()
+    public void 地表枚举恰为九种()
     {
-        Assert.Equal(8, Enum.GetValues<Surface>().Length);
+        Assert.Equal(9, Enum.GetValues<Surface>().Length);
         Assert.All(Enum.GetValues<Surface>(), s => Assert.False(string.IsNullOrWhiteSpace(s.DisplayName())));
-        Assert.Equal(8, Enum.GetValues<Surface>().Select(s => s.DisplayName()).Distinct().Count());
+        Assert.Equal(9, Enum.GetValues<Surface>().Select(s => s.DisplayName()).Distinct().Count());
     }
 
     [Fact]

@@ -235,8 +235,8 @@ public class 总势力Tests
         Assert.Equal(["F5", "E6", "G6", "F7"], p0.ExclusiveCells.Notations());
         Assert.Empty(p0.ScoredCells);
         Assert.Equal(0, p0.TerritoryScore);
-        Assert.Equal((BigInteger)1, p0.GroupScore);
-        Assert.Equal(1, p0.Total);
+        Assert.Equal((BigInteger)2, p0.GroupScore);   // terrain-bonus：荒漠修正 +1
+        Assert.Equal(2, p0.Total);
     }
 
     [Fact]
@@ -260,8 +260,8 @@ public class 总势力Tests
 
         PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
 
-        Assert.Equal((BigInteger)1, p0.GroupScore);
+        Assert.Equal((BigInteger)2, p0.GroupScore);   // terrain-bonus：荒漠修正 +1
         Assert.Equal(4, p0.TerritoryScore);
-        Assert.Equal(5, p0.Total);
+        Assert.Equal(6, p0.Total);
     }
 }

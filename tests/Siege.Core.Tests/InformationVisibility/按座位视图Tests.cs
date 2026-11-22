@@ -66,8 +66,8 @@ public class 按座位视图Tests
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(plate.Cells().Order().Select(c => c.ToNotation()), a.Cells.Where(c => plate.Contains(Coord.Parse(c.Coord))).Select(c => c.Coord));
         SeatCellView w = a.CellAt(water[0])!;
-        Assert.Equal((Terrain.Obstacle, Surface.DeepWater, false), (w.Terrain, w.Surface, w.Bridge));
-        Assert.True(w.Ownership is { Kind: OwnershipKind.Obstacle }, $"{w.Ownership}");
+        Assert.Equal((Terrain.Playable, Surface.DeepWater, false), (w.Terrain, w.Surface, w.Bridge));
+        Assert.True(w.Ownership is { Kind: OwnershipKind.Neutral }, $"{w.Ownership}");   // terrain-bonus：空的未架桥深水不是覆盖目标，恒为中立
         SeatCellView r = a.CellAt(rocks[0])!;
         Assert.Equal((Terrain.Obstacle, Surface.Grass), (r.Terrain, r.Surface));
 

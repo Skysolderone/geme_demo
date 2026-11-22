@@ -24,7 +24,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
             for (int dx = -1; dx <= 1; dx++)
             {
                 int x = c.X + dx, y = c.Y + dy;
-                if (x < 0 || y < 0 || x >= map.Width || y >= map.Height || !map.IsPlayable(new Coord(x, y)))
+                if (x < 0 || y < 0 || x >= map.Width || y >= map.Height || !map.IsLand(new Coord(x, y)))
                 {
                     return false;
                 }
@@ -51,7 +51,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
                 Assert.Equal(sites.Length, sites.Select(s => s.Cell).Distinct().Count());
                 foreach (RelicSite site in sites)
                 {
-                    Assert.True(map.IsPlayable(site.Cell), $"{map.Id} 遗址 {site} 不可落子。");
+                    Assert.True(map.IsLand(site.Cell), $"{map.Id} 遗址 {site} 不可落子。");
                     Assert.Equal(0, map.HeightAt(site.Cell));   // 追加裁决 13：遗址只落低地，平台顶 / 坡道不放
                     Assert.True(Inland(map, site.Cell), $"{map.Id} 遗址 {site} 贴着岸线 / 障碍 / 深水。");
                 }
@@ -142,7 +142,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
         Assert.Empty(Codes(large with { RelicSites = [.. sites.Reverse()] }));   // 次序不是校验项
 
         // 位置：挪到岸边 / 岩石旁、不可落子格、重复。
-        Coord shore = large.AllCoords().First(c => large.IsPlayable(c) && !Inland(large, c));
+        Coord shore = large.AllCoords().First(c => large.IsLand(c) && !Inland(large, c));
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = shore }) }));
         Coord rock = large.Obstacles.First(c => c.X > 10 && c.Y > 10);
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = rock }) }));

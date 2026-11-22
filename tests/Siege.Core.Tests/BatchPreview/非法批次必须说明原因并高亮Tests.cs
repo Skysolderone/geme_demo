@@ -145,20 +145,10 @@ public class 非法批次必须说明原因并高亮Tests
     [Fact]
     public void 破坏活形的格目标改造高亮在格上()
     {
-        // 搭桥漏眼（夹具同 capture-resolution「搭桥漏眼被拒」）：触发的改造目标是格 E3（深水），走格高亮而不是边高亮。
-        GameBoard board = LifeShapeFixtures.Grid(
-        [
-            ".......",
-            ".......",
-            "00000..",
-            "0...~..",
-            "0...0..",
-            "00000..",
-        ]);
+        // terrain-bonus：空的未架桥深水不再是墙，格目标改造（搭桥 / 烧林）在新规则下已造不出破坏活形的局面（原"搭桥漏眼"夹具失效）。
+        // 呈现层"触发改造是格目标时走格高亮、不走边高亮"仍保留：直接构造一条由搭桥触发的破坏活形失败。
         Placement bridge = BatchFixtures.Artisan("F3", TerrainEdit.Bridge(TestMaps.At("E3")));
-
-        SettlementOutcome outcome = BatchFixtures.Driver(board).Confirm(BatchFixtures.Context(board, P1), [bridge]);
-        FailurePresentation shown = FailurePresentation.From(outcome.Failure!);
+        FailurePresentation shown = FailurePresentation.From(BatchFailure.BreaksLife(TestMaps.P0, [TestMaps.At("A1")], [bridge]));
 
         Assert.Equal(BatchFailureKind.BreaksLife, shown.Kind);
         Assert.Equal(["E3", "F3"], shown.Highlights.Where(h => h.Kind == HighlightKind.FailureFocus).Select(h => h.Coord).Notations());

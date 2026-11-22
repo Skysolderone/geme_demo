@@ -74,7 +74,7 @@ public class 锁定落座Tests
                 for (int dx = -4; dx <= 4; dx++)
                 {
                     var c = new Coord(flag.X + dx, flag.Y + dy);
-                    if (Large.IsPlayable(c))
+                    if (Large.IsLand(c))
                     {
                         ring.Add(c);
                     }

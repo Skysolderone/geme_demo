@@ -297,12 +297,23 @@ public static class PieceEffects
         return group.Stones.Count(stone => TypeAt(board, stone) == PieceType.Multiplier);
     }
 
-    /// <summary>棋串的基础军势总和。</summary>
+    /// <summary>棋串的基础军势总和：逐枚取 <see cref="TerrainEffects.EffectiveBasePower"/>（类型基础军势 + 所在格地形修正，逐枚不为负，terrain-bonus 裁决 4）。</summary>
     public static int BaseTotal(GameBoard board, Group group)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
-        return group.Stones.Sum(stone => BasePower(TypeAt(board, stone)));
+        return group.Stones.Sum(stone => TerrainEffects.EffectiveBasePower(TypeAt(board, stone), board.Map, stone));
+    }
+
+    /// <summary>
+    /// 棋串基础军势里来自地形的部分（terrain-bonus）：<see cref="BaseTotal"/> 减去各枚类型基础军势之和。
+    /// 逐枚的"不为负"截断已计入（截断时该枚的地形部分为 −类型基础军势）；只作明细展示与遥测，MUST NOT 另行加进军势。
+    /// </summary>
+    public static int TerrainBonus(GameBoard board, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+        return BaseTotal(board, group) - group.Stones.Sum(stone => BasePower(TypeAt(board, stone)));
     }
 
     /// <summary>从 <paramref name="start"/> 沿 (dx, dy) 方向的极长连珠线；若 <paramref name="start"/> 不是该线起点则返回 0，避免子区间重复计分。</summary>

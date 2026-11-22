@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace Siege.Core.Board;
 
 /// <summary>
-/// 一个战场（board-link-mode D1）：沿几何四邻相连的可落子格的一个极大连通分量。
+/// 一个战场（board-link-mode D1）：沿几何四邻相连的可落子格的一个极大连通分量（terrain-bonus 起含未架桥深水；地图生成与校验的自检另用只看陆地的 <see cref="Battlefields.OfLand"/>）。
 /// <see cref="Id"/> 取分量内编号最小的出生棋盘（= 出生区）编号，在整局中稳定；分量里没有任何出生区时为 −1
 /// （链接档地图上这是校验失败项 <c>BATTLEFIELD_WITHOUT_BIRTH_BOARD</c>，其余规格档的孤立可落子区允许存在、只是不属于任何战场编号）。
 /// </summary>
@@ -33,6 +33,7 @@ public sealed record Battlefield(int Id, ImmutableArray<Coord> Cells, ImmutableA
 public sealed class Battlefields
 {
     private static readonly ConditionalWeakTable<MapData, Battlefields> Memo = new();
+    private static readonly ConditionalWeakTable<MapData, Battlefields> LandMemo = new();
 
     private readonly int _width;
     private readonly int _height;
@@ -58,7 +59,17 @@ public sealed class Battlefields
     public static Battlefields Of(MapData map)
     {
         ArgumentNullException.ThrowIfNull(map);
-        return Memo.GetValue(map, Compute);
+        return Memo.GetValue(map, m => Compute(m, m.IsPlayable));
+    }
+
+    /// <summary>
+    /// 只按陆地（<see cref="MapData.IsLand"/>：未架桥深水不连通）导出的战场（terrain-bonus 实现决策 I7）：即深水可落之前的战场口径，
+    /// <b>只</b>供地图生成与地图校验的自检使用，使既有地图逐格不变；对局规则 MUST 走 <see cref="Of"/>。
+    /// </summary>
+    public static Battlefields OfLand(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return LandMemo.GetValue(map, m => Compute(m, m.IsLand));
     }
 
     /// <summary>该格所在的战场；不可落子的格（含越界）为 <c>null</c>。</summary>
@@ -87,7 +98,7 @@ public sealed class Battlefields
         return null;
     }
 
-    private static Battlefields Compute(MapData map)
+    private static Battlefields Compute(MapData map, Func<Coord, bool> passable)
     {
         int width = map.Width;
         int height = map.Height;
@@ -99,7 +110,7 @@ public sealed class Battlefields
         foreach (Coord start in map.AllCoords())
         {
             int startIndex = (start.Y * width) + start.X;
-            if (component[startIndex] >= 0 || !map.IsPlayable(start))
+            if (component[startIndex] >= 0 || !passable(start))
             {
                 continue;
             }
@@ -116,7 +127,7 @@ public sealed class Battlefields
                 foreach (Coord n in Adjacency.Neighbors(width, height, current))
                 {
                     int index = (n.Y * width) + n.X;
-                    if (component[index] < 0 && map.IsPlayable(n))
+                    if (component[index] < 0 && passable(n))
                     {
                         component[index] = number;
                         queue.Enqueue(n);
@@ -160,7 +171,7 @@ public sealed class Battlefields
             Coord? anchor = null;
             foreach (Coord c in map.Boards[b].Cells())
             {
-                if (map.IsPlayable(c))
+                if (passable(c))
                 {
                     anchor = c;
                     break;

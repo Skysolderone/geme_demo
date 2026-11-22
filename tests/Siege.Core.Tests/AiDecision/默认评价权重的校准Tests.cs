@@ -160,7 +160,9 @@ public class 默认评价权重的校准Tests
         Assert.Equal(terrainDimensions, EvaluationWeights.TerrainDimensions);
         Assert.Contains("Safety / Eye / Threat 三维" + EvaluationWeights.TerrainUncalibratedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
         Assert.Equal("未校准（fence-eye-rule 后）", EvaluationWeights.FenceEyeUncalibratedStatus);
-        Assert.EndsWith("活形无视栅栏后 Safety / Eye / Threat 三维" + EvaluationWeights.FenceEyeUncalibratedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        Assert.Contains("活形无视栅栏后 Safety / Eye / Threat 三维" + EvaluationWeights.FenceEyeUncalibratedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        // terrain-bonus I8：深水可落与地形军势修正改了计分与可落子规则，九维取值不变、以此补注结尾。
+        Assert.EndsWith("；深水可落与地形军势修正后九维未重扫（terrain-bonus 后）", EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
         // 停手阈值不是评价权重，不带地形补注（4.3 只标权重）；活形规则变更（fence-eye-rule）按 testing.md 同标未校准，见「默认停手阈值被改动」。
         Assert.DoesNotContain("link-map-terrain", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
         Assert.EndsWith(EvaluationWeights.FenceEyeUncalibratedStatus, AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
@@ -279,7 +281,8 @@ public class 默认评价权重的校准Tests
             + "；more-pieces-relics 扩展计分后未重扫"   // more-pieces-relics 3.4：计分扩展后补注，取值不变
             + "；信物维原始值改为势力增量口径后 Relic 未校准（relic-redesign C1 后，取值 6 沿用）"   // relic-redesign C1：信物维重写后补注，取值不变
             + "；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）"   // link-map-terrain 4.3（M10）：地形相关三维补注，取值不变
-            + "；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）",   // fence-eye-rule 2.1（F5）：活形规则变更后同三维补注，取值不变
+            + "；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）"   // fence-eye-rule 2.1（F5）：活形规则变更后同三维补注，取值不变
+            + "；深水可落与地形军势修正后九维未重扫（terrain-bonus 后）",   // terrain-bonus I8：计分与可落子规则变更后九维补注，取值不变
             EvaluationWeights.CalibrationStatus);
         Assert.Contains(EvaluationWeights.CalibrationStatus, src, StringComparison.Ordinal);
 

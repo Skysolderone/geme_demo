@@ -42,13 +42,13 @@ public class 地图静态校验规则Tests
         MapData map = Link();
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(975, map.PlayableCount);    // map-coastline 裁决 F1：原 972（F1 之前）；map-coastline 之前 1419（矩形切角岛）；seat-gap-25 之前 833（30×30 岛）
+        Assert.Equal(975, map.LandCount);    // map-coastline 裁决 F1：原 972（F1 之前）；map-coastline 之前 1419（矩形切角岛）；seat-gap-25 之前 833（30×30 岛）
         Assert.Equal(5, map.Boards.Length);      // 2 个座位 + 3 块中立平台（原 6 块平台）
         Assert.DoesNotContain("RelicCells", MapFile.ToJson(map), StringComparison.Ordinal);   // 不放静态信物格（段 A3；relic-redesign W1 起地图数据没有该字段）
         Assert.Equal("AN15", Clean.Origin.ToNotation());
         Assert.Equal(BoardPlateKind.Birth, Clean.Kind);
         Assert.Equal(BoardTheme.Forest, Clean.Theme);
-        Assert.Equal(["AO19", "AO20", "AO21", "AP21"], Clean.Cells().Where(c => !map.IsPlayable(c)).Order().Notations());
+        Assert.Equal(["AO19", "AO20", "AO21", "AP21"], Clean.Cells().Where(c => !map.IsLand(c)).Order().Notations());
         Assert.DoesNotContain(map.TerrainData.Fences, e => Clean.Contains(e.A) || Clean.Contains(e.B));
         Assert.Equal("AP17", Clean.CoreOrigin.ToNotation());
     }
@@ -59,9 +59,9 @@ public class 地图静态校验规则Tests
         // 2 人浮空岛可落子格区间 900–1060（MapValidator 声明表；map-coastline 种子 1–20 实测 953–1001 外留约 5%，原 seat-gap-25 的 1250–1480、更早 760–876）。
         // 下界：低地（平台外）按坐标序挖掉 76 格 → 975 − 76 = 899（map-coastline 裁决 F1：原 972 − 73）；上界：画布全部开放。
         MapData map = Link();
-        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(76)];
+        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsLand(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(76)];
         MapData tooFew = map with { Obstacles = map.Obstacles.Union(rocks) };
-        Assert.Equal(899, tooFew.PlayableCount);
+        Assert.Equal(899, tooFew.LandCount);
         MapValidationFailure low = Assert.Single(
             MapValidator.Validate(tooFew).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains("可落子格为 899", low.Message, StringComparison.Ordinal);
@@ -70,10 +70,10 @@ public class 地图静态校验规则Tests
 
         // 上界 1060 同样要挡住：区间只有下界有算例时，把上界写得更大只会让消息文本变化，行为上一条测试都不红。
         MapData tooOpen = map with { Obstacles = [] };
-        Assert.True(tooOpen.PlayableCount > 1060, tooOpen.PlayableCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(tooOpen.LandCount > 1060, tooOpen.LandCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains($"可落子格为 {tooOpen.PlayableCount}", high.Message, StringComparison.Ordinal);
+        Assert.Contains($"可落子格为 {tooOpen.LandCount}", high.Message, StringComparison.Ordinal);
         Assert.Contains("900–1060", high.Message, StringComparison.Ordinal);
     }
 
@@ -291,7 +291,7 @@ public class 地图静态校验规则Tests
 
         // 上界同样是 9：给出生区添一格 1 号平台中间带的可落子格 → 10 → 报错。
         BoardPlate first = map.Boards[0];
-        Coord middle = first.Cells().Order().First(c => first.InMiddleBand(c) && map.IsPlayable(c));
+        Coord middle = first.Cells().Order().First(c => first.InMiddleBand(c) && map.IsLand(c));
         MapData ten = map with { BirthZones = map.BirthZones.SetItem(0, map.BirthZones[0].Add(middle)) };
         MapValidationFailure over = Assert.Single(
             MapValidator.Validate(ten).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
@@ -306,7 +306,7 @@ public class 地图静态校验规则Tests
         MapData shrunk = map with
         {
             BirthZones = map.BirthZones.SetItem(
-                0, [.. map.BirthZones[0].Where(map.IsPlayable).Order().Take(8)]),
+                0, [.. map.BirthZones[0].Where(map.IsLand).Order().Take(8)]),
         };
 
         MapValidationFailure failure = Assert.Single(
@@ -323,7 +323,7 @@ public class 地图静态校验规则Tests
         MapData nineCells = map with
         {
             BirthZones = map.BirthZones.SetItem(
-                0, [.. map.BirthZones[0].Where(map.IsPlayable).Order().Take(9)]),
+                0, [.. map.BirthZones[0].Where(map.IsLand).Order().Take(9)]),
         };
 
         Assert.DoesNotContain(
@@ -382,7 +382,7 @@ public class 地图静态校验规则Tests
         // 用障碍 AR15–AU15（南）、AQ16 / AQ17（西）、AR18–AU18（北）封住其余三侧。
         MapData map = Link();
         string[] region = ["AR16", "AS16", "AT16", "AU16", "AR17", "AS17", "AT17", "AU17"];
-        Assert.DoesNotContain(region.Select(Coord.Parse), c => map.HeightAt(c) != 2 || !map.IsPlayable(c));
+        Assert.DoesNotContain(region.Select(Coord.Parse), c => map.HeightAt(c) != 2 || !map.IsLand(c));
         Assert.Equal(0, map.HeightAt(Coord.Parse("AV16")));   // 东侧崖下是低地
         Coord[] walls = [.. new[] { "AR15", "AS15", "AT15", "AU15", "AQ16", "AQ17", "AR18", "AS18", "AT18", "AU18" }.Select(Coord.Parse)];
         MapData eightCellPocket = map with { Obstacles = map.Obstacles.Union(walls) };
@@ -449,8 +449,8 @@ public class 地图静态校验规则Tests
         Coord entrance = Coord.Parse("A5");   // map-expand-25：画布西侧留白
         Coord choke = Coord.Parse("B4");
         MapData map = Link() with { CentralEntrance = entrance, ChokePoints = [choke], DistanceTolerance = 3, ToleranceRelaxReason = null };
-        Assert.False(map.IsPlayable(entrance));
-        Assert.False(map.IsPlayable(choke));
+        Assert.False(map.IsLand(entrance));
+        Assert.False(map.IsLand(choke));
 
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
@@ -536,7 +536,7 @@ public class 地图静态校验规则Tests
     public void 出生区内四种新地表都被拒(Surface surface)
     {
         MapData map = Link();
-        Coord cell = map.BirthZones[0].Where(map.IsPlayable).Order().First();
+        Coord cell = map.BirthZones[0].Where(map.IsLand).Order().First();
         MapData tainted = map with
         {
             TerrainData = WithSurfaces(map.TerrainData, map.TerrainData.Surfaces.SetItem(cell, surface)),
@@ -554,7 +554,7 @@ public class 地图静态校验规则Tests
         // map-expand-25：平台之外是可落子的低地，四种新地表标在按坐标序前四个低地草地格上（平台内的新地表只许在中间带，见「中间带新地表被接受」「外圈或核心区的新地表被拒」）。
         MapData map = Link();
         Assert.True(MapValidator.Validate(map).IsValid);
-        Coord[] outside = [.. map.AllCoords().Where(c => map.IsPlayable(c) && map.SurfaceAt(c) == Surface.Grass && !map.Boards.Any(b => b.Contains(c))).Order().Take(4)];
+        Coord[] outside = [.. map.AllCoords().Where(c => map.IsLand(c) && map.SurfaceAt(c) == Surface.Grass && !map.Boards.Any(b => b.Contains(c))).Order().Take(4)];
         Assert.All(outside, c => Assert.Null(map.BirthZoneOf(c)));
         Surface[] kinds = [Surface.Desert, Surface.Marsh, Surface.Crag, Surface.Shallows];
         ImmutableDictionary<Coord, Surface> surfaces = map.TerrainData.Surfaces;

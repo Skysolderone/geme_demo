@@ -368,6 +368,7 @@ public static class MapFile
         Surface.Marsh => 'M',
         Surface.Crag => 'P',
         Surface.Shallows => 'S',
+        Surface.Rock => 'K',
         _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
     };
 
@@ -385,6 +386,7 @@ public static class MapFile
         'M' => Surface.Marsh,
         'P' => Surface.Crag,
         'S' => Surface.Shallows,
+        'K' => Surface.Rock,
         _ => null,
     };
 

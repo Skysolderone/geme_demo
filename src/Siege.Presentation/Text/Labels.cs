@@ -30,7 +30,9 @@ public static class Labels
     /// </summary>
     public static string? SurfaceRule(Surface surface) => surface switch
     {
-        Surface.Grass or Surface.Road or Surface.Forest or Surface.DeepWater => null,
+        Surface.Grass or Surface.Road or Surface.Forest => null,
+        Surface.DeepWater => "深水：可落子，空着时不算气、不被覆盖",
+        Surface.Rock => "岩石：其上的棋子不产生覆盖",
         Surface.Desert => "荒漠：独占也不计领地分",
         Surface.Marsh => "沼泽：其上的棋子不产生覆盖",
         Surface.Crag => "岩台：其上的棋子多覆盖直线远一格",
@@ -65,7 +67,7 @@ public static class Labels
     {
         PieceType.Basic => "军势 1，没有特殊效果；最省槽位的填充",
         PieceType.Fortress => "军势 4，单枚最硬",
-        PieceType.Line => "横或纵连成 L 枚（L≥2）的线 +L×(L−1)；隔崖、深水、栅栏不成线",
+        PieceType.Line => "横或纵连成 L 枚（L≥2）的线 +L×(L−1)；隔崖、栅栏不成线",
         PieceType.Multiplier => "所在棋串军势整体 ×1.5，每枚叠乘、不封顶，向下取整",
         PieceType.Synergy => $"每枚 +{PieceEffects.SynergyPerType} × 本串其他类型的种数",
         PieceType.Artisan => $"军势 1；落下时可改造一次地形（{Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Bridge)} / {Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Fence)} / {Core.Board.TerrainEdit.DisplayName(TerrainEditKind.Burn)}），之后同普通子",
@@ -75,6 +77,17 @@ public static class Labels
         PieceType.Boundary => $"每个有气边相邻的己方独占空格 +{PieceEffects.BoundaryPerExclusiveCell}，守自家地块",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
+
+    /// <summary>
+    /// 地形军势修正的一句话（terrain-bonus 裁决 3–7）：如「沼泽 +2」「深水 −1」「草地 ±0」；数值取 Core 的 <see cref="TerrainEffects"/>（唯一一份）。
+    /// </summary>
+    public static string TerrainModifier(Surface surface) => $"{surface.DisplayName()} {Signed(TerrainEffects.UncalibratedSurfaceModifier(surface))}";
+
+    /// <summary>高度军势修正的一句话：如「高台（h=2）+2」。</summary>
+    public static string HeightModifier(int height) =>
+        $"{(height switch { 0 => "低地", 1 => "平台", _ => "高台" })}（h={height}）{Signed(TerrainEffects.UncalibratedHeightModifier(height))}";
+
+    private static string Signed(int v) => v > 0 ? $"+{v}" : v < 0 ? $"−{-v}" : "±0";
 
     /// <summary>
     /// 一次地形改造的文案，如「搭桥 D4」「立栅 E5–E6」「烧林 F4」。动作名取 <see cref="Core.Board.TerrainEdit.DisplayName"/>（唯一一份），

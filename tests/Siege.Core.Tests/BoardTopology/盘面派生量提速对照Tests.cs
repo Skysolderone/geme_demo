@@ -104,13 +104,13 @@ public class 盘面派生量提速对照Tests
             }
         }
 
-        // 样本口径下界：三类改造都穷举到；且确有"距离 2 处覆盖目标变化""距离 1 处气边变化"的样本——作废半径写小即红（MT-1）。
+        // 样本口径下界：三类改造都穷举到；且确有"距离 2 处覆盖目标变化""距离 1 处气边或覆盖目标变化"的样本（terrain-bonus 起搭桥不改气边，只改覆盖目标）——作废半径写小即红（MT-1）。
         Assert.True(edits >= 1000, $"只穷举了 {edits} 个改造");
         Assert.True(counts.GetValueOrDefault(TerrainEditKind.Bridge) >= 20, $"搭桥只有 {counts.GetValueOrDefault(TerrainEditKind.Bridge)} 个");
         Assert.True(counts.GetValueOrDefault(TerrainEditKind.Fence) >= 100, $"立栅只有 {counts.GetValueOrDefault(TerrainEditKind.Fence)} 个");
         Assert.True(counts.GetValueOrDefault(TerrainEditKind.Burn) >= 20, $"烧林只有 {counts.GetValueOrDefault(TerrainEditKind.Burn)} 个");
         Assert.True(farCoverageChanges >= 10, $"距离 2 处覆盖目标变化的样本只有 {farCoverageChanges} 个");
-        Assert.True(nearLibertyChanges >= 10, $"距离 1 处气边变化的样本只有 {nearLibertyChanges} 个");
+        Assert.True(nearLibertyChanges >= 10, $"距离 1 处气边或覆盖目标变化的样本只有 {nearLibertyChanges} 个");
     }
 
     [Fact]
@@ -456,7 +456,8 @@ public class 盘面派生量提速对照Tests
                 far++;
             }
 
-            if (d == 1 && !Adjacency.LibertyNeighbors(before.Map, c).SequenceEqual(Adjacency.LibertyNeighbors(after.Map, c)))
+            if (d == 1 && (!Adjacency.LibertyNeighbors(before.Map, c).SequenceEqual(Adjacency.LibertyNeighbors(after.Map, c))
+                || !Adjacency.CoverageTargets(before.Map, c).SequenceEqual(Adjacency.CoverageTargets(after.Map, c))))
             {
                 near++;
             }

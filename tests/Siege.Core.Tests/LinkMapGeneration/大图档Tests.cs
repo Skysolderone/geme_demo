@@ -50,10 +50,10 @@ public class 大图档Tests(ITestOutputHelper output)
                 Assert.True(MapValidator.Validate(map).IsValid, $"{id} 未通过校验：{MapValidator.Validate(map)}");
 
                 // 可落子区外接矩形恰 150×150（ISLAND_EXTENT 守下限；留白 2 格恒为障碍守上限）。
-                Coord[] cells = [.. map.AllCoords().Where(map.IsPlayable)];
+                Coord[] cells = [.. map.AllCoords().Where(map.IsLand)];
                 Assert.Equal((Rect, Rect), (cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1));
 
-                int count = map.PlayableCount;
+                int count = map.LandCount;
                 int share = (Rect * Rect - count) * 100 / (Rect * Rect);
                 Assert.InRange(share, 25, 35);
                 Assert.Empty(map.BirthZones);
@@ -139,7 +139,7 @@ public class 大图档Tests(ITestOutputHelper output)
         for (ulong seed = 1; seed <= 200; seed++)
         {
             MapData map = LinkMapGenerator.Generate(seed, 4, MapTier.Large);   // 生成器内部已过校验，越界即抛
-            playable.Add(map.PlayableCount);
+            playable.Add(map.LandCount);
         }
 
         playable.Sort();

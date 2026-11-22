@@ -30,10 +30,10 @@ public class AI对地表的感知Tests
     [Fact]
     public void 沼泽落子无领地收益()
     {
-        // 规格 Scenario「沼泽落子无领地收益」：普通子落在四周空草地的沼泽 G7 → 即时势力增量只含棋子军势 1。
+        // 规格 Scenario「沼泽落子无领地收益」：普通子落在四周空草地的沼泽 G7 → 即时势力增量只含棋子军势（terrain-bonus：基础 1 + 沼泽修正 2 = 3）。
         (EvaluationBreakdown e, _) = EvaluationFixtures.EvaluateP0(At(TestMaps.Terrain(surfaces: [("G7", Surface.Marsh)])), "G7");
 
-        Assert.Equal(1, e.RawOf(EvaluationDimension.PowerGain));
+        Assert.Equal(3, e.RawOf(EvaluationDimension.PowerGain));
     }
 
     [Fact]

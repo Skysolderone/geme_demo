@@ -924,6 +924,13 @@ public sealed record GroupEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, int>? RelicCounts { get; init; }
 
+    /// <summary>
+    /// <see cref="Base"/> 中来自地形军势修正的部分（terrain-bonus）。terrain-bonus 之后的日志恒写出（含 0）；旧日志为 <c>null</c>，按 0 读
+    /// （旧规则下没有地形修正，0 就是真值）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? TerrainBonus { get; init; }
+
     /// <summary>某种信物在本串上的件数（缺字段按 0）。</summary>
     public int RelicCountOf(Siege.Core.PieceRelics.RelicKind kind) => RelicCounts?.GetValueOrDefault(kind.ToString()) ?? 0;
 }

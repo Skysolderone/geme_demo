@@ -25,9 +25,13 @@ public class 新地表的规则标示Tests
         Assert.Equal(["沼泽：其上的棋子不产生覆盖"], ownership.SurfaceLegend);
         Assert.Equal(ownership.SurfaceLegend, groups.SurfaceLegend);
 
-        // 反面：没有新地表的地图，图例为空（草地 / 林地 / 深水不进图例）。
-        MatchFlow plain = TerrainMatch(TestMaps.Terrain(surfaces: [("G7", Surface.Forest), ("G5", Surface.DeepWater)]));
+        // 反面：没有新地表的地图，图例为空（草地 / 林地不进图例）。
+        MatchFlow plain = TerrainMatch(TestMaps.Terrain(surfaces: [("G7", Surface.Forest)]));
         Assert.Empty(((TerritoryLayerContent)plain.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership)).SurfaceLegend);
+
+        // terrain-bonus：深水可落子后进图例。
+        MatchFlow water = TerrainMatch(TestMaps.Terrain(surfaces: [("G5", Surface.DeepWater)]));
+        Assert.Equal(["深水：可落子，空着时不算气、不被覆盖"], ((TerritoryLayerContent)water.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership)).SurfaceLegend);
     }
 
     [Fact]

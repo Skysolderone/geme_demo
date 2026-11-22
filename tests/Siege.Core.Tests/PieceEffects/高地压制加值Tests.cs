@@ -23,7 +23,7 @@ public class 高地压制加值Tests
 
         Assert.Equal(1, GroupAt(board, TestMaps.P0, "F7").HighGroundBonus);
         Assert.Equal(0, GroupAt(board, TestMaps.P1, "F6").HighGroundBonus);
-        Assert.Equal(2, GroupAt(board, TestMaps.P0, "F7").Power);   // 基础 1 + 高地 1
+        Assert.Equal(4, GroupAt(board, TestMaps.P0, "F7").Power);   // 基础 1 + h=2 地形修正 2（terrain-bonus）+ 高地 1
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class 高地压制加值Tests
         GroupPower group = Assert.Single(snapshot.Of(TestMaps.P0).Groups);
         Assert.Equal(3, group.HighGroundBonus);
         Assert.Equal(3, group.PositionBonus);
-        Assert.Equal(4 + 3, group.Power);
+        Assert.Equal((4 * 3) + 3, group.Power);   // terrain-bonus：h=2 每枚基础军势 1 + 2
     }
 
     [Fact]
@@ -121,9 +121,10 @@ public class 高地压制加值Tests
 
         GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "B7");
 
-        Assert.Equal((3, 2, 1), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
-        Assert.Equal(7, group.Power);
-        Assert.NotEqual(6, group.Power);
+        // terrain-bonus：三枚都在 h=2，基础军势各 1 + 2 → 9；⌊(9 + 2) × 1.5⌋ = 16（加值不进倍率会得 ⌊9 × 1.5⌋ + 2 = 15）。
+        Assert.Equal((9, 2, 1), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
+        Assert.Equal(16, group.Power);
+        Assert.NotEqual(15, group.Power);
     }
 
     [Fact]

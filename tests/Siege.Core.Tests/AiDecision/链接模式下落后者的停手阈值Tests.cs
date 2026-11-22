@@ -56,10 +56,10 @@ public class 链接模式下落后者的停手阈值Tests
             : new HeuristicTurnController(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy, Weights, config);
         ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));
 
-        // 样本口径：唯一候选是孤子点，收益恰为 5（低于阈值 20）。
+        // 样本口径：唯一候选是孤子点，收益恰为 7（低于阈值 20）。
         PointScore point = Assert.Single(ai.LastPointRanking);
         Assert.Equal(Candidate, point.Coord);
-        Assert.Equal(5, point.Total);
+        Assert.Equal(7, point.Total);   // terrain-bonus：核心区 h=2，基础军势 1 + 高度修正 2，收益 5 → 7（仍低于阈值 20）
         return ai;
     }
 
@@ -84,7 +84,7 @@ public class 链接模式下落后者的停手阈值Tests
     [InlineData(true)]
     public void 落后者不轻易停手(bool simulated)
     {
-        // Scenario「落后者不轻易停手」：Link 双人战场、AI 势力低于对手，最好候选收益 5 < 阈值 20 → 停手阈值取 0，AI 落子而不是 Pass。
+        // Scenario「落后者不轻易停手」：Link 双人战场、AI 势力低于对手，最好候选收益 7 < 阈值 20 → 停手阈值取 0，AI 落子而不是 Pass。
         // simulated = true：专家前瞻的模拟对手（ForSimulation）走同一处判定（ai-decision「前瞻中的停手口径」的复用点）。
         MatchFlow match = Trailing();
         MatchPublicView view = match.Publish();
@@ -102,7 +102,7 @@ public class 链接模式下落后者的停手阈值Tests
     [InlineData(true)]
     public void 领先者照常停手(bool simulated)
     {
-        // Scenario「领先者照常停手」：同一局面换成 AI 势力高于对手 → 停手阈值为缺省值，收益 5 不过阈值，AI Pass。
+        // Scenario「领先者照常停手」：同一局面换成 AI 势力高于对手 → 停手阈值为缺省值，收益 7 不过阈值，AI Pass。
         MatchFlow match = Started([Zone, Zone, 3, 2]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0), Corner(0, 1));
         MatchPublicView view = match.Publish();
         Assert.True(view.Power!.Of(P0).Total > view.Power.Of(P1).Total);   // 样本口径

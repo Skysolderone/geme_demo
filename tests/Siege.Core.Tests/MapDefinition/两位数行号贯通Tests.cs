@@ -75,7 +75,7 @@ public class 两位数行号贯通Tests
         Assert.Equal(0, restored.HeightAt(Coord.Parse("B30")));   // 高度行没有错位一行
         Assert.Equal(Surface.Forest, restored.SurfaceAt(Coord.Parse("O32")));
         Assert.True(restored.HasBridge(Coord.Parse("M28")));
-        Assert.False(restored.IsPlayable(Coord.Parse("N28")));
+        Assert.False(restored.IsLand(Coord.Parse("N28")));
         Assert.True(restored.HasFence(Coord.Parse("Z31"), Coord.Parse("Z32")));
         Assert.Equal(json, MapFile.ToJson(restored));
     }

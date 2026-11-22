@@ -73,7 +73,7 @@ public static partial class LinkMapGenerator
         for (int attempt = 0; attempt <= MaxCoastRedraws; attempt++)
         {
             Island island = DraftCoast(rect, layout, guarded, coast, g, bays: true);
-            if (Battlefields.Of(island.Preview()).Count == 1)
+            if (Battlefields.OfLand(island.Preview()).Count == 1)
             {
                 return island;
             }

@@ -144,7 +144,7 @@ public class 信物刷新与预告Tests
         Assert.Equal(4, neutral.Length);   // 样本口径：link:1:4 有 4 块中立平台
         HashSet<Coord> candidates = [.. RelicSpawner.Candidates(board, birth)];
         Assert.All(map.BirthBoards().SelectMany(b => b.Cells()), c => Assert.True(birth.IsBirthArea(c) && !candidates.Contains(c), c.ToNotation()));
-        Assert.All(neutral.SelectMany(b => b.Cells()).Where(map.IsPlayable), c => Assert.True(!birth.IsBirthArea(c) && candidates.Contains(c), c.ToNotation()));
+        Assert.All(neutral.SelectMany(b => b.Cells()).Where(map.IsLand), c => Assert.True(!birth.IsBirthArea(c) && candidates.Contains(c), c.ToNotation()));
     }
 
     [Theory]

@@ -650,6 +650,7 @@ public sealed class MatchSession
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                     RelicCounts = RelicCountsOf(view.Board, g),
+                    TerrainBonus = g.TerrainBonus,
                 })],
                 // match-telemetry 第 11 项。
                 EliminationReason = state.EliminationReason?.ToString(),

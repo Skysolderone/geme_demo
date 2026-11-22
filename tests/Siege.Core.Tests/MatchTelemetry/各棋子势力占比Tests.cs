@@ -94,6 +94,7 @@ public class 各棋子势力占比Tests
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);
+        Assert.Contains(groups, g => g.TerrainBonus > 0);   // terrain-bonus：写入端真的写了地形修正（出生平台 h=2，非 0 才抓得到漏写）
 
         int fortressAndBasic = 0;
         int synergyWithBonus = 0;
@@ -112,7 +113,8 @@ public class 各棋子势力占比Tests
             int drums = g.RelicCountOf(Siege.Core.PieceRelics.RelicKind.WarDrum);
             int chameleons = g.RelicCountOf(Siege.Core.PieceRelics.RelicKind.Chameleon);
             int baseFromPieces = c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"]
-                + drums * Siege.Core.PieceRelics.RelicKinds.UncalibratedWarDrumBase;
+                + drums * Siege.Core.PieceRelics.RelicKinds.UncalibratedWarDrumBase
+                + (g.TerrainBonus ?? 0);   // terrain-bonus：基础军势含地形修正，条目另记 TerrainBonus
             Assert.Equal(baseFromPieces, g.Base);
             int otherTypes = new[] { "Basic", "Fortress", "Line", "Multiplier", "Artisan" }.Count(t => c[t] > 0)
                 + chameleons * Siege.Core.PieceRelics.RelicKinds.UncalibratedChameleonExtraTypes;

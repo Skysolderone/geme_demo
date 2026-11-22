@@ -106,7 +106,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             string at = $"link:{seed}:{players}";
             Assert.Equal(w + (2 * M), map.Width);
             Assert.Equal(h + (2 * M), map.Height);
-            Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
+            Coord[] playable = [.. map.AllCoords().Where(map.IsLand)];
             Assert.Equal(w, playable.Max(c => c.X) - playable.Min(c => c.X) + 1);
             Assert.Equal(h, playable.Max(c => c.Y) - playable.Min(c => c.Y) + 1);
             Assert.All(IslandOf(map), c => Assert.True(c.X >= M && c.X < M + w && c.Y >= M && c.Y < M + h, $"{at}：岛面 {c.ToNotation()} 越出外接矩形"));
@@ -207,9 +207,9 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
         var centre = new Coord(M + ((w - 1) / 2), M + ((h - 1) / 2));
         foreach ((ulong seed, MapData map) in Maps(players))
         {
-            Coord expected = map.IsPlayable(centre)
+            Coord expected = map.IsLand(centre)
                 ? centre
-                : map.AllCoords().Where(c => OnIsland(c, map) && map.IsPlayable(c) && map.HeightAt(c) == 0)
+                : map.AllCoords().Where(c => OnIsland(c, map) && map.IsLand(c) && map.HeightAt(c) == 0)
                     .OrderBy(c => Math.Abs(c.X - centre.X) + Math.Abs(c.Y - centre.Y)).ThenBy(c => c.Y).ThenBy(c => c.X).First();
             Assert.Equal(expected, map.CentralEntrance);
         }
@@ -227,7 +227,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             string at = $"link:{seed}:{players}";
             foreach (BoardPlate p in map.Boards)
             {
-                Coord[] playable = [.. p.Cells().Where(map.IsPlayable)];
+                Coord[] playable = [.. p.Cells().Where(map.IsLand)];
                 Coord[] ramps = [.. playable.Where(c => map.HeightAt(c) == 1)];
                 Assert.All(playable.Except(ramps), c => Assert.True(map.HeightAt(c) == 2, $"{at}：{c.ToNotation()} 高 {map.HeightAt(c)}"));
                 Assert.InRange(ramps.Length, 2, 3);
@@ -236,17 +236,17 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
                 foreach (Coord ramp in ramps)
                 {
                     Coord o = Assert.IsType<Coord>(Outward(p, ramp));
-                    Assert.True(OnIsland(o, map) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !InPlate(map, o), $"{at}：坡道 {ramp.ToNotation()} 朝外 {o.ToNotation()} 不是低地");
+                    Assert.True(OnIsland(o, map) && map.IsLand(o) && map.HeightAt(o) == 0 && !InPlate(map, o), $"{at}：坡道 {ramp.ToNotation()} 朝外 {o.ToNotation()} 不是低地");
                     Assert.Equal(Surface.Grass, map.SurfaceAt(ramp));
                     sides.Add((o.X - ramp.X, o.Y - ramp.Y));
-                    Assert.Contains(o, Adjacency.LibertyNeighbors(map, ramp));   // 坡道两头都通（h0 → h1 → h2）
+                    Assert.Contains(o, Adjacency.LandLibertyNeighbors(map, ramp));   // 坡道两头都通（h0 → h1 → h2）
                 }
 
                 Assert.Equal(ramps.Length, sides.Count);   // 两两不在同一条边
-                Assert.All(p.CoreCells(), c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 2 && map.SurfaceAt(c) == Surface.Grass, $"{at}：核心区 {c.ToNotation()}"));
+                Assert.All(p.CoreCells(), c => Assert.True(map.IsLand(c) && map.HeightAt(c) == 2 && map.SurfaceAt(c) == Surface.Grass, $"{at}：核心区 {c.ToNotation()}"));
                 foreach (Coord c in playable.Except(ramps))
                 {
-                    Assert.All(Adjacency.LibertyNeighbors(map, c), n => Assert.True(p.Contains(n), $"{at}：{c.ToNotation()} 不是坡道却与平台外 {n.ToNotation()} 有气边"));
+                    Assert.All(Adjacency.LandLibertyNeighbors(map, c), n => Assert.True(p.Contains(n), $"{at}：{c.ToNotation()} 不是坡道却与平台外 {n.ToNotation()} 有气边"));
                 }
             }
         }
@@ -261,12 +261,12 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
         // design D4 连通硬约束：全部可落子格沿气边（Adjacency.LibertyNeighbors）连成一片；几何战场恰 1 个。测试内独立 BFS。
         foreach ((ulong seed, MapData map) in Maps(players))
         {
-            Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
+            Coord[] playable = [.. map.AllCoords().Where(map.IsLand)];
             var reached = new HashSet<Coord> { playable[0] };
             var queue = new Queue<Coord>(reached);
             while (queue.Count > 0)
             {
-                foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()))
+                foreach (Coord n in Adjacency.LandLibertyNeighbors(map, queue.Dequeue()))
                 {
                     if (reached.Add(n))
                     {
@@ -298,7 +298,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             List<List<Coord>> rivers = [.. water.Where(w => w.Any(map.HasBridge))];
             List<List<Coord>> lakes = [.. water.Where(w => !w.Any(map.HasBridge))];
             Assert.True(rivers.Count == players, $"{at}：低地河道 {rivers.Count} 条");
-            HashSet<Coord> outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(c => map.IsPlayable(c) && map.HeightAt(c) == 1).Select(c => Outward(p, c)!.Value))];
+            HashSet<Coord> outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(c => map.IsLand(c) && map.HeightAt(c) == 1).Select(c => Outward(p, c)!.Value))];
             foreach (List<Coord> river in rivers)
             {
                 Assert.True(river.Count >= 6, $"{at}：河道只有 {river.Count} 格");
@@ -309,7 +309,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
                 Assert.Equal(2, bridges.Length);
                 Assert.False(Adjacency.AreAdjacent(bridges[0], bridges[1]), $"{at}：两座桥相邻");
                 Assert.DoesNotContain(river, outlets.Contains);
-                Assert.All(bridges, b => Assert.True(Adjacency.LibertyNeighbors(map, b).Length >= 2, $"{at}：桥 {b.ToNotation()} 两岸不通"));
+                Assert.All(bridges, b => Assert.True(Adjacency.LandLibertyNeighbors(map, b).Length >= 2, $"{at}：桥 {b.ToNotation()} 两岸不通"));
             }
 
             foreach (List<Coord> lake in lakes)

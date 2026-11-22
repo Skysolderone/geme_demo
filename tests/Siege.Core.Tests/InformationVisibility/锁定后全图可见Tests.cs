@@ -90,7 +90,7 @@ public class 锁定后全图可见Tests
         SeatPublicView seat = match.PublishFor(P0);
         Assert.Equal(match.Map.AllCoords().Order().Select(c => c.ToNotation()), seat.Cells.Select(c => c.Coord));
         Assert.All(lowland, c => Assert.Equal((Terrain.Playable, match.Map.HeightAt(c)), (seat.CellAt(c)!.Terrain, seat.CellAt(c)!.Height)));
-        Assert.Equal((Terrain.Obstacle, Surface.DeepWater), (seat.CellAt(water[0])!.Terrain, seat.CellAt(water[0])!.Surface));
+        Assert.Equal((Terrain.Playable, Surface.DeepWater), (seat.CellAt(water[0])!.Terrain, seat.CellAt(water[0])!.Surface));
 
         // 低地上的棋子对其他座位可见（第 4 大回合起可落低地）。
         match.Place(P2, lowland[0]);

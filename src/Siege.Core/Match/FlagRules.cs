@@ -60,7 +60,7 @@ public static class FlagRules
             for (int x = Math.Max(0, flag.X - RingReach); x <= Math.Min(map.Width - 1, flag.X + RingReach); x++)
             {
                 var c = new Coord(x, y);
-                if (map.IsPlayable(c))
+                if (map.IsLand(c))
                 {
                     cells.Add(c);
                 }
@@ -121,7 +121,7 @@ public static class FlagRules
             return $"{c.ToNotation()} 不在画布内。";
         }
 
-        if (!map.IsPlayable(c))
+        if (!map.IsLand(c))
         {
             return $"{c.ToNotation()} 不可落子。";
         }
@@ -264,7 +264,7 @@ public static class FlagRules
 
     /// <summary>旗格本身的条件：可落子、高度 0、不是桥格、不在任何平台的外接矩形内。</summary>
     private static bool IsFlagGround(MapData map, Coord c) =>
-        map.IsPlayable(c) && map.HeightAt(c) == 0 && !map.HasBridge(c) && !map.Boards.Any(p => p.Contains(c));
+        map.IsLand(c) && map.HeightAt(c) == 0 && !map.HasBridge(c) && !map.Boards.Any(p => p.Contains(c));
 
     /// <summary>
     /// 旗心 13×13 会与某块平台重叠或贴着它的格（按平台外接矩形外扩 6 + <see cref="PlateClearance"/> 格标记），以及与某处普通信物遗址切比雪夫距离 &lt; <see cref="SiteClearance"/> 的格
@@ -323,7 +323,7 @@ public static class FlagRules
             int row = 0;
             for (int x = 0; x < w; x++)
             {
-                row += map.IsPlayable(new Coord(x, y)) ? 1 : 0;
+                row += map.IsLand(new Coord(x, y)) ? 1 : 0;
                 prefix[((y + 1) * stride) + x + 1] = prefix[(y * stride) + x + 1] + row;
             }
         }

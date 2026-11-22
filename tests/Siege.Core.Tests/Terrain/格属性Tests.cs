@@ -7,10 +7,10 @@ namespace Siege.Core.Tests.TerrainSpec;
 public class 格属性Tests
 {
     [Fact]
-    public void 深水拒绝落子()
+    public void 障碍拒绝落子()
     {
-        // G6 为未架桥的深水 → 任何写入被拒并报"目标格不可落子"
-        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.DeepWater)]));
+        // terrain-bonus：深水可落子后，只有障碍（虚空）拒绝写入并报"目标格不可落子"
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(), 11, "G6");
 
         Assert.False(board.Map.IsPlayable(TestMaps.At("G6")));
         Assert.Equal(Siege.Core.Board.Terrain.Obstacle, board[TestMaps.At("G6")].Terrain);
@@ -80,15 +80,16 @@ public class 格属性Tests
     }
 
     [Fact]
-    public void 深水不计入可落子格数()
+    public void 深水计入可落子格数但不计入陆地格数()
     {
         GameBoard board = TestMaps.Blank(
             TestMaps.Terrain(surfaces: [("G6", Surface.DeepWater), ("H6", Surface.DeepWater)], bridges: ["H6"]),
             size: 7,
             "A1");
 
-        // 49 − 1 障碍 − 1 未架桥深水；桥格 H6 仍计入
-        Assert.Equal(47, board.Map.PlayableCount);
+        // terrain-bonus：49 − 1 障碍；未架桥深水可落子。陆地口径（生成 / 校验用）再去掉未架桥深水；桥格 H6 两者都计入
+        Assert.Equal(48, board.Map.PlayableCount);
+        Assert.Equal(47, board.Map.LandCount);
     }
 
 

@@ -211,8 +211,8 @@ public class 专家前瞻的记录Tests
         // ai-bridge-candidate 1.6 重钉（搭桥候选缺省开）：小回合 108 → 104（首个分歧：第 1 小回合 P0 构筑期不前瞻，高难的选择换成同分 902 的搭桥候选，见任务目录 rebaseline.txt）。
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 104 → 120、前瞻记录 26 → 31。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 120 → 88、前瞻记录 31 → 22。
-        Assert.Equal(88, log.Turns.Count);
-        Assert.Equal(22, log.LookaheadTurns.Count());   // ai-bridge-candidate 1.6：27 → 26；terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
+        Assert.Equal(80, log.Turns.Count);   // terrain-bonus 重钉：88 → 80
+        Assert.Equal(20, log.LookaheadTurns.Count());   // terrain-bonus 重钉：22 → 20；   // ai-bridge-candidate 1.6：27 → 26；terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -248,7 +248,7 @@ public class 专家前瞻的记录Tests
         // map-expand-25 段 A2 重钉（同上）：旧值 1B605EF21E8DA2FC0172156C055F187E60351FFBE8C5DBFC7D4349E65D865499。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 C8D89AA6851B26A68BB50DF222F93C8B5F0C5D6F02DDF308259FCFB172C30DDB。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 48D46609E5BFA8F248412AB9C05DE97624D87F246AF37DAC2FE8662B298172E4。
-        Assert.True("8D0BC8D1681ADB82EF25552E3425127BDF9FEBCA82475BEB3288293FCBA662E6" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        Assert.True("C26B306EC83AF811C96A7B0C7718ADE6825768B65F3A6E2EA8F720AEE63CD44A" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -270,13 +270,13 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 92 → 64、前瞻记录 23 → 16；钉值从此是开关 0 路径的自证值，不再是"引入之前"的独立参照。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 64 → 92、前瞻记录 16 → 23。
-        Assert.Equal(92, log.Turns.Count);
-        Assert.Equal(23, log.LookaheadTurns.Count());
+        Assert.Equal(80, log.Turns.Count);   // terrain-bonus 重钉：92 → 80
+        Assert.Equal(20, log.LookaheadTurns.Count());   // terrain-bonus 重钉：23 → 20
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 DFEE9276235A54E479669646F504307147A35CD04A733F552404C4214FDFE334。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 0D2A9F6B483FFE01658D396E2E1DF2671FE234AE38BEFAC32BCD37FBB093C965。
-        Assert.True("2069D09FF17FA0B9246D3B4FFDF63086A4D35739CB6EC1DFDC2AE807FEED0419" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 FC570B68…
+        Assert.True("C5308D9D107F7AEC42777618A97F8AE3E6025FB03D2CDD9EA8600BF40C5462B9" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 FC570B68…
     }
 
     [Fact]
@@ -289,12 +289,12 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 100 → 104；钉值从此是开关 0 路径的自证值。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 104 → 92。
-        Assert.Equal(92, log.Turns.Count);
+        Assert.Equal(88, log.Turns.Count);   // terrain-bonus 重钉：92 → 88
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 C9C92C2A0ACF002EAD7D28EA92D26774AA2F350F68D1AAAE3699DF5CA48EA05C。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 09102758BCC4B179EE463D86312B3C1309A7C79E55A8FCFFEBC70DD270339A3C。
-        Assert.True("DEEAE93A8B0E2936216C96A5A3469CAAF5E823200F418633724EEB9A8D29556B" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 3878113D…
+        Assert.True("E2D2B653B0B5FD0B431B47EDC373A94F10C00841628A463BA207F36DE8E8734E" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 3878113D…
     }
 
     [Fact]
@@ -308,13 +308,13 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 108 → 120、前瞻记录 27 → 31；钉值从此是开关 0 路径的自证值。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 120 → 88、前瞻记录 31 → 22。
-        Assert.Equal(88, log.Turns.Count);
-        Assert.Equal(22, log.LookaheadTurns.Count());
+        Assert.Equal(80, log.Turns.Count);   // terrain-bonus 重钉：88 → 80
+        Assert.Equal(20, log.LookaheadTurns.Count());   // terrain-bonus 重钉：22 → 20
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 8621274918F15B2BE4073EF98C8D3B6A3827FBB4419756DEAE4D10EF37C2A613。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 698796B3FE259F568442B0B392B94DE4DB03E08DB839FDF748B14EBDA58CC8BC。
-        Assert.True("C8A277FE91CC4B1CAFD93DBF4A05D8F6F7579652965E4854F28EAF668537C499" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 7F4C3230…
+        Assert.True("D00C55A34D31F503969D75B85C1E213E686CD7A54E9030046BF4AA0522D057FD" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 7F4C3230…
     }
 
     [Fact]
@@ -327,12 +327,12 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 92 → 96；钉值从此是开关 0 路径的自证值。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 96 → 92。
-        Assert.Equal(92, log.Turns.Count);
+        Assert.Equal(104, log.Turns.Count);   // terrain-bonus 重钉：92 → 104
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 AE9FE60C108EA624D2CB75F644FD771C1ABF3DA501F9FFD6726545F1E85D83D6。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 262A702D94659698BD969DE4A2402A2AD512400A4FDEDB62B9CF43C788538176。
-        Assert.True("8D37957902B08713774C475A8E6BA4AC0F10950AEB2F81A6E52D6E6E9002D86A" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 AF724AB0…
+        Assert.True("7F9C2175374A2634097D752368B4980806E8D3E0E8DC48020BF8CA9847CFF52D" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 AF724AB0…
     }
 
     /// <summary>
@@ -478,7 +478,7 @@ public class 专家前瞻的记录Tests
         // ai-bridge-candidate 1.6 重钉（搭桥候选缺省开，首个分歧：第 1 小回合 P0 选中搭桥候选）：小回合 92 → 101。开关 0 的守门见 搭桥候选关闭时非专家日志与改动前相同。
         // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 101 → 96。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：96 → 92。
-        Assert.Equal(92, log.Turns.Count);   // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变）：92 → 132；link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
+        Assert.Equal(104, log.Turns.Count);   // terrain-bonus 重钉：92 → 104；// fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变）：92 → 132；link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -504,7 +504,7 @@ public class 专家前瞻的记录Tests
         // ai-bridge-candidate 1.6 重钉（同上，走法变：小回合 92 → 101；首部另多 "EditSeed":1）：旧值 7E180336B84B99D3C33EE84E43DCA397962E93B2FE113E138603863DCFC766A6（开关 0 下不变）。
         // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：小回合 96 → 92，旧值 9EDABD9A57D072DCFFAC704A6D89CDADC16CB3792A82BE78FD1163087AADFD23。
         // relic-redesign 段 C1 重钉（信物事件进日志：平坦载体上没有出生区以外的格、每批预告 0 件、落位 0 件，也各记一条 RelicsForecast / RelicsLanded 事件行，首部版本 12 → 13 还原为 3 后比对；小回合数与前瞻记录数不变——载体没有出生区以外的格、整局没有信物落位，走法与 W1 相同）：旧值 B789929AFF7F15A78C6C17E047C36E41B06A4175A85676866400C165CCC02B30。
-        Assert.True("E4EE97CEBC6413101C2783E1BFD1B1EA03654AB86C86EE6A210A73FEA8F9A6BE" == digest, $"非专家日志确定性文本哈希：{digest}");   // map-expand-25 段 A2 重钉（载体改为平坦手写图），旧值 E19BA9F4…；   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        Assert.True("BBFE05DC9F44FF1F01CB9BEFB4D3CDF01F7FEC7080A061B34C6F5EB948CB20A5" == digest, $"非专家日志确定性文本哈希：{digest}");   // map-expand-25 段 A2 重钉（载体改为平坦手写图），旧值 E19BA9F4…；   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]
