@@ -48,7 +48,7 @@ public class 停手阈值Tests
     // seat-gap-25 段 A 重钉（地图变了：link:1:4 改为四角出生座位岛 + 中立平台；盲选座位互斥、座次随之变；AI 未改，同一配置的走法随之变）：种子 36 不变，旧值 DB6EBB4C30805FCBAEA60F1CF347D5AB194CACFA44ABAB67AE71128ECC8EEA68。
     // map-coastline 重钉（地图变了：裁决 5 同标识出新图——不规则岸线 + 湖泊 / 岩区 / 加宽河道，可落子 1927 → 1368，平台不变；AI 未改，同一配置的走法随之变）：种子 36 不变，旧值 54F9441BBE7830759B51645F77CD34A66575968C8725F0C35A429F4CE0A9DD7A。
     // map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了，link:1:4 可落子 1368 → 1366；AI 未改，同一配置的走法随之变）：种子 36 不变，旧值 2F0E71043F1122CE8D9856370ED5059D170270E1D17855FB979E2ABE5924B401。
-    private const string StrictImprovementTurnHash = "D708D1345B59408E9F705F51EDB11611B962C9CBF2C1BF2957AA7FF9BCA1566A";
+    private const string StrictImprovementTurnHash = "8D59678017D2A521D93FACFA7E1A3B4BE39080E64E07A828BD0D9F325ADEEA9A";   // terrain-bonus 重钉，旧值 D708D134…1566A
 
     /// <summary>
     /// ai-whole-batch 1.6：<see cref="StrictImprovementTurnHash"/> 同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选缺省开时的哈希。首个分歧：第 7 小回合（第 2 大回合）P0，
@@ -60,7 +60,7 @@ public class 停手阈值Tests
     // seat-gap-25 段 A 重钉（地图与盲选座次变了，同一配置的走法随之变）：旧值 DB6EBB4C30805FCBAEA60F1CF347D5AB194CACFA44ABAB67AE71128ECC8EEA68；仍与 StrictImprovementTurnHash 同值。
     // map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道，同一配置的走法随之变）：旧值 54F9441BBE7830759B51645F77CD34A66575968C8725F0C35A429F4CE0A9DD7A；仍与 StrictImprovementTurnHash 同值。
     // map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改，同一配置的走法随之变）：旧值 2F0E71043F1122CE8D9856370ED5059D170270E1D17855FB979E2ABE5924B401；仍与 StrictImprovementTurnHash 同值。
-    private const string StrictImprovementTurnHashWholeBatch = "D708D1345B59408E9F705F51EDB11611B962C9CBF2C1BF2957AA7FF9BCA1566A";
+    private const string StrictImprovementTurnHashWholeBatch = "8D59678017D2A521D93FACFA7E1A3B4BE39080E64E07A828BD0D9F325ADEEA9A";   // terrain-bonus 重钉，旧值 D708D134…1566A
 
     /// <summary>
     /// ai-bridge-candidate 1.6：同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选与搭桥候选都缺省开时的哈希（搭桥候选关时即 <see cref="StrictImprovementTurnHashWholeBatch"/>）。
@@ -72,7 +72,7 @@ public class 停手阈值Tests
     // seat-gap-25 段 A 重钉（地图与盲选座次变了，同一配置的走法随之变）：旧值 7A3AFCF1D4845CC67F5A6587604BCB0E631714F06FD0625C8F24408787C85BFB；仍与 StrictImprovementTurnHashWholeBatch 不同。
     // map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道，同一配置的走法随之变）：旧值 E91670AC37143216A8226E5EBCA5C084537B2D44846E75007EA3BE311461BD29；仍与 StrictImprovementTurnHashWholeBatch 不同。
     // map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改，同一配置的走法随之变）：旧值 71726810F7DFD1714741D9AB2D1293BFE8C5EAFBD7BFBEBB69AFDE5B9E36D1C8；仍与 StrictImprovementTurnHashWholeBatch 不同。
-    private const string StrictImprovementTurnHashEditSeed = "0B1D8E47BBAA631C6797F95FD277CE51D9E1FF4DECB1641E834B7133F53838A0";
+    private const string StrictImprovementTurnHashEditSeed = "BD8FFCB4A01298C7DEF8D38E736C31D2F094D1481FA1A5687E9308C2AFF2D5F3";   // terrain-bonus 重钉，旧值 0B1D8E47…38A0
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 36;   // link-map-surfaces 2.2：34 → 35；map-expand-25 段 A2：35 → 46；relic-redesign W1：46 → 36（见上）
@@ -244,22 +244,11 @@ public class 停手阈值Tests
         // 反面改为写死的固定种子区间（沿用 open-map 的探针区间 31–46）：区间内至少一颗种子的两种阈值走法不同；逐颗按序比对，找到即停。
         // map-expand-25 段 A2：区间不变，比对次序改为先比 StrictImprovementSeed（本局已跑、只需补一局缺省阈值）、再按序比其余种子——所守的"区间内至少一颗不同"不变；
         // 新图上区间内只有种子 46 不同，按原次序要先跑完 31–45 的 30 局（约 5 分钟）才找到它。
-        bool differs = false;
-        foreach (ulong seed in Enumerable.Range(31, 16).Select(s => (ulong)s).OrderBy(s => s == StrictImprovementSeed ? 0 : 1).ThenBy(s => s))
-        {
-            if (differs)
-            {
-                break;
-            }
-
-            string atZero = seed == StrictImprovementSeed
-                ? hash
-                : 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { SeedStart = seed }, parallelism: 1)[0]);
-            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed, WholeBatch = 0, EditSeed = 0 }, parallelism: 1)[0];
-            differs = atZero != 候选格上限Tests.TurnHash(byDefault);
-        }
-
-        Assert.True(differs, "种子 31–46 里没有一颗在阈值 0 与缺省阈值下走法不同，无从证明阈值传到了 AI");
+        // terrain-bonus：地形修正进军势后每批收益普遍超过缺省阈值 20，种子 31–46 跑到 72 个小回合两种阈值走法仍全同（AI 观察，按"AI 放最后"只记录）。
+        // 反面改为与缺省阈值无关的比对：同一种子、同 24 个小回合，阈值 0 对比一个任何收益都达不到的阈值——领先者因此停手，走法必然不同，
+        // 守的仍是"跑局配置里的阈值确实传到了 AI"（单元级的阈值判定由「无落点被保留则Pass」守）。
+        MatchLog unreachable = BatchRunner.Execute(zero with { PassThreshold = 1_000_000 }, parallelism: 1)[0];
+        Assert.True(hash != 候选格上限Tests.TurnHash(unreachable), "阈值 0 与极大阈值下走法相同，无从证明阈值传到了 AI");
 
         // 整批候选缺省开（跑局层不给开关）、搭桥候选关的同一局：钉 StrictImprovementTurnHashWholeBatch（ai-bridge-candidate：即引入搭桥候选之前的口径，开关 0 守门）。
         string on = 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { WholeBatch = null }, parallelism: 1)[0]);
