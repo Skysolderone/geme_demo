@@ -56,7 +56,7 @@ public sealed record EvaluationWeights(
     /// <para>守门测试 <c>默认评价权重的校准Tests</c> 断言本常量、<see cref="CalibrationOf"/> 与 <see cref="Default"/> 的每一维同步。
     /// 以未单独扫档维度的当前默认值产出的基线数据，引用时 MUST 注明权重口径，MUST NOT 与别的权重口径下的数据直接比较。</para>
     /// </summary>
-    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫；信物维原始值改为势力增量口径后 Relic 未校准（relic-redesign C1 后，取值 6 沿用）；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）";
+    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫；信物维原始值改为势力增量口径后 Relic 未校准（relic-redesign C1 后，取值 6 沿用）；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）；深水可落与地形军势修正后九维未重扫（terrain-bonus 后）";
 
     /// <summary>
     /// more-pieces-relics（D10，负责人裁决不重新校准）扩展了计分——四种新棋子的位置加值、连营 / 犄角——之后的补注：上面的扫档全部是在旧内容上做的，

@@ -479,7 +479,7 @@ public static partial class LinkMapGenerator
             ImmutableHashSet<FenceEdge> fences = [.. _fences];
             ImmutableHashSet<Coord> rocks = [.. _rocks];
             MapData preview = PreviewOf(Plate, heights, surfaces, bridges, fences, rocks);
-            if (Battlefields.Of(preview).Count != 1)
+            if (Battlefields.OfLand(preview).Count != 1)
             {
                 return null;
             }
@@ -494,7 +494,7 @@ public static partial class LinkMapGenerator
             var queue = new Queue<Coord>(reached.Order());
             while (queue.Count > 0)
             {
-                foreach (Coord n in Adjacency.LibertyNeighbors(preview, queue.Dequeue()))
+                foreach (Coord n in Adjacency.LandLibertyNeighbors(preview, queue.Dequeue()))
                 {
                     if (Plate.Contains(n) && reached.Add(n))
                     {
@@ -503,7 +503,7 @@ public static partial class LinkMapGenerator
                 }
             }
 
-            if (Plate.Cells().Any(c => preview.IsPlayable(c) && !reached.Contains(c)))
+            if (Plate.Cells().Any(c => preview.IsLand(c) && !reached.Contains(c)))
             {
                 return null;
             }

@@ -102,8 +102,14 @@ public sealed record MapData
     /// <summary>两格之间是否有栅栏（不分方向）。</summary>
     public bool HasFence(Coord a, Coord b) => TerrainData.HasFence(a, b);
 
-    /// <summary>该格是否可落子：在盘内、非障碍、非未架桥的深水。桥格与林地都是可落子格。</summary>
-    public bool IsPlayable(Coord c) => Contains(c) && !Obstacles.Contains(c) && !TerrainData.IsUnbridgedDeepWater(c);
+    /// <summary>该格是否可落子：在盘内、非障碍（虚空）。terrain-bonus 裁决 1 起未架桥深水与岩石地表都可落子。</summary>
+    public bool IsPlayable(Coord c) => Contains(c) && !Obstacles.Contains(c);
+
+    /// <summary>
+    /// 该格是否是陆地：可落子且不是未架桥深水（即 terrain-bonus 之前的"可落子"口径）。地图生成、地图校验、插旗与信物遗址按它取格，
+    /// 使深水可落之后既有地图与旗位逐格不变（terrain-bonus 实现决策 I7）；对局规则（气、覆盖、落子）MUST NOT 读它。
+    /// </summary>
+    public bool IsLand(Coord c) => IsPlayable(c) && !TerrainData.IsUnbridgedDeepWater(c);
 
     /// <summary>
     /// 该格的可落子性。越界、障碍与未架桥的深水一律为 <see cref="Terrain.Obstacle"/>（三者共享"不可落子、不可控制、不计分、封堵"的语义）；
@@ -176,6 +182,9 @@ public sealed record MapData
         }
     }
 
-    /// <summary>可落子格总数（不含障碍与未架桥的深水，含桥格）。</summary>
+    /// <summary>可落子格总数（不含障碍，含深水与桥格）。</summary>
     public int PlayableCount => AllCoords().Count(IsPlayable);
+
+    /// <summary>陆地格总数（<see cref="IsLand"/>：不含障碍与未架桥的深水，含桥格）。地图校验的可落子预算按它计。</summary>
+    public int LandCount => AllCoords().Count(IsLand);
 }

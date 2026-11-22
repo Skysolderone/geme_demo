@@ -92,7 +92,7 @@ public class 势力明细Tests
         Assert.Equal(14, group.PositionBonus);
         Assert.Equal(6, group.LineBonus);
         Assert.Equal(8, group.SynergyBonus);
-        Assert.Equal(6 + 14, group.Power);
+        Assert.Equal(12 + 14, group.Power);   // terrain-bonus：第 2 行 h=1，六枚基础军势各 1 + 1 → 12
     }
 
     [Fact]
@@ -264,6 +264,6 @@ public class 势力明细Tests
 
         Assert.Equal((0, 0, 0, 0), (group.BannerBonus, group.ChainBonus, group.SentryBonus, group.BoundaryBonus));
         Assert.Equal((6, 4, 4, 14), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus, group.PositionBonus));
-        Assert.Equal(20, group.Power);
+        Assert.Equal(26, group.Power);   // terrain-bonus：h=1 六枚基础军势 12 + 位置加值 14
     }
 }

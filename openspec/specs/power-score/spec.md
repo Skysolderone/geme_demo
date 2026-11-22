@@ -7,7 +7,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 系统 SHALL 对每条棋串独立计算军势：
 
-`棋串军势 = ⌊(基础军势总和 + 位置加值) × 1.5^倍增子数量⌋`
+`棋串军势 = ⌊(基础军势总和 + 位置加值) × 1.5^倍增子数量⌋`（基础军势总和逐枚取有效基础军势，含地形修正，见 `piece-effects`「地形军势修正」）
 
 `位置加值 = 连珠加值 + 协同加值 + 高地加值 + 旗手加值 + 铁链加值 + 哨兵加值 + 界碑加值 + 信物位置加值`（高地加值见 `piece-effects`「高地压制加值」，四种新来源见 `piece-effects` 对应 Requirement；信物位置加值 = 本串挂着的号令 / 百变的加值，战鼓计入基础军势，军旗计入倍率指数，见 `relic-effects`「五种信物」）。倍率指数 = 倍增子数量 + 阵型阶数 + 本串挂着的军旗件数。
 
@@ -31,7 +31,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 #### Scenario: 高地加值被倍率放大
 - **WHEN** 一条位于 h=2 的棋串含普通子×2、倍增子×2，其中 3 枚棋子各自压制到一枚更低处的敌子
-- **THEN** 基础军势为 4，高地加值为 3，棋串军势为 `⌊7 × 2.25⌋ = 15`
+- **THEN** 基础军势为 4 × (1 + 2) = 12（含高度修正，terrain-bonus），高地加值为 3，棋串军势为 `⌊15 × 2.25⌋ = 33`
 
 #### Scenario: 逐棋串取整
 - **WHEN** 某玩家拥有两条棋串，各自"（基础军势 + 位置加值）× 倍率"的未取整值为 16.5 与 16.5
@@ -89,7 +89,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 #### Scenario: 荒漠中的孤立棋子
 - **WHEN** 一枚没有任何竞争的孤立普通子位于荒漠格，四周为空的荒漠格，附近无敌子
-- **THEN** 该玩家从此局部获得 1 点势力（棋子军势 1；四个独占荒漠格不计分）
+- **THEN** 该玩家从此局部获得 2 点势力（棋子军势 1 + 荒漠修正 1，terrain-bonus；四个独占荒漠格不计分）
 
 #### Scenario: 荒漠与草地混合
 - **WHEN** 一枚孤立普通子位于草地，四个独占空格中两格是荒漠、两格是草地

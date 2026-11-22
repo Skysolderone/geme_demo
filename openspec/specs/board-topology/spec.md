@@ -39,7 +39,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 
 系统 SHALL 为每个格子保存三类彼此正交的属性：地形属性（高度、地表、障碍、预置桥，见 `terrain`）、静态标记（出生区归属）、动态占用（无 / 某玩家的某种棋子）与动态信物层（该格至多 1 件信物，`relic-carry-on-piece`）。格间栅栏作为边属性单独保存。旧静态"信物格"标记随 relic-redesign 删除。
 
-障碍格与未架桥的深水格 MUST NOT 被占用、MUST NOT 被任何玩家控制、MUST NOT 参与任何计分。棋盘外沿与障碍具有相同的封堵语义。
+障碍格 MUST NOT 被占用、MUST NOT 被任何玩家控制、MUST NOT 参与任何计分。未架桥的深水格可以被占用（terrain-bonus），空着时 MUST NOT 被任何玩家控制、MUST NOT 参与领地计分。棋盘外沿与障碍具有相同的封堵语义。
 
 信物层 MUST NOT 阻挡棋子落下或改变该格的地形属性：落子到有信物的空格即拾取。
 
@@ -93,7 +93,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 
 ### Requirement: 气的计算
 
-系统 SHALL 把棋串的气定义为：与该棋串任一棋子之间存在气边、当前为空、且地表不是浅滩的可落子格的集合（按格去重）。被任何玩家棋子占据的格、空的浅滩格、障碍格、未架桥的深水格、越界方向、以及因崖壁或栅栏而无气边的格 MUST NOT 计入气。
+系统 SHALL 把棋串的气定义为：与该棋串任一棋子之间存在气边、当前为空、且地表不是浅滩也不是未架桥深水的可落子格的集合（按格去重）。被任何玩家棋子占据的格、空的浅滩格、空的未架桥深水格、障碍格、越界方向、以及因崖壁或栅栏而无气边的格 MUST NOT 计入气。
 
 浅滩只影响"空格能否作为气"：浅滩格与相邻格之间的气边照常存在，位于浅滩上的棋子照常沿气边连成棋串，其气照常按上式取自它的邻格。
 

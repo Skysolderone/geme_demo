@@ -261,7 +261,7 @@ public static class MapValidator
             return false;
         }
 
-        Battlefields fields = Battlefields.Of(map);
+        Battlefields fields = Battlefields.OfLand(map);
         ValidatePlateCells(map, plates, fields, f);
         ValidateThemes(map, plates, f);
         ValidateBirthPlates(map, plates, f);
@@ -337,8 +337,8 @@ public static class MapValidator
                 : new Coord(c.X, c.Y + 1);
         }
 
-        bool Lowland(Coord o) => map.Contains(o) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !map.Boards.Any(b => b.Contains(o));
-        Coord[] playable = [.. plate.Cells().Where(map.IsPlayable)];
+        bool Lowland(Coord o) => map.Contains(o) && map.IsLand(o) && map.HeightAt(o) == 0 && !map.Boards.Any(b => b.Contains(o));
+        Coord[] playable = [.. plate.Cells().Where(map.IsLand)];
         Coord[] ramps = [.. playable.Where(c => map.HeightAt(c) == 1)];
         Coord[] flat = [.. playable.Where(c => map.HeightAt(c) is not (1 or 2))];
         Coord[] badRamps = [.. ramps.Where(c => Outlet(c) is not { } o || !Lowland(o) || map.SurfaceAt(c) != Surface.Grass)];
@@ -371,7 +371,7 @@ public static class MapValidator
             ImmutableArray<Coord> inCore = [.. line.Cells.Where(plate.InCore)];
             ImmutableArray<Coord> leaks = [.. line.Cells
                 .Where(c => passages.Length != 1 || c != passages[0])
-                .Where(c => Adjacency.LibertyNeighbors(map, c).Any(n => !line.Cells.Contains(n)))];
+                .Where(c => Adjacency.LandLibertyNeighbors(map, c).Any(n => !line.Cells.Contains(n)))];
             if (!inCore.IsEmpty)
             {
                 f.Add(new MapValidationFailure(
@@ -394,7 +394,7 @@ public static class MapValidator
 
         // 核心区（map-expand-25 D7：随平台抬升改为高度 2）。
         ImmutableArray<Coord> coreCells = [.. plate.CoreCells()
-            .Where(c => !map.IsPlayable(c) || map.HeightAt(c) != 2 || map.SurfaceAt(c) != Surface.Grass || map.HasBridge(c))];
+            .Where(c => !map.IsLand(c) || map.HeightAt(c) != 2 || map.SurfaceAt(c) != Surface.Grass || map.HasBridge(c))];
         FenceEdge[] coreFences = [.. map.TerrainData.Fences.Where(e => plate.InCore(e.A) && plate.InCore(e.B)).OrderBy(e => e.A).ThenBy(e => e.B)];
         if (!coreCells.IsEmpty || coreFences.Length > 0)
         {
@@ -428,7 +428,7 @@ public static class MapValidator
         // 连通：棋盘内的可落子格只能落在一个战场分量里。保留格数最多的一片（并列取先出现的），其余各片即"被隔开的格"。
         List<List<Coord>> parts = [];
         var partOf = new Dictionary<Coord, List<Coord>>();
-        foreach (Coord c in plate.Cells().Where(map.IsPlayable))
+        foreach (Coord c in plate.Cells().Where(map.IsLand))
         {
             Coord key = fields.At(c)!.Cells[0];
             if (!partOf.TryGetValue(key, out List<Coord>? part))
@@ -541,7 +541,7 @@ public static class MapValidator
         {
             if (!plates.BirthTerrain)
             {
-                ImmutableArray<Coord> stray = [.. map.BirthZones[i].Where(c => !births[i].Contains(c) || !map.IsPlayable(c)).Order()];
+                ImmutableArray<Coord> stray = [.. map.BirthZones[i].Where(c => !births[i].Contains(c) || !map.IsLand(c)).Order()];
                 if (map.BirthZones[i].IsEmpty || !stray.IsEmpty)
                 {
                     f.Add(new MapValidationFailure(
@@ -605,7 +605,7 @@ public static class MapValidator
             return;
         }
 
-        Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
+        Coord[] playable = [.. map.AllCoords().Where(map.IsLand)];
         int columns = playable.Length == 0 ? 0 : playable.Max(c => c.X) - playable.Min(c => c.X) + 1;
         int rows = playable.Length == 0 ? 0 : playable.Max(c => c.Y) - playable.Min(c => c.Y) + 1;
         if (columns < budget.Island.Width || rows < budget.Island.Height)
@@ -752,7 +752,7 @@ public static class MapValidator
         List<ImmutableArray<Coord>> parts = [];
         foreach (Coord start in map.AllCoords())
         {
-            if (!visited.Contains(start) && map.IsPlayable(start))
+            if (!visited.Contains(start) && map.IsLand(start))
             {
                 parts.Add(FloodFill(map, start, visited));
             }
@@ -833,7 +833,7 @@ public static class MapValidator
             return;
         }
 
-        int playable = map.PlayableCount;
+        int playable = map.LandCount;
         if (playable < budget.MinPlayable || playable > budget.MaxPlayable)
         {
             f.Add(new MapValidationFailure(
@@ -882,7 +882,7 @@ public static class MapValidator
                     "BIRTH_ZONE_OUT_OF_BOUNDS", $"{BirthZoneLabel.Of(i)} 含越界格。", outside));
             }
 
-            int playable = zone.Count(map.IsPlayable);
+            int playable = zone.Count(map.IsLand);
             if (playable < ProtectionPhaseDeployments)
             {
                 f.Add(new MapValidationFailure(
@@ -953,7 +953,7 @@ public static class MapValidator
         var visited = new HashSet<Coord>();
         foreach (Coord start in map.AllCoords())
         {
-            if (visited.Contains(start) || !map.IsPlayable(start))
+            if (visited.Contains(start) || !map.IsLand(start))
             {
                 continue;
             }
@@ -1033,7 +1033,7 @@ public static class MapValidator
             Coord current = queue.Dequeue();
             component.Add(current);
             // 连通区沿气边（terrain-model D-E）：崖壁、栅栏、深水隔开的两片各成一区。平地上与几何邻居等价。
-            foreach (Coord n in Adjacency.LibertyNeighbors(map, current))
+            foreach (Coord n in Adjacency.LandLibertyNeighbors(map, current))
             {
                 if (!visited.Contains(n))
                 {
@@ -1052,7 +1052,7 @@ public static class MapValidator
         var queue = new Queue<Coord>();
         foreach (Coord s in sources.Order())
         {
-            if (!map.IsPlayable(s))
+            if (!map.IsLand(s))
             {
                 continue;
             }
@@ -1065,7 +1065,7 @@ public static class MapValidator
         {
             Coord current = queue.Dequeue();
             // 最短落子距离沿气边（terrain-model D-E）：崖壁挡住的路不算路。平地上与几何邻居等价。
-            foreach (Coord n in Adjacency.LibertyNeighbors(map, current))
+            foreach (Coord n in Adjacency.LandLibertyNeighbors(map, current))
             {
                 if (!dist.ContainsKey(n))
                 {

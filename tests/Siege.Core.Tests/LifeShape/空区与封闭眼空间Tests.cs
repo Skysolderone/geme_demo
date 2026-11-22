@@ -197,8 +197,9 @@ public class 空区与封闭眼空间Tests
     }
 
     [Fact]
-    public void 未架桥深水算墙()
+    public void 空的未架桥深水不是墙()
     {
+        // terrain-bonus：深水可落子后与空浅滩同一口径——贴着空深水的空区不封闭。
         GameBoard board = Grid([
             ".........",
             "....0....",
@@ -210,9 +211,7 @@ public class 空区与封闭眼空间Tests
         ]);
         LifeShapeReport report = LifeShapeReport.Analyze(board);
 
-        EyeSpace eye = report.EyeSpaceAt(TestMaps.At("E5"))!;
-        Assert.Equal(["E5"], eye.Cells());
-        Assert.Equal(A, eye.Owner);
+        Assert.Null(report.EyeSpaceAt(TestMaps.At("E5")));
     }
 
     [Fact]
@@ -346,7 +345,7 @@ public class 空区与封闭眼空间Tests
     [Fact]
     public void 眼边只去掉气边的栅栏一条()
     {
-        // fence-eye-rule tasks 1.1：同一对格子之间立栅后，气边消失、眼边保留；崖壁 / 未架桥深水 / 障碍处两者都没有；双向对称。
+        // fence-eye-rule tasks 1.1：同一对格子之间立栅后，气边消失、眼边保留；崖壁 / 障碍处两者都没有；双向对称。terrain-bonus 起未架桥深水可落子，两种边都有。
         // E5–E6 立栅；F5 高 2（崖壁）；D5 未架桥深水；E4 岩石。E5 的四个几何邻居恰好各占一种情形。
         // 变异验证见 implement.md（M-F1：眼边加回"无栅栏"一条 → 本测试红；M-F5：眼边去掉高差一条 → 本测试红）。
         GameBoard board = Grid(
@@ -363,11 +362,11 @@ public class 空区与封闭眼空间Tests
             fences: [("E5", "E6")]);
         Coord e5 = TestMaps.At("E5");
 
-        Assert.Equal(["E6"], board.EyeNeighbors(e5).Notations());
-        Assert.Empty(board.LibertyNeighbors(e5));
+        Assert.Equal(["D5", "E6"], board.EyeNeighbors(e5).Notations());
+        Assert.Equal(["D5"], board.LibertyNeighbors(e5).Notations());
         Assert.Contains(e5, board.EyeNeighbors(TestMaps.At("E6")));
         Assert.DoesNotContain(e5, board.LibertyNeighbors(TestMaps.At("E6")));
-        Assert.Empty(board.EyeNeighbors(TestMaps.At("D5")));   // 深水自身不可落子：两种边都没有
+        Assert.Contains(e5, board.EyeNeighbors(TestMaps.At("D5")));   // 深水可落子（terrain-bonus）：两种边都有
         Assert.Empty(board.EyeNeighbors(TestMaps.At("E4")));   // 障碍同上
         Assert.DoesNotContain(e5, board.EyeNeighbors(TestMaps.At("F5")));   // 崖壁：反方向同样没有
 

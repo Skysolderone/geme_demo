@@ -674,8 +674,7 @@ public sealed partial class GameBoard
         RequireInBounds(c);
         if (!Map.IsPlayable(c))
         {
-            string reason = Map.TerrainData.IsUnbridgedDeepWater(c) ? "未架桥的深水格" : "障碍格";
-            throw new SiegeRuleException($"目标格不可落子：{c.ToNotation()} 是{reason}。");
+            throw new SiegeRuleException($"目标格不可落子：{c.ToNotation()} 是障碍格。");
         }
 
         if (_occupants[Index(c)] is not null)

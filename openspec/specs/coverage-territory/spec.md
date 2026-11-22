@@ -55,7 +55,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 荒漠格的归属 SHALL 与其他空格一样判定（可以被独占、争议或中立），独占的荒漠格照常进入盘面层归属读法，只是 MUST NOT 计领地分。
 
-障碍格与未架桥的深水格 MUST NOT 属于任何玩家。林地格不是覆盖目标（见 `terrain`「覆盖关系」），空的林地格 SHALL 恒为中立。
+障碍格与空的未架桥深水格 MUST NOT 属于任何玩家（未架桥深水不是覆盖目标）。林地格不是覆盖目标（见 `terrain`「覆盖关系」），空的林地格 SHALL 恒为中立。
 
 覆盖来源的棋子数量 MUST NOT 影响判定：同一玩家用 1 枚还是 4 枚棋子覆盖同一空格，结果都是该玩家独占，且只计 1 分。
 

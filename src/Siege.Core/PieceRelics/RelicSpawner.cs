@@ -127,7 +127,7 @@ public static class RelicSpawner
         var candidates = new List<Coord>();
         foreach (Coord c in board.AllCoords())
         {
-            if (board[c].IsPlayableEmpty && !near[(c.Y * width) + c.X] && board.RelicAt(c) is null && !birth.IsBirthArea(c))
+            if (board[c].IsPlayableEmpty && board.Map.IsLand(c) && !near[(c.Y * width) + c.X] && board.RelicAt(c) is null && !birth.IsBirthArea(c))
             {
                 candidates.Add(c);
             }

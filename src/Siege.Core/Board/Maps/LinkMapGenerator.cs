@@ -945,13 +945,13 @@ public static partial class LinkMapGenerator
     private static Coord CentralEntranceOf(MapData map, Island island)
     {
         var centre = new Coord(Margin + ((island.Width - 1) / 2), Margin + ((island.Height - 1) / 2));
-        if (map.IsPlayable(centre))
+        if (map.IsLand(centre))
         {
             return centre;
         }
 
         return island.Cells()
-            .Where(c => map.IsPlayable(c) && map.HeightAt(c) == 0)
+            .Where(c => map.IsLand(c) && map.HeightAt(c) == 0)
             .OrderBy(c => Math.Abs(c.X - centre.X) + Math.Abs(c.Y - centre.Y))
             .ThenBy(c => c.Y)
             .ThenBy(c => c.X)
@@ -980,7 +980,7 @@ public static partial class LinkMapGenerator
             foreach (Coord c in dry.AllCoords())
             {
                 int i = Index(c);
-                if (!dry.IsPlayable(c))
+                if (!dry.IsLand(c))
                 {
                     _adjacent[i] = [];
                     continue;
@@ -988,7 +988,7 @@ public static partial class LinkMapGenerator
 
                 _playable[i] = true;
                 _playableCount++;
-                _adjacent[i] = [.. Adjacency.LibertyNeighbors(dry, c).Select(Index)];
+                _adjacent[i] = [.. Adjacency.LandLibertyNeighbors(dry, c).Select(Index)];
             }
         }
 

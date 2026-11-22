@@ -157,7 +157,7 @@ public sealed partial class GameBoard
 
         public Terrain TerrainAt(int i, Coord c) => IsPlayable(i, c) ? Terrain.Playable : Terrain.Obstacle;
 
-        /// <summary>该格为空时能否作为气：可落子且地表不是浅滩（"空格能否作为气"的唯一判定，见 <see cref="GameBoard.GivesLiberty"/>）。</summary>
+        /// <summary>该格为空时能否作为气：可落子、地表不是浅滩且不是未架桥深水（terrain-bonus）（"空格能否作为气"的唯一判定，见 <see cref="GameBoard.GivesLiberty"/>）。</summary>
         public bool GivesLibertyWhenEmpty(int i, Coord c) => (Flags(i, c) & LibertyWhenEmpty) != 0;
 
         public int? BirthZoneOf(int i, Coord c)
@@ -206,7 +206,7 @@ public sealed partial class GameBoard
                 if (playable)
                 {
                     flags |= Playable;
-                    if (map.SurfaceAt(c) != Surface.Shallows)
+                    if (map.SurfaceAt(c) != Surface.Shallows && !map.TerrainData.IsUnbridgedDeepWater(c))
                     {
                         flags |= LibertyWhenEmpty;
                     }

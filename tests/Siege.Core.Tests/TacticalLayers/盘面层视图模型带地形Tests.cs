@@ -52,7 +52,7 @@ public class 盘面层视图模型带地形Tests
 
         // 深水 D4 未架桥 → 障碍且地表深水；G4 有桥 → 可落子且地表仍是深水。
         BoardCellView d4 = board.CellAt(TestMaps.At("D4"));
-        Assert.Equal((Terrain.Obstacle, Surface.DeepWater, false), (d4.Terrain, d4.Surface, d4.HasBridge));
+        Assert.Equal((Terrain.Playable, Surface.DeepWater, false), (d4.Terrain, d4.Surface, d4.HasBridge));
         BoardCellView g4 = board.CellAt(TestMaps.At("G4"));
         Assert.Equal((Terrain.Playable, Surface.DeepWater, true), (g4.Terrain, g4.Surface, g4.HasBridge));
 

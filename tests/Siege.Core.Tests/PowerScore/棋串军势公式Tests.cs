@@ -69,9 +69,10 @@ public class 棋串军势公式Tests
 
         GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "B7");
 
-        Assert.Equal((4, 3, 2), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
-        Assert.Equal((4 + 3) * 9 / 4, group.Power);
-        Assert.Equal(15, group.Power);
+        // terrain-bonus：四枚都在 h=2，基础军势各 1 + 2 → 12；⌊(12 + 3) × 2.25⌋ = 33。
+        Assert.Equal((12, 3, 2), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
+        Assert.Equal((12 + 3) * 9 / 4, group.Power);
+        Assert.Equal(33, group.Power);
     }
 
     [Fact]

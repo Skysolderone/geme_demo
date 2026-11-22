@@ -416,6 +416,7 @@ public static class Program
         Surface.Marsh => 'M',
         Surface.Crag => 'P',
         Surface.Shallows => 'S',
+        Surface.Rock => 'K',
         _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
     };
 
