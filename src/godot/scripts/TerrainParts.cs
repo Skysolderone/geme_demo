@@ -18,6 +18,12 @@ public static class TerrainParts
     public const string Directory = "res://parts/terrain_full_art";
 
     /// <summary>
+    /// 卡通装饰目录（chibi-world 段 ①）：<c>tools/blender/chibi_terrain.py</c> 生成的 <c>&lt;名&gt;[_&lt;档&gt;].glb</c>。装饰类部件（<see cref="Create"/> / <see cref="Template"/>）
+    /// 先找这里，再找 <see cref="Directory"/> 的 <c>.tscn</c>，最后退回 <see cref="LowPoly"/>；删掉这个目录即回到改前样式。地块部件（<see cref="PieceOf"/>）不走这里。
+    /// </summary>
+    public const string ChibiDirectory = "res://parts/terrain_chibi";
+
+    /// <summary>
     /// 一类部件：名字、变体档数（1 表示没有变体后缀）、程序生成函数、锚点约定。
     /// </summary>
     /// <param name="Name">部件名（资源文件名前缀）。</param>
@@ -31,6 +37,9 @@ public static class TerrainParts
     {
         /// <summary>第 <paramref name="variant"/> 档的资源文件名（不含目录）。</summary>
         public string FileName(int variant) => Variants == 1 ? $"{Name}.tscn" : $"{Name}_{((variant % Variants) + Variants) % Variants}.tscn";
+
+        /// <summary>第 <paramref name="variant"/> 档的卡通 glb 文件名（不含目录）：与 <see cref="FileName"/> 同名，扩展名换成 <c>.glb</c>。</summary>
+        public string ChibiFileName(int variant) => $"{FileName(variant)[..^".tscn".Length]}.glb";
     }
 
     // 明亮的棋盘由 BoardView 保持地表判读；这些颜色只作用于部件自身。
@@ -189,9 +198,27 @@ public static class TerrainParts
     /// <summary>本进程里退回程序生成的部件数。</summary>
     public static int GeneratedCount { get; private set; }
 
-    /// <summary>取一件部件：有资源就实例化资源，否则程序生成。返回节点原点在地砖上表面（与 <see cref="LowPoly"/> 同一约定）。</summary>
+    /// <summary>本进程里经 <see cref="Create"/> / <see cref="CountLoaded"/> 放置的装饰中，来自卡通 glb（<see cref="ChibiDirectory"/>）的件数。</summary>
+    public static int ChibiCount { get; private set; }
+
+    /// <summary>本进程里经 <see cref="Create"/> / <see cref="CountLoaded"/> 放置的装饰中，没有卡通 glb、回退到 <c>.tscn</c> 或程序生成的件数。</summary>
+    public static int ChibiFallbackCount { get; private set; }
+
+    /// <summary>探测过但没有（或读不出）卡通 glb 的档（文件名）：启动日志据此点名回退的是哪几档。</summary>
+    public static IReadOnlyCollection<string> ChibiMisses => ChibiMissed;
+
+    /// <summary>取一件部件：卡通 glb → <c>.tscn</c> 资源 → 程序生成。返回节点原点在地砖上表面（与 <see cref="LowPoly"/> 同一约定）。</summary>
     public static Node3D Create(Kind kind, int variant = 0)
     {
+        ArgumentNullException.ThrowIfNull(kind);
+        if (ChibiOf(kind, variant) is { } chibi)
+        {
+            LoadedCount++;
+            ChibiCount++;
+            return chibi.Instantiate();
+        }
+
+        ChibiFallbackCount++;
         if (SceneOf(kind, variant)?.Instantiate() is Node3D node)
         {
             LoadedCount++;
@@ -203,13 +230,239 @@ public static class TerrainParts
     }
 
     /// <summary>
-    /// 合批用的模板（board-render-perf D2）：该档资源的一份实例，<b>不计数</b>；没有资源时返回 <c>null</c>——
+    /// 合批用的模板（board-render-perf D2）：该档资源的一份实例（卡通 glb 优先），<b>不计数</b>；没有资源时返回 <c>null</c>——
     /// 程序生成的松树 / 遗迹随 <paramref name="variant"/> 连续变化（朝向不按档数取模），归并不成有限几种，调用方应退回 <see cref="Create"/> 逐件画。
     /// </summary>
-    public static Node3D? Template(Kind kind, int variant) => SceneOf(kind, variant)?.Instantiate() as Node3D;
+    public static Node3D? Template(Kind kind, int variant) =>
+        ChibiOf(kind, variant)?.Instantiate() ?? SceneOf(kind, variant)?.Instantiate() as Node3D;
 
-    /// <summary>合批放置了一件来自资源的部件（实例由 MultiMesh 画，不再各建节点）：只记数，让启动日志的"资源 N 件"仍是放置件数。</summary>
-    public static void CountLoaded() => LoadedCount++;
+    /// <summary>合批放置了一件来自资源的部件（实例由 MultiMesh 画，不再各建节点）：只记数，让启动日志的"资源 N 件"仍是放置件数，并分出其中卡通 glb 的件数。</summary>
+    public static void CountLoaded(Kind kind, int variant)
+    {
+        ArgumentNullException.ThrowIfNull(kind);
+        LoadedCount++;
+        if (ChibiOf(kind, variant) is not null)
+        {
+            ChibiCount++;
+        }
+        else
+        {
+            ChibiFallbackCount++;
+        }
+    }
+
+    // —— 卡通装饰（chibi-world 段 ①）：glb 按槽合并成"根下一层、各带一个网格"，每档只合并一次；材质按 (槽, 颜色) 全图共用，描边全图一份。
+
+    /// <summary>卡通 glb 的物体名前缀（材质槽）；Line 是描边外壳。与 <c>tools/blender/chibi_terrain.py</c> 的 SLOTS 一致。</summary>
+    private static readonly string[] ChibiSlots = ["Stone", "Shade", "Wood", "Leaf", "Moss", "Water", "Crystal", "Gold", "Flame", "Glow", "Bloom", "Bone", "Line"];
+
+    private const string ChibiLineSlot = "Line";
+
+    private static readonly Dictionary<string, ChibiTemplate?> ChibiTemplates = [];
+    private static readonly HashSet<string> ChibiMissed = [];
+    private static readonly Dictionary<(string Slot, Color Color), StandardMaterial3D> ChibiMaterials = [];
+    private static StandardMaterial3D? _chibiOutline;
+
+    /// <summary>一件卡通装饰的合并结果：每个槽一个网格（描边那个名为 <see cref="PieceModels.OutlineName"/>），网格与材质在实例之间共用。</summary>
+    private sealed record ChibiTemplate(string Name, (string Node, Mesh Mesh, Material Material, bool Shadow)[] Parts)
+    {
+        public Node3D Instantiate()
+        {
+            var root = new Node3D { Name = Name };
+            foreach ((string node, Mesh mesh, Material material, bool shadow) in Parts)
+            {
+                root.AddChild(new MeshInstance3D
+                {
+                    Name = node,
+                    Mesh = mesh,
+                    MaterialOverride = material,
+                    CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
+
+            return root;
+        }
+    }
+
+    /// <summary>该档的卡通 glb 合并结果；没有文件、读不出或含未知槽的零件时为 <c>null</c>（只探测一次）。</summary>
+    private static ChibiTemplate? ChibiOf(Kind kind, int variant)
+    {
+        string file = kind.ChibiFileName(variant);
+        if (ChibiTemplates.TryGetValue(file, out ChibiTemplate? cached))
+        {
+            return cached;
+        }
+
+        string path = $"{ChibiDirectory}/{file}";
+        ChibiTemplate? template = null;
+        if (ResourceLoader.Exists(path) && ResourceLoader.Load<PackedScene>(path) is { } scene)
+        {
+            Node node = scene.Instantiate();
+            try
+            {
+                template = MergeChibi(node, kind, variant, file);
+            }
+            finally
+            {
+                node.Free();
+            }
+        }
+
+        if (template is null)
+        {
+            ChibiMissed.Add(file);
+        }
+
+        ChibiTemplates[file] = template;
+        return template;
+    }
+
+    /// <summary>把 glb 的零件（任意层级，按全局变换）按名字前缀的槽合并：每槽一个网格，按 <see cref="ChibiSlots"/> 的次序排；Line 槽成为不投影的描边节点。</summary>
+    private static ChibiTemplate? MergeChibi(Node scene, Kind kind, int variant, string file)
+    {
+        var tools = new Dictionary<string, SurfaceTool>();
+        string? bad = null;
+        Collect(scene, Transform3D.Identity);
+        if (bad is not null || tools.Count == 0)
+        {
+            GD.PushWarning($"[terrain-chibi] {file}：{(bad is null ? "没有零件" : $"零件 {bad} 的名字不带已知材质槽前缀")}，回退旧样式");
+            return null;
+        }
+
+        var parts = new List<(string, Mesh, Material, bool)>();
+        foreach (string slot in ChibiSlots)
+        {
+            if (!tools.TryGetValue(slot, out SurfaceTool? tool))
+            {
+                continue;
+            }
+
+            ArrayMesh mesh = tool.Commit();
+            parts.Add(slot == ChibiLineSlot
+                ? (PieceModels.OutlineName, mesh, _chibiOutline ??= Visuals.Outline(Visuals.OutlineInk), false)
+                : (slot, mesh, ChibiMaterial(slot, ChibiColor(kind.Name, Wrap(variant, kind.Variants), slot)), slot is not ("Flame" or "Glow")));
+        }
+
+        return new ChibiTemplate(kind.Name, [.. parts]);
+
+        void Collect(Node node, Transform3D parent)
+        {
+            Transform3D transform = node is Node3D spatial ? parent * spatial.Transform : parent;
+            if (node is MeshInstance3D { Mesh: { } mesh } instance)
+            {
+                string name = instance.Name.ToString();
+                int split = name.IndexOf('_');
+                string slot = split > 0 ? name[..split] : name;
+                if (Array.IndexOf(ChibiSlots, slot) < 0)
+                {
+                    bad ??= name;
+                    return;
+                }
+
+                if (!tools.TryGetValue(slot, out SurfaceTool? tool))
+                {
+                    tool = new SurfaceTool();
+                    tool.Begin(Mesh.PrimitiveType.Triangles);
+                    tools.Add(slot, tool);
+                }
+
+                for (int surface = 0; surface < mesh.GetSurfaceCount(); surface++)
+                {
+                    tool.AppendFrom(mesh, surface, transform);
+                }
+            }
+
+            foreach (Node child in node.GetChildren())
+            {
+                Collect(child, transform);
+            }
+        }
+    }
+
+    /// <summary>卡通装饰的槽材质（按槽与颜色全图共用一份，合批时各档同槽同色的子网格材质相同）：火焰不受光，晶体微微自发光，水 / 金 / 晶体开卡通高光，其余为卡通分阶。</summary>
+    private static StandardMaterial3D ChibiMaterial(string slot, Color color)
+    {
+        if (ChibiMaterials.TryGetValue((slot, color), out StandardMaterial3D? cached))
+        {
+            return cached;
+        }
+
+        StandardMaterial3D material;
+        if (slot is "Flame" or "Glow")
+        {
+            material = new StandardMaterial3D { AlbedoColor = color, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
+        }
+        else
+        {
+            material = Visuals.Toon(color, specular: slot is "Water" or "Gold" or "Crystal");
+            if (slot == "Crystal")
+            {
+                material.EmissionEnabled = true;
+                material.Emission = color;
+                material.EmissionEnergyMultiplier = 0.22f;
+            }
+        }
+
+        ChibiMaterials[(slot, color)] = material;
+        return material;
+    }
+
+    // 卡通装饰色板（chibi-world 裁决 5：放弃粉彩，改用与单位协调的饱和色）。先按槽给底色，再按种类 / 档覆盖。
+    private static readonly Color ChibiSlate = Color.Color8(128, 142, 186);        // 巨石、晶簇座、火盆：冷石板蓝灰
+    private static readonly Color ChibiSlateDark = Color.Color8(74, 80, 124);
+    private static readonly Color ChibiSandstone = Color.Color8(232, 208, 160);    // 遗迹、拱门、石碑：暖砂岩
+    private static readonly Color ChibiSandstoneDark = Color.Color8(156, 118, 92);
+    private static readonly Color ChibiWood = Color.Color8(166, 104, 56);           // 同单位 Cloth 槽的木色一系
+    private static readonly Color ChibiWoodDark = Color.Color8(108, 66, 42);
+    private static readonly Color ChibiLeaf = Color.Color8(68, 168, 64);
+    private static readonly Color ChibiMoss = Color.Color8(142, 206, 72);
+    private static readonly Color ChibiPine = Color.Color8(30, 128, 86);
+    private static readonly Color ChibiPineLight = Color.Color8(64, 166, 92);
+    private static readonly Color ChibiWater = Color.Color8(58, 164, 232);
+    private static readonly Color ChibiCrystal = Color.Color8(168, 84, 238);
+    private static readonly Color ChibiGold = Color.Color8(250, 194, 48);
+    private static readonly Color ChibiFlame = Color.Color8(255, 138, 32);
+    private static readonly Color ChibiGlow = Color.Color8(255, 222, 72);   // 用户裁决 6：火盆黄色内焰（不受光）
+    private static readonly Color ChibiBloomPink = Color.Color8(248, 104, 158);
+    private static readonly Color ChibiBloomYellow = Color.Color8(255, 212, 46);
+    private static readonly Color ChibiBloomWhite = Color.Color8(250, 248, 240);
+    private static readonly Color ChibiBone = Color.Color8(246, 238, 216);
+
+    /// <summary>卡通装饰某档某槽的颜色。</summary>
+    private static Color ChibiColor(string kind, int variant, string slot) => (kind, slot) switch
+    {
+        ("ruins" or "arch" or "stele", "Stone") => ChibiSandstone,
+        ("ruins" or "arch" or "stele", "Shade") => ChibiSandstoneDark,
+        ("pines", "Leaf") => ChibiPine,
+        ("pines", "Moss") => ChibiPineLight,
+        ("desert", "Shade") => Color.Color8(204, 150, 86),       // 沙纹：比荒漠地砖深一档的砂色
+        ("crag", "Stone") => Color.Color8(188, 170, 150),
+        ("crag", "Shade") => Color.Color8(78, 70, 82),
+        ("shallows", "Stone") => Color.Color8(206, 198, 186),
+        ("bridge", "Bloom") => Color.Color8(222, 170, 104),     // 桥面木板：比木料亮的原木色
+        ("chest", "Bloom") => Color.Color8(206, 138, 72),       // 箱盖：比箱体亮一档的木色
+        ("crystal", "Bloom") => Color.Color8(228, 186, 255),    // 晶簇里那根浅色小晶
+        ("brazier", "Bloom") => Color.Color8(196, 58, 36),      // 盆里的余烬
+        ("chest", "Shade") => Color.Color8(82, 64, 70),
+        ("fence_x" or "fence_z" or "bridge", "Shade") => ChibiWoodDark,
+        ("flower", "Bloom") => variant switch { 0 => ChibiBloomPink, 1 => ChibiBloomYellow, _ => ChibiBloomWhite },
+        (_, "Stone") => SlotColor(slot, ChibiSlate),
+        (_, "Shade") => SlotColor(slot, ChibiSlateDark),
+        (_, "Wood") => SlotColor(slot, ChibiWood),
+        (_, "Leaf") => SlotColor(slot, ChibiLeaf),
+        (_, "Moss") => SlotColor(slot, ChibiMoss),
+        (_, "Water") => SlotColor(slot, ChibiWater),
+        (_, "Crystal") => SlotColor(slot, ChibiCrystal),
+        (_, "Gold") => SlotColor(slot, ChibiGold),
+        (_, "Flame") => SlotColor(slot, ChibiFlame),
+        (_, "Glow") => SlotColor(slot, ChibiGlow),
+        (_, "Bloom") => SlotColor(slot, ChibiBloomPink),
+        (_, "Bone") => SlotColor(slot, ChibiBone),
+        _ => Colors.Magenta,
+    };
+
+    /// <summary>按槽取的缺省色：当前色板（段 ② 候选）若覆盖了这个槽就用覆盖值（段 ① 裁决 2：只改常量、不重新生成 glb）。种类专属色不经这里。</summary>
+    private static Color SlotColor(string slot, Color fallback) => TerrainPalette.Current.ChibiSlots.GetValueOrDefault(slot, fallback);
 
     /// <summary>
     /// 取单网格部件（地块用）的网格与自带材质：有资源就取资源里第一个 <see cref="MeshInstance3D"/> 的网格（计"资源"），没有就程序生成（计"程序生成"）。
@@ -229,7 +482,7 @@ public static class TerrainParts
         if (loaded is { } piece)
         {
             LoadedCount++;
-            return piece;
+            return Toonify(kind, variant, piece);
         }
 
         GeneratedCount++;
@@ -239,7 +492,175 @@ public static class TerrainParts
             GeneratedPieces[file] = generated;
         }
 
-        return generated;
+        return Toonify(kind, variant, generated);
+    }
+
+    // —— 段 ②（chibi-world）：地块卡通材质与高差描边。网格不重建（.tscn 快照照用），只把部件自带的哑光材质换成按色板取色的卡通材质，顶点色色带保留。
+
+    /// <summary>崖壁 / 缓坡 / 台面外框的描边宽（世界单位）：与单位描边（0.03）同一量级，近景约 3–4 像素。</summary>
+    public const float ReliefOutlineWidth = 0.035f;
+
+    /// <summary>浮岛外轮廓（阶梯断崖、垂岩）的描边宽：岛是远景里的大件，按远景每格约 25 像素定，远景约 2 像素。</summary>
+    public const float IslandOutlineWidth = 0.08f;
+
+    /// <summary>描边顶沿（朝下的那条压边）高出棱线的量：盖在棱线外侧、低于一切贴地标记（最低 +0.008）。</summary>
+    public const float OutlineLift = 0.004f;
+
+    private static readonly Dictionary<(string Kind, int Tier), StandardMaterial3D> ToonPieces = [];
+    private static readonly Dictionary<Mesh, ArrayMesh> Hulls = [];
+    private static StandardMaterial3D? _reliefOutline;
+    private static ArrayMesh? _edgeOutline;
+    private static ArrayMesh? _cornerOutline;
+
+    /// <summary>地块 / 浮岛描边共用的一份材质（<see cref="Visuals.Outline"/>，墨色同单位）：只画背面、不受光；全图所有高差描边按网格归并进同一批。</summary>
+    public static StandardMaterial3D ReliefOutline => _reliefOutline ??= Visuals.Outline(Visuals.OutlineInk);
+
+    /// <summary>
+    /// 自带材质的地块部件换成卡通材质（按 <see cref="TerrainPalette.Current"/> 取色，同种类同档共用一份，合批键不变）；由 BoardView 覆盖材质的部件
+    /// （地砖、衬底、亮条、台面边框）原样返回。
+    /// </summary>
+    private static Piece Toonify(Kind kind, int variant, Piece piece)
+    {
+        TerrainPalette palette = TerrainPalette.Current;
+        (Color Color, int Tier)? spec = kind.Name switch
+        {
+            "side_slope" => (palette.SlopeSide, 0),
+            "side_cliff" => (palette.CliffSide, 0),
+            "bank_lip" => (palette.BankFoam, 0),
+            "rim" => (palette.RimStone, 0),
+            "island_layer" => (palette.IslandTiers[Wrap(variant, 3)], Wrap(variant, 3)),
+            "island_spike" => Wrap(variant, IslandSpike.Variants) == 0 ? (palette.IslandTiers[2], 2) : (palette.IslandTiers[1], 1),
+            "cloud" => (palette.Cloud, 0),
+            _ => null,
+        };
+        if (spec is not { } s)
+        {
+            return piece;
+        }
+
+        if (!ToonPieces.TryGetValue((kind.Name, s.Tier), out StandardMaterial3D? material))
+        {
+            material = Visuals.ToonVertex(s.Color);
+            if (kind == Cloud)
+            {
+                // 云团：卡通分阶、半透明（α 取色板），不接收阴影（它们挂在岛底下，接收阴影会整片发黑）、不投影由 BoardView 设。
+                material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+                material.DisableReceiveShadows = true;
+            }
+
+            ToonPieces[(kind.Name, s.Tier)] = material;
+        }
+
+        return piece with { Material = material };
+    }
+
+    /// <summary>
+    /// 高差外缘描边件（一条格边一件）：网格里边沿 X 轴（±0.5）、外侧朝 −Z，原点在棱线中点。两部分，都用 <see cref="ReliefOutline"/>（只画背面）：
+    /// <list type="bullet">
+    /// <item>外壳竖墙：崖面沿外法线外推 <see cref="ReliefOutlineWidth"/>，从棱线上方一个描边宽一直落到两层之下（埋进低处地面）；正面朝外——朝相机的一侧被剔除，背向相机的远侧崖沿露出一线。</item>
+    /// <item>压边：棱线外侧一条宽 <see cref="ReliefOutlineWidth"/> 的水平带，正面朝下——俯视时画出来，朝相机的崖沿也有一道墨线。</item>
+    /// </list>
+    /// 只摆在"邻格更低"的格边上（BoardView 按邻格层数判），同高相邻的格之间没有这件，平地不出格线（裁决 4）。
+    /// </summary>
+    public static ArrayMesh EdgeOutlineMesh => _edgeOutline ??= BuildEdgeOutline();
+
+    /// <summary>凸角补件：两条外缘在凸角相接处缺的那一小方（压边一小块 + 外壳两小片），局部 +X 与 −Z 两个方向朝外，原点在角点（棱线高）。</summary>
+    public static ArrayMesh CornerOutlineMesh => _cornerOutline ??= BuildCornerOutline();
+
+    private static ArrayMesh BuildEdgeOutline()
+    {
+        const float t = ReliefOutlineWidth;
+        float bottom = -((2f * BoardGeometry.LayerHeight) + BoardGeometry.TileHeight);
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        OutlineQuad(tool, new Vector3(-0.5f, t, -t), new Vector3(0.5f, t, -t), new Vector3(0.5f, bottom, -t), new Vector3(-0.5f, bottom, -t), Vector3.Forward);
+        OutlineQuad(tool, new Vector3(-0.5f, OutlineLift, -t), new Vector3(0.5f, OutlineLift, -t), new Vector3(0.5f, OutlineLift, 0f), new Vector3(-0.5f, OutlineLift, 0f), Vector3.Down);
+        return tool.Commit();
+    }
+
+    private static ArrayMesh BuildCornerOutline()
+    {
+        const float t = ReliefOutlineWidth;
+        float bottom = -((2f * BoardGeometry.LayerHeight) + BoardGeometry.TileHeight);
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        OutlineQuad(tool, new Vector3(0f, t, -t), new Vector3(t, t, -t), new Vector3(t, bottom, -t), new Vector3(0f, bottom, -t), Vector3.Forward);
+        OutlineQuad(tool, new Vector3(t, t, -t), new Vector3(t, t, 0f), new Vector3(t, bottom, 0f), new Vector3(t, bottom, -t), Vector3.Right);
+        OutlineQuad(tool, new Vector3(0f, OutlineLift, -t), new Vector3(t, OutlineLift, -t), new Vector3(t, OutlineLift, 0f), new Vector3(0f, OutlineLift, 0f), Vector3.Down);
+        return tool.Commit();
+    }
+
+    /// <summary>描边四边形：按 <paramref name="front"/> 定绕序（Godot 从正面看顺时针），法线即 <paramref name="front"/>（描边不受光，法线只为完整）。</summary>
+    public static void OutlineQuad(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 front)
+    {
+        OutlineTri(tool, a, b, c, front);
+        OutlineTri(tool, a, c, d, front);
+    }
+
+    private static void OutlineTri(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 front)
+    {
+        bool counterClockwise = (b - a).Cross(c - a).Dot(front) > 0f;
+        foreach (Vector3 v in counterClockwise ? new[] { a, c, b } : new[] { a, b, c })
+        {
+            tool.SetNormal(front);
+            tool.AddVertex(v);
+        }
+    }
+
+    /// <summary>
+    /// 某网格的反向外壳（同网格只算一次）：顶点先按位置焊接、法线取各面按面积加权的平均（平直着色的硬边不再裂开），再沿平均法线外推
+    /// <paramref name="push"/>（按轴给：实例若非等比缩放，在这里按缩放的倒数补偿，外推后的世界厚度才均匀）。三角面绕序同本体，配 <see cref="ReliefOutline"/> 只画背面。
+    /// </summary>
+    public static ArrayMesh HullOf(Mesh mesh, Vector3 push)
+    {
+        ArgumentNullException.ThrowIfNull(mesh);
+        if (Hulls.TryGetValue(mesh, out ArrayMesh? cached))
+        {
+            return cached;
+        }
+
+        var triangles = new List<Vector3>();
+        for (int surface = 0; surface < mesh.GetSurfaceCount(); surface++)
+        {
+            global::Godot.Collections.Array arrays = mesh.SurfaceGetArrays(surface);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            int[] indices = arrays[(int)Mesh.ArrayType.Index].VariantType == Variant.Type.Nil ? [] : arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+            if (indices.Length == 0)
+            {
+                triangles.AddRange(vertices);
+            }
+            else
+            {
+                triangles.AddRange(indices.Select(i => vertices[i]));
+            }
+        }
+
+        static (int, int, int) Key(Vector3 p) => ((int)MathF.Round(p.X * 4096f), (int)MathF.Round(p.Y * 4096f), (int)MathF.Round(p.Z * 4096f));
+        var normals = new Dictionary<(int, int, int), Vector3>();
+        for (int i = 0; i + 2 < triangles.Count; i += 3)
+        {
+            Vector3 a = triangles[i], b = triangles[i + 1], c = triangles[i + 2];
+            // Godot 正面为顺时针：(c − a) × (b − a) 朝正面（外侧），模长即两倍面积——按面积加权。
+            Vector3 face = (c - a).Cross(b - a);
+            foreach (Vector3 p in new[] { a, b, c })
+            {
+                normals[Key(p)] = normals.GetValueOrDefault(Key(p)) + face;
+            }
+        }
+
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        foreach (Vector3 p in triangles)
+        {
+            Vector3 n = normals[Key(p)];
+            n = n.LengthSquared() > 1e-12f ? n.Normalized() : Vector3.Zero;
+            tool.SetNormal(n);
+            tool.AddVertex(p + (n * push));
+        }
+
+        ArrayMesh hull = tool.Commit();
+        Hulls[mesh] = hull;
+        return hull;
     }
 
     /// <summary>取节点树里第一个带网格的 <see cref="MeshInstance3D"/> 的网格与材质，然后释放节点（网格与材质是引用计数资源，留在缓存里）。</summary>
@@ -384,11 +805,11 @@ public static class TerrainParts
 
     private static StandardMaterial3D? _runeMaterial;
 
-    /// <summary>符文环材质（全图共用一份）：白底哑光、打开顶点色，颜色全由 <see cref="RuneRingMesh"/> 的顶点色给出。</summary>
-    public static StandardMaterial3D RuneMaterial => _runeMaterial ??= VertexMaterial(Colors.White, 1f);
+    /// <summary>符文环材质（全图共用一份）：白底、打开顶点色，颜色全由 <see cref="RuneRingMesh"/> 的顶点色给出。chibi-world 段 ③：哑光改卡通分阶（<see cref="Visuals.ToonVertex"/>），与地块同一套。</summary>
+    public static StandardMaterial3D RuneMaterial => _runeMaterial ??= Visuals.ToonVertex(Colors.White);
 
     /// <summary>
-    /// 中立平台的符文环（map-restyle 段C）：贴在平台顶面的薄片——外圈紫晶色宽带、内圈古金细带、两带之间八道深石短刻与四枚开口朝外的 V 形符文、
+    /// 中立平台的符文环（map-restyle 段C）：贴在平台顶面的薄片——外圈紫晶色宽带、内圈古金细带、两带之间八道短刻与四枚开口朝外的 V 形符文（chibi-world 段 ③：深石色改墨色 Visuals.OutlineInk）、
     /// 中心一圈六边形紫晶细带，全是顶点着色的贴地 Ribbon（y 0.0035–0.0045：高于地砖角饰 0.0015、低于平台格线 0.006 与一切标记）。
     /// 半径由 BoardView 按平台尺寸给；每段只在 <paramref name="keep"/>（段中点相对平台中心的偏移）认为底下是本层平地时才建——河面 / 棋盘内岩石上方不留悬空碎段。
     /// 参数随平台变化，所以这一件不进 <see cref="All"/>、不导出快照。
@@ -428,7 +849,7 @@ public static class TerrainParts
         {
             float a = Mathf.Tau * k / 8f;
             var dir = new Vector3(MathF.Cos(a), 0f, MathF.Sin(a));
-            Polyline([(dir * (radius * 0.85f)) + new Vector3(0f, glyphY, 0f), (dir * (radius * 0.95f)) + new Vector3(0f, glyphY, 0f)], 0.04f, ArtDarkStone);
+            Polyline([(dir * (radius * 0.85f)) + new Vector3(0f, glyphY, 0f), (dir * (radius * 0.95f)) + new Vector3(0f, glyphY, 0f)], 0.04f, Visuals.OutlineInk);
         }
 
         for (int k = 0; k < 4; k++)
@@ -440,7 +861,7 @@ public static class TerrainParts
             Vector3 tip = (dir * (radius * 0.42f)) + lift;
             Vector3 left = (dir * (radius * 0.64f)) - (side * (radius * 0.08f)) + lift;
             Vector3 right = (dir * (radius * 0.64f)) + (side * (radius * 0.08f)) + lift;
-            Polyline([left, tip, right], 0.04f, ArtDarkStone);
+            Polyline([left, tip, right], 0.04f, Visuals.OutlineInk);
         }
 
         return LowPolyMesh.Merge(parts);

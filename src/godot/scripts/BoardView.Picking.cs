@@ -32,7 +32,8 @@ public sealed partial class BoardView
 
         public void Collect(Node node, Transform3D relative)
         {
-            if (node is MeshInstance3D { Mesh: { } mesh } instance)
+            // 卡通棋子的描边外壳只是本体沿法线外推的一圈，不参与拾取：拾取几何与本体一致。
+            if (node is MeshInstance3D { Mesh: { } mesh } instance && !PieceModels.IsOutline(instance))
             {
                 PickMesh data = PickMeshCache.GetValue(mesh, static key => new PickMesh(key));
                 if (data.Faces.Length > 0)

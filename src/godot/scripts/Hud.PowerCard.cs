@@ -100,7 +100,7 @@ public sealed partial class Hud
         valueRow.AddThemeConstantOverride("separation", UiTheme.Space3);
         valueRow.AddChild(Ui.Text("势力", Ui.MutedText, UiTheme.Caption));
         _cardValue = Ui.Text("0", Ui.InfoText, CardValueFontPx);
-        _cardValue.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.6f));
+        _cardValue.AddThemeColorOverride("font_outline_color", Ui.Ink with { A = 0.6f });   // chibi-world 段 ③：纯黑 → 卡通墨色，透明度不变
         _cardValue.AddThemeConstantOverride("outline_size", 4);
         _cardValue.VerticalAlignment = VerticalAlignment.Center;
         valueRow.AddChild(_cardValue);
@@ -195,7 +195,7 @@ public sealed partial class Hud
         Label label = Ui.Text(string.Empty, Ui.InfoText, size);
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.VerticalAlignment = VerticalAlignment.Center;
-        label.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
+        label.AddThemeColorOverride("font_outline_color", Ui.Ink with { A = 0.85f });   // chibi-world 段 ③：纯黑 → 卡通墨色，透明度不变
         label.AddThemeConstantOverride("outline_size", outline);
         return label;
     }

@@ -359,3 +359,11 @@ dotnet build                          # 零警告（TreatWarningsAsErrors 已开
 dotnet test                           # 全部测试
 dotnet test --filter "FullyQualifiedName~棋串"   # 按名过滤
 ```
+
+## 黄金哈希的输入必须先归一成 LF（report-hash-eol，2026-11-21）
+
+`StringBuilder.AppendLine` 和 `Environment.NewLine` 在 Windows 上写的是 `\r\n`，在 Mac/Linux 上写的是 `\n`。拿这类文本求 SHA-256 或做逐字节比对时，钉值会把钉值那台机器的行尾一起钉进去，在另一个平台上恒红。
+
+- 实例：`平衡分析方向Tests.内容集v1的报告除第12项外钉值` 按 `'\n'` 切行，却没去掉每行末尾的 `\r`。它的钉值是在 Windows 上算的（405c16e），在 Mac 上从钉值那一刻起就是红的；其间几次合并在 Mac 上算出的哈希都相同，可见不是代码漂移。
+- 规则：求哈希前，必须先把输入归一成 LF：`ReplaceLineEndings("\n")`，或者切行后逐行 `TrimEnd('\r')` 再用 `'\n'` 拼接。可以复用 `SimFixtures.Sha256Lf`。
+- 判别：一条哈希用例只在某一个平台上红，并且多次提交上算出的值相同，先怀疑行尾，不要直接重钉。核实办法：在改动前的代码里把文本换成 `\r\n`，看能不能复现旧钉值。

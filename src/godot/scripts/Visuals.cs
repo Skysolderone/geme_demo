@@ -13,7 +13,7 @@ public static class Visuals
     public static readonly Color GridInk = Color.Color8(64, 54, 80);
 
     /// <summary>浮岛底座与岛缘的淡紫灰石面（map-restyle 段A：参考图的粉彩岩台），比地砖更灰、更紫，与浅色地砖形成内外层次。</summary>
-    public static readonly Color IslandRim = Color.Color8(176, 166, 192);
+    public static Color IslandRim => TerrainPalette.Current.IslandGround;
 
     /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。</summary>
     public static readonly Color CoordinateLabel = ToColor(BoardLabelStyle.CoordinateLabel);
@@ -22,28 +22,28 @@ public static class Visuals
     public static readonly Color CoordinateLabelOutline = ToColor(BoardLabelStyle.CoordinateLabelOutline);
 
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。map-restyle 段A：参考图的岛面是淡紫灰的浅色石面，草色只靠草丛装饰（段C）读出来。</summary>
-    public static readonly Color TilePlayable = Color.Color8(188, 180, 198);
+    public static Color TilePlayable => TerrainPalette.Current.GrassPatchA;
 
     /// <summary>
     /// 草地分片之二（map-surface 裁决 3）：淡草绿。三片靠色相分、明度刻意与淡紫石同档（Rec.601 灰度 187 对 184），
     /// 灰度下仍是同一档"可落子"；与土路（158）/ 荒漠（212）/ 岩台（136）各差 ≥ 20 级。
     /// </summary>
-    public static readonly Color TilePlayableGreen = Color.Color8(172, 200, 156);
+    public static Color TilePlayableGreen => TerrainPalette.Current.GrassPatchB;
 
     /// <summary>草地分片之三（map-surface 裁决 3）：淡泥褐，灰度 187——比土路亮 29 级、比荒漠暗 25 级，不会读成土路或荒漠。</summary>
-    public static readonly Color TilePlayableLoam = Color.Color8(208, 182, 158);
+    public static Color TilePlayableLoam => TerrainPalette.Current.GrassPatchC;
 
     /// <summary>土路地表：暖褐色，比草地与岩台暗；两侧辅以短轮迹。</summary>
-    public static readonly Color TileRoad = Color.Color8(190, 150, 120);
+    public static Color TileRoad => TerrainPalette.Current.Road;
 
     /// <summary>林地地表：深绿，配角落的小树；林地不接收覆盖，靠占据拿。</summary>
-    public static readonly Color TileForest = Color.Color8(78, 156, 122);
+    public static Color TileForest => TerrainPalette.Current.Forest;
 
     /// <summary>
     /// 荒漠地表（terrain-surfaces）：比土路更浅更白的沙色。去色后仍与土路、草地拉开；
     /// 与土路的区分主要靠格角的仙人掌 / 兽骨（段 1 补装饰）。
     /// </summary>
-    public static readonly Color TileDesert = Color.Color8(236, 212, 150);
+    public static Color TileDesert => TerrainPalette.Current.Desert;
 
     /// <summary>仙人掌（荒漠装饰）：偏灰的橄榄绿，比林地树冠浅、比沼泽亮；轮廓是竖柱带侧臂，不是锥形树冠。</summary>
     public static readonly Color Cactus = Color.Color8(96, 160, 120);
@@ -67,16 +67,16 @@ public static class Visuals
     public static readonly Color Ripple = Color.Color8(236, 252, 248);
 
     /// <summary>沼泽地表：暗灰绿色泥面，去色后比林地更暗；形状提示是水洼与芦苇，不用锥形树冠。</summary>
-    public static readonly Color TileMarsh = Color.Color8(96, 126, 118);
+    public static Color TileMarsh => TerrainPalette.Current.Marsh;
 
     /// <summary>岩台地表：冷灰石面，与障碍岩石靠材质和裂纹区分；形状提示是裂纹与加厚边缘。</summary>
-    public static readonly Color TileCrag = Color.Color8(140, 130, 160);
+    public static Color TileCrag => TerrainPalette.Current.Crag;
 
     /// <summary>浅滩地表：亮青水色，与草地拉开灰度；与深水靠高度、水纹和鹅卵石区分。</summary>
-    public static readonly Color TileShallows = Color.Color8(150, 232, 226);
+    public static Color TileShallows => TerrainPalette.Current.Shallows;
 
     /// <summary>深水：低于地砖的亮青绿水面（map-restyle 段A），不可落子。</summary>
-    public static readonly Color DeepWater = Color.Color8(58, 178, 182);
+    public static Color DeepWater => TerrainPalette.Current.DeepWater;
 
     /// <summary>深水的浅色波纹。</summary>
     public static readonly Color WaterRipple = Color.Color8(228, 250, 246);
@@ -88,10 +88,10 @@ public static class Visuals
     public static readonly Color Timber = Color.Color8(122, 82, 58);
 
     /// <summary>h=1 那一层的侧面（缓坡侧面）：土色。</summary>
-    public static readonly Color SlopeSide = Color.Color8(196, 164, 148);
+    public static Color SlopeSide => TerrainPalette.Current.SlopeSide;
 
     /// <summary>h=2 那一层的侧面（崖壁侧面）：岩灰。Δh=2 的崖壁露出土色 + 岩灰两条色带，Δh=1 的缓坡只露土色一条。</summary>
-    public static readonly Color CliffSide = Color.Color8(168, 158, 184);
+    public static Color CliffSide => TerrainPalette.Current.CliffSide;
 
     /// <summary>林地小树的树冠。</summary>
     public static readonly Color TreeCanopy = Color.Color8(72, 168, 138);
@@ -118,7 +118,7 @@ public static class Visuals
     public static readonly Color BoardGridLine = Color.Color8(72, 62, 88);
 
     /// <summary>障碍岩石（装饰层）。</summary>
-    public static readonly Color TileObstacle = Color.Color8(150, 142, 166);
+    public static Color TileObstacle => TerrainPalette.Current.Obstacle;
 
     /// <summary>岩石。</summary>
     public static readonly Color Rock = Color.Color8(176, 168, 190);
@@ -188,6 +188,43 @@ public static class Visuals
         AlbedoColor = albedo,
         Roughness = roughness,
         Metallic = 0f,
+    };
+
+    /// <summary>卡通描边墨色（chibi-pieces / chibi-world 共用）：棋子与地形装饰的反向外壳都用这一色。</summary>
+    public static readonly Color OutlineInk = Color.Color8(28, 24, 30);
+
+    /// <summary>
+    /// 卡通分阶材质（chibi-pieces 起的单位风格，chibi-world 段 ① 起地形装饰共用）：<c>DiffuseMode = Toon</c>、粗糙度 0.22、无金属；
+    /// <paramref name="specular"/> 为真时开卡通高光（钢甲 / 晶体 / 水面），否则关高光。阵营相关的取色、顶点色与自发光由调用方再加。
+    /// </summary>
+    public static StandardMaterial3D Toon(Color albedo, bool specular = false) => new()
+    {
+        AlbedoColor = albedo,
+        Roughness = 0.22f,
+        Metallic = 0f,
+        DiffuseMode = BaseMaterial3D.DiffuseModeEnum.Toon,
+        SpecularMode = specular ? BaseMaterial3D.SpecularModeEnum.Toon : BaseMaterial3D.SpecularModeEnum.Disabled,
+    };
+
+    /// <summary>
+    /// 地块用卡通分阶材质（chibi-world 段 ②）：<see cref="Toon"/> 再打开顶点色——地块网格的顶点色是亮度系数（色带、岩缝、倒角），卡通分阶叠在色带上。
+    /// </summary>
+    public static StandardMaterial3D ToonVertex(Color albedo)
+    {
+        StandardMaterial3D material = Toon(albedo);
+        material.VertexColorUseAsAlbedo = true;
+        return material;
+    }
+
+    /// <summary>
+    /// 卡通描边材质：配反向外壳网格（本体沿法线外推）用——只画背面（<c>CullMode = Front</c>）、不受光、纯墨色。
+    /// 节点名约定 <c>Outline</c>（<see cref="PieceModels.IsOutline"/>，拾取跳过）；调用方另设 <c>CastShadow = Off</c>。
+    /// </summary>
+    public static StandardMaterial3D Outline(Color ink) => new()
+    {
+        AlbedoColor = ink,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        CullMode = BaseMaterial3D.CullModeEnum.Front,
     };
 
     /// <summary>自发光材质（用于标记与高亮，保证在任何光照下都读得出来）。</summary>
