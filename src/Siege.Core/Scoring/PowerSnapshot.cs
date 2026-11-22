@@ -46,6 +46,12 @@ public sealed record GroupPower(
     /// </summary>
     public int RelicPositionBonus { get; init; }
 
+    /// <summary>
+    /// <see cref="BaseTotal"/> 中来自地形军势修正的部分（terrain-bonus：地表 + 高度修正之和，已含逐枚不为负的截断）。只是拆账，已在 <see cref="BaseTotal"/> 里，
+    /// MUST NOT 再加一次。由 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringVersion)"/> 给出；手工构造的明细缺省 0。
+    /// </summary>
+    public int TerrainBonus { get; init; }
+
     /// <summary>挂在本串棋子上的军旗带来的倍率指数加值（relic-redesign D3：每件 +1，可叠加）。无信物时恒 0。</summary>
     public int RelicExponent { get; init; }
 

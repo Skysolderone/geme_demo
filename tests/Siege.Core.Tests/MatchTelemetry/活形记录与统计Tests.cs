@@ -97,26 +97,24 @@ public class 活形记录与统计Tests
     [Fact]
     public void 所有者的改造导致失去记为所有者的改造()
     {
-        // 失去原因的第二个取值。D4 是未架桥深水（墙）：
-        //   第 3 行  C3 ● · D3 眼 · E3 ● · F3 眼 · G3 ●
-        //   第 4 行  C4 ●   D4 ~    E4 ●   F4 ●   G4 ●
-        // E3–E4–F4–G4–G3 一串贴 D3、F3 两个单格眼 → 已确定活形（C3–C4 另成一串，只贴 D3，未定）。
-        // P0 本批在 D5 落匠人并对 D4 搭桥 → D3、D4 连成 2 格空区（眼值 0），该串只剩 F3 → 未定：失去，原因"所有者的改造"（落点 D5 不在原眼空间里）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater)]))
+        // 失去原因的第二个取值。terrain-bonus 改写：原夹具靠"给充当墙的未架桥深水 D4 搭桥"拆眼，空深水不再是墙后失效；
+        // 改用「活形硬约束 · 用改造拆自己的活形也被淘汰」的盘面：P0 一排 D3…J3，两端单格眼 C3、K3（C4 / K4 为 h=2 崖壁）→ 已确定活形。
+        // P0 本批在 F4 落匠人并立栅 F3–G3 → 切成各只剩一个眼的两段 → 未定：失去，原因"所有者的改造"（落点 F4 不在原眼空间里）。
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(heights: [("C4", 2), ("K4", 2)]))
             .AtRound(5, [P0, P1, TestMaps.P2, TestMaps.P3])
-            .Stones(P0, "C3", "E3", "G3", "C4", "E4", "F4", "G4");
+            .Stones(P0, "D3", "E3", "F3", "G3", "H3", "J3");
         match.Debug.SeedHand(P0, (PieceType.Artisan, 1));
-        Assert.Equal(LifeState.Alive, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("E3"))!.Life);   // 前提
+        Assert.Equal(LifeState.Alive, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("D3"))!.Life);   // 前提
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(P0, new EditController("D5", TerrainEdit.Bridge(TestMaps.At("D4"))));
+        session.SetController(P0, new EditController("F4", TerrainEdit.Fence(TestMaps.At("F3"), TestMaps.At("G3"))));
 
         MatchLog log = RoundTrip(session.Run());
 
         Assert.Single(log.Turns[0].Edits!);   // 前提：改造确实生效
         LifeChangeEntry lost = Assert.Single(log.Turns[0].Life!.Changes, c => c.Kind == LifeChangeEntry.Lost);
         Assert.Equal(LifeChangeEntry.OwnerEdit, lost.Cause);
-        Assert.Equal(["E3", "G3", "E4", "F4", "G4"], lost.Stones);
-        Assert.Equal(["D3=1", "F3=1"], lost.EyeSpaces);
+        Assert.Equal(["D3", "E3", "F3", "G3", "H3", "J3"], lost.Stones);
+        Assert.Equal(["C3=1", "K3=1"], lost.EyeSpaces);
     }
 
     [Fact]
@@ -195,13 +193,13 @@ public class 活形记录与统计Tests
 
     /// <summary>
     /// 「真实跑局的活形字段自洽」的脚本局（fence-eye-rule 2.2）：平坦 8×8 链接载体、四人同锁棋盘 0，第 1 大回合开局前摆好 P0 的一字两眼活形
-    /// D3…J3（两端的墙是未架桥深水 C4、K4 与棋盘外沿，眼 C3、K3 都贴地形 → R8 贴地形小空区）。P1 每个小回合先暂放"匠人落 F4、立栅 F3–G3"
+    /// D3…J3（两端的墙是 h=2 崖壁 C4、K4（terrain-bonus 前为未架桥深水）与棋盘外沿，眼 C3、K3 都贴地形 → R8 贴地形小空区）。P1 每个小回合先暂放"匠人落 F4、立栅 F3–G3"
     /// 并预演一次（把 P0 切成各一眼的两段 → 预演第 6 步破坏活形），再清空暂放、Pass；P0 只 Pass；P2、P3 是会话配置的 AI。截到第 8 个小回合。
     /// </summary>
     private static MatchSession BreakAttemptSession()
     {
         MatchFlow match = LinkModeFixtures.PlainStarted(
-                TestMaps.Terrain(surfaces: [("C4", Surface.DeepWater), ("K4", Surface.DeepWater)]),
+                TestMaps.Terrain(heights: [("C4", 2), ("K4", 2)]),
                 options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 })
             .Stones(LinkModeFixtures.P0, "D3", "E3", "F3", "G3", "H3", "J3");
         match.Debug.SeedHand(LinkModeFixtures.P1, (PieceType.Artisan, 4), (PieceType.Basic, 4));

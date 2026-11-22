@@ -255,7 +255,8 @@ public class 循环提子诊断Tests
         Assert.Equal(entries, CycleAnalyzer.ReviewMatch(MatchLog.Parse(real.FullText())).Stalls);
     }
 
-    private const ulong StallRunSeed = 9;
+    // terrain-bonus 重探（深水可落子、地形修正进军势后走法变了，种子 9 不再停手）：种子 1–16 × 80 小回合，只有种子 16 有停手，取 16。
+    private const ulong StallRunSeed = 16;
 
     private const int StallRunTurns = 80;
 

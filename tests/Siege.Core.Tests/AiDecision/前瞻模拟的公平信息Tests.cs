@@ -245,7 +245,8 @@ public class 前瞻模拟的公平信息Tests
     // "两种口径给出不同回应"的候选只在种子 2 出现（4 条；独立复算条数依次 40 / 28 / 36 / 35 / 36 / 40 / 33 / 36），故取 2（原 3）。
     // relic-redesign W1 重探（信物刷新接入对局后走法变了，种子 2 截断前不再出现"两种口径给出不同回应"的候选）：同口径种子 1–8，
     // 这样的候选依次 4 / 0 / 1 / 1 / 0 / 0 / 0 / 0 条（独立复算条数 35 / 35 / 36 / 34 / 34 / 36 / 35 / 35，与记录逐条相同），取最多的种子 1。
-    internal const ulong IndependentResponseSeed = 1;
+    // terrain-bonus 重探（走法变了，种子 1 截断前不再出现"两种口径给出不同回应"的候选）：同口径种子 1–8，只有种子 3 / 8 有，取 3。
+    internal const ulong IndependentResponseSeed = 3;
 
     [Fact]
     public void 模拟回应等于专家口径的不扰动贪心()

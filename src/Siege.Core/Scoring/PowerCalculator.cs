@@ -104,6 +104,7 @@ public static class PowerCalculator
         {
             FormationTier = formationTier,
             RelicPositionBonus = relicPositionBonus,
+            TerrainBonus = PieceEffects.TerrainBonus(board, group),
             RelicExponent = pieceRelics.Exponent,
             RelicContribution = power - withoutRelics,
         };
