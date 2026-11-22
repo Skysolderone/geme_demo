@@ -348,3 +348,17 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 实施（1 implement + 1 check）：全量 2250 / 2243 / 7；开关 0 守门 `*-es0.txt`；开关 1 重钉 9 份（首个分歧都是搭桥候选被选中）；门控 2.985 / 3.59。
 - 验证 40 局：搭桥 25 → 59（致提子 0）、候选被选 49 / 105、大回合中位 23 → 22.5（均值 22.6 → 24.15）、耗时比 0.95；按准则采纳。观察：河流主题平均名次 2.27 → 3.07（20 局未归因）。设计文档 v1.39；HANDOFF 第 10e / 10f 项、ROADMAP。
 - 三项 AI 改进全部完成；合并回 main 由负责人决定。
+
+## Session: 2026-11-22 — chibi-world 收尾推送；terrain-bonus 段 A 收尾合回 main
+
+- chibi-world 三段已合回 main、归档并推送（远程 main = 2191b564）。
+- terrain-bonus 段 A：原 worktree 里的代码一直没提交也没跑快测，合入 main 后 98 红。分诊结果：
+  - 地图逐格不变（main 与分支导出的 link:1:2/3/4、link:9:4:l 逐字节相同），地图 / 校验 / 插旗类测试改走陆地口径。
+  - 规则层测试按 I10 改写，深水当墙的夹具改用 h=2 崖壁。
+  - 用户裁决：同批要架桥的深水格允许当批落子。
+  - 删去已不可构造的「搭桥漏眼」类测试 3 条、场景 1 条。
+  - 新增 GroupPower / 日志 TerrainBonus 拆账。
+  - 决策基线 15 份重录，G1 / 链接图 / 停手阈值 / 前瞻记录 / 平衡报告黄金值重钉，样本种子重探（停滞 16、回应 3、两层加分 3）。
+- 结果：快测 2112 / 0 / 1；5 处变异全被抓到。合回 main = 0a8c5e1e，归档 e734d0f8，未推送。worktree 与分支已删。
+- AI 观察（只记录）：缺省停手阈值 20 在地形修正后基本不再起作用。
+- 下一步：terrain-bonus 段 B（9 项裁决已批，见记忆 project_terrain_bonus）。从 main 开新 worktree，派一个实现 agent，做完出对照图停下。
