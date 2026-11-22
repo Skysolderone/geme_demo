@@ -112,7 +112,7 @@ public sealed record MapData
     public bool IsLand(Coord c) => IsPlayable(c) && !TerrainData.IsUnbridgedDeepWater(c);
 
     /// <summary>
-    /// 该格的可落子性。越界、障碍与未架桥的深水一律为 <see cref="Terrain.Obstacle"/>（三者共享"不可落子、不可控制、不计分、封堵"的语义）；
+    /// 该格的可落子性。越界与障碍为 <see cref="Terrain.Obstacle"/>（共享"不可落子、不可控制、不计分、封堵"的语义）；terrain-bonus 起未架桥深水可落子，为 <see cref="Terrain.Playable"/>；
     /// 要区分岩石与深水读 <see cref="SurfaceAt"/>。
     /// </summary>
     public Terrain TerrainAt(Coord c) => IsPlayable(c) ? Terrain.Playable : Terrain.Obstacle;

@@ -298,7 +298,7 @@ public class 改造合法性Tests
     }
 
     [Fact]
-    public void 当批可以站上本批要架桥的深水格()
+    public void 当批可以站上要架桥的深水格()
     {
         // terrain-bonus（用户裁决 2026-11-22「允许」）：深水本就可落子，合法性按批次开始前的地形判定，
         // 所以本批要架桥的深水格同批即可作落点，也可作匠人落点继续向外架桥；搭桥目标有子同样合法。
@@ -318,6 +318,24 @@ public class 改造合法性Tests
         Assert.Null(first.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4"))));
         Assert.True(BatchFixtures.Driver(river).Confirm(first.Context, first.Placements).Confirmed);
         Assert.True(river.Map.HasBridge(TestMaps.At("E4")));
+    }
+
+    [Fact]
+    public void 下一批次可以使用()
+    {
+        // terrain-edit Scenario「下一批次可以使用」：上一批次架的桥结算后，本批次可以在该格落子，也可以以它为起点继续向外架桥（T-4 宽河分批次逐格架）。
+        GameBoard river = TestMaps.Blank(
+            TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("E4", Surface.DeepWater)]), size: 9);
+        StagedBatch first = Batch(river);
+        Assert.Null(first.Stage(TestMaps.At("C4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))));
+        Assert.True(BatchFixtures.Driver(river).Confirm(first.Context, first.Placements).Confirmed);
+        Assert.True(river.Map.HasBridge(TestMaps.At("D4")));
+
+        StagedBatch next = Batch(river);
+        Assert.Null(next.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4"))));
+        Assert.True(BatchFixtures.Driver(river).Confirm(next.Context, next.Placements).Confirmed);
+        Assert.True(river.Map.HasBridge(TestMaps.At("E4")));
+        Assert.NotNull(river[TestMaps.At("D4")].Occupant);
     }
 
     [Fact]

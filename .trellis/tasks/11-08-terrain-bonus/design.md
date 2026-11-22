@@ -32,6 +32,7 @@
 - **I9 规格**：直接改 `openspec/specs/*/spec.md` 的 Requirement / Scenario（项目近期惯例，不建 `openspec/changes/`）。
 
 - **I10 活形**：空的未架桥深水与空浅滩同一口径（不属于空区、不是墙），原「未架桥深水算墙」改为「空的未架桥深水不是墙」。
+- **I11 拆账（收尾补）**：`GroupPower.TerrainBonus`（`PieceEffects.TerrainBonus` = 基础军势总和 − 各枚类型基础军势之和）与日志 `GroupEntry.TerrainBonus`；只拆账、不另加，规格见 power-score「势力明细」。
 
 ## 不在范围
 

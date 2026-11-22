@@ -71,7 +71,7 @@ public sealed class GroupLife
 /// </summary>
 /// <remarks>
 /// <para>纯计算、只读盘面：棋子（棋串，按气边连通）来自 <see cref="GameBoard.AllGroups"/>，空区与封闭的邻接只来自 <see cref="GameBoard.EyeNeighbors"/>
-/// （fence-eye-rule D1：眼边 = 两格可落子且 |Δh| ≤ 1，不看栅栏）——无眼边的方向（障碍、未架桥深水、崖壁、棋盘外沿）不产生邻格，天然是墙，不另写判定；
+/// （fence-eye-rule D1：眼边 = 两格可落子且 |Δh| ≤ 1，不看栅栏）——无眼边的方向（障碍、崖壁、棋盘外沿）不产生邻格，天然是墙（terrain-bonus：未架桥深水可落子、有眼边，空着时不属于空区且使所贴空区不封闭，不是墙），不另写判定；
 /// <b>栅栏不是墙</b>：它既不切分空区，也不挡住对面的棋子参与封闭判定（裁决 F1 / F3）。</para>
 /// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不入存档（design D5）；不做增量——唯一的记忆化是
 /// <see cref="GameBoard.LifeMemo"/>（ai-turn-speed D2）：同一盘面实例在没有任何写入原语之间再次分析时返回同一份全量结果，写入之后整份重算。</para>

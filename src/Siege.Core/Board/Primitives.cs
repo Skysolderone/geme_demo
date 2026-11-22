@@ -9,7 +9,7 @@ public enum Terrain
     /// <summary>可落子格（含桥格与林地）。</summary>
     Playable,
 
-    /// <summary>不可落子：岩石障碍或未架桥的深水；不可控制、不计分。</summary>
+    /// <summary>不可落子：障碍（虚空 / 岩石障碍；terrain-bonus 起未架桥深水可落子，不再是此值）；不可控制、不计分。</summary>
     Obstacle,
 }
 
