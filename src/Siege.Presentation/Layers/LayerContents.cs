@@ -101,6 +101,9 @@ public enum TerrainReason
     Marsh,
     Crag,
     Shallows,
+
+    /// <summary>岩石（terrain-bonus 裁决 7）：其上的棋子不产生覆盖，同沼泽——以它为气的空格可以无人覆盖。</summary>
+    Rock,
 }
 
 /// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
@@ -366,20 +369,25 @@ public static class TacticalLayers
         [
             .. liberties.Except(covered).OrderBy(c => c).Select(c => map.SurfaceAt(c) == Surface.Forest
                 ? new ReadingDiffCell(c, [TerrainReason.Forest])
-                : OnMarshSide(world, map, c)
-                    ? new ReadingDiffCell(c, [TerrainReason.Marsh])
-                    : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，既不是林地、以它为气的棋串里也没有沼泽上的棋子：气边与覆盖关系不一致。")),
+                : NoCoverageSides(world, map, c) is { IsEmpty: false } sides
+                    ? new ReadingDiffCell(c, sides)
+                    : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，既不是林地、以它为气的棋串里也没有沼泽 / 岩石上的棋子：气边与覆盖关系不一致。")),
         ];
 
         return coveredNotLiberty.IsEmpty && libertyNotCovered.IsEmpty ? BoardReadingDiff.Empty : new BoardReadingDiff(coveredNotLiberty, libertyNotCovered);
     }
 
     /// <summary>
-    /// 以 <paramref name="cell"/> 为气的棋串里是否有棋子站在沼泽上——只查气快照与地表，不算邻接。
-    /// 既然该格是气（与某棋子有气边）却无人覆盖、又不是林地，能解释它的只有"给它气的棋子都在沼泽上"。
+    /// 以 <paramref name="cell"/> 为气的棋串里站在"不产生覆盖"地表上的棋子给出的原因：沼泽 → <see cref="TerrainReason.Marsh"/>，岩石（terrain-bonus 裁决 7，同沼泽源分支）→
+    /// <see cref="TerrainReason.Rock"/>；去重、按枚举序，没有为空——只查气快照与地表，不算邻接。
+    /// 既然该格是气（与某棋子有气边）却无人覆盖、又不是林地，能解释它的只有"给它气的棋子都站在不产生覆盖的地表上"。
     /// </summary>
-    private static bool OnMarshSide(PublicWorld world, MapData map, Coord cell) =>
-        world.Supplement.Liberties.Where(g => g.Liberties.Contains(cell)).Any(g => g.Stones.Any(s => map.SurfaceAt(s) == Surface.Marsh));
+    private static ImmutableArray<TerrainReason> NoCoverageSides(PublicWorld world, MapData map, Coord cell)
+    {
+        IEnumerable<Surface> surfaces = world.Supplement.Liberties.Where(g => g.Liberties.Contains(cell)).SelectMany(g => g.Stones).Select(map.SurfaceAt);
+        return [.. surfaces.Select(s => s switch { Surface.Marsh => TerrainReason.Marsh, Surface.Rock => TerrainReason.Rock, _ => (TerrainReason?)null })
+            .OfType<TerrainReason>().Distinct().Order()];
+    }
 
     /// <summary>
     /// 盘面层图例的新地表规则说明：当前地图上出现过的新地表各一句，按地表枚举序；没有新地表时为空。

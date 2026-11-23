@@ -435,18 +435,13 @@ public sealed partial class BoardView : Node3D
                 TerrainPalette palette = TerrainPalette.Current;
                 color = color.Lerp(palette.HighWash, cell.Height == 1 ? palette.HighWashLow : palette.HighWashHigh);
             }
-            if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
+            if (playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
-                // 棋盘内的岩石（link-map-terrain 6.1，D4 中间带 0–2 格）：本战场的一格地形，不是场景装饰——按棋盘格画（障碍色地砖 + 岩石部件，不在松树 / 断柱里挑，
-                // 免得读成林地），逐格节点挂在地砖与装饰层（场景面砖与合批装饰是整块 MultiMesh）。归属只读视图模型的棋盘清单。
-                // map-restyle 段C：岩石之外按坐标散列换成水晶 / 火盆 / 拱门 / 宝箱——都是石材 / 器物，仍读作"此格不可落子"而不是林地。
-                color = Visuals.TileObstacle;
-                Node3D rock = TerrainParts.Create(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: false), cell.Coord), Variant(cell.Coord, 0));
-                rock.Position = center;
-                sink.Decoration.AddChild(rock);
-                AddTileStack(sink, cell.Coord, center, cell.Height, SurfaceOf(color), color);
+                // terrain-bonus 段 B（裁决 1 / 4）：岩石是可落子地表——岩石色地砖（SurfaceTileColorOf）+ 格角平板岩片（不挡格心，单位站上去看得清），
+                // 平台上（h=2）与低地（h=0）一样画；与其他地表点缀同走装饰层合批。"这一格画岩石"只读视图模型（ObstacleArtAt 按地表给出），不自己判。
+                // 原"棋盘内障碍格 = 巨石 / 水晶 / 火盆 / 拱门 / 宝箱"的分支随之删除：障碍格只剩虚空，一律走下面的场景格画法。
+                sink.Ornament(TerrainParts.RockSlab, Variant(cell.Coord, 7), center);
                 boardRocks++;
-                return;
             }
 
             if (!playable)
@@ -607,7 +602,7 @@ public sealed partial class BoardView : Node3D
         // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内障碍格逐格画了几格（map-restyle 段C 起不只是岩石，各件见 [deco]）。
         if (zoneStrips.Count > 0 || boardRocks > 0)
         {
-            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内障碍 {boardRocks} 格（按棋盘格画）");
+            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；岩石地表 {boardRocks} 格（地砖 + 平板岩片）");
         }
 
         AddTerrainRelief(board, tiles);
@@ -1292,7 +1287,7 @@ public sealed partial class BoardView : Node3D
         return minX == int.MaxValue ? (new Coord(0, 0), new Coord(board.Width - 1, board.Height - 1)) : (new Coord(minX, minY), new Coord(maxX, maxY));
     }
 
-    private enum SurfaceHint { None, Road, Forest, Marsh, Desert, Crag, Shallows }
+    private enum SurfaceHint { None, Road, Forest, Marsh, Desert, Crag, Shallows, Rock }
 
     private static SurfaceHint HintForSurface(Surface surface) => surface switch
     {
@@ -1302,6 +1297,7 @@ public sealed partial class BoardView : Node3D
         Surface.Desert => SurfaceHint.Desert,
         Surface.Crag => SurfaceHint.Crag,
         Surface.Shallows => SurfaceHint.Shallows,
+        Surface.Rock => SurfaceHint.Rock,
         _ => SurfaceHint.None,
     };
 
@@ -1316,7 +1312,7 @@ public sealed partial class BoardView : Node3D
     /// 纯表现：只读视图模型的地表与坐标，4 邻用坐标算术，不调规则内核的邻接查询（visual-style-baseline）。
     /// </remarks>
     /// <summary>
-    /// 六种非草地地表 → 地砖基色的唯一映射（守门 <c>新地表判断唯一Tests</c> 允许清单里本文件登记为"地砖色"）：3D 地砖与小地图底图（<see cref="Minimap"/>）共用。
+    /// 七种非草地地表（terrain-bonus 段 B 加岩石）→ 地砖基色的唯一映射（守门 <c>新地表判断唯一Tests</c> 允许清单里本文件登记为"地砖色"）：3D 地砖与小地图底图（<see cref="Minimap"/>）共用。
     /// 草地按坐标分片（<see cref="GrassPatchColor"/>）、深水 / 障碍另有分支，都不在此——其余返回 <c>null</c>，由调用方取各自的缺省色。
     /// </summary>
     internal static Color? SurfaceTileColorOf(Surface surface) => surface switch
@@ -1327,6 +1323,7 @@ public sealed partial class BoardView : Node3D
         Surface.Marsh => Visuals.TileMarsh,
         Surface.Crag => Visuals.TileCrag,
         Surface.Shallows => Visuals.TileShallows,
+        Surface.Rock => Visuals.TileRock,
         _ => null,
     };
 
@@ -3171,7 +3168,7 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>棋子层里一枚已画出的棋子（board-render-perf D3）：节点、占用者，以及画它时的进度（盘上棋子 = 出现进度 ‰，不在出现动画里为 -1；被提棋子 = 淡出进度 ‰）。</summary>
-    private sealed record PieceNode(Node3D Node, Occupant Occupant, int Progress);
+    private sealed record PieceNode(Node3D Node, Occupant Occupant, int Progress, bool WaterRing = false);
 
     /// <summary>一次棋子层重画动了多少节点。</summary>
     private readonly record struct PieceRedraw(int Created, int Freed, int Updated, int Kept)
@@ -3201,9 +3198,10 @@ public sealed partial class BoardView : Node3D
             _pieceEmphasis = treatment.PieceEmphasisPercent;
         }
 
-        void Sync(Dictionary<Coord, PieceNode> table, Coord coord, Occupant occupant, int progress, bool captured)
+        void Sync(Dictionary<Coord, PieceNode> table, Coord coord, Occupant occupant, int progress, bool captured, bool waterRing)
         {
-            if (table.TryGetValue(coord, out PieceNode? shown) && shown.Occupant == occupant)
+            // 水纹环（terrain-bonus 段 B 裁决 6）随棋子节点建：有无环变了（脚下架起了桥）就整枚重建。
+            if (table.TryGetValue(coord, out PieceNode? shown) && shown.Occupant == occupant && shown.WaterRing == waterRing)
             {
                 if (shown.Progress == progress)
                 {
@@ -3225,9 +3223,18 @@ public sealed partial class BoardView : Node3D
             }
 
             Node3D piece = BuildPiece(occupant, treatment.PieceEmphasisPercent);
+            if (waterRing)
+            {
+                piece.AddChild(WaterRingOf());
+                if (++_waterRings == 1)
+                {
+                    GD.Print($"[water-ring] 首枚站在未架桥深水上的棋子挂水纹环：{coord.ToNotation()}");
+                }
+            }
+
             PosePiece(piece, coord, progress, captured);
             _pieces.AddChild(piece);
-            table[coord] = new PieceNode(piece, occupant, progress);
+            table[coord] = new PieceNode(piece, occupant, progress, waterRing);
             created++;
         }
 
@@ -3252,7 +3259,7 @@ public sealed partial class BoardView : Node3D
             }
 
             onBoard.Add(cell.Coord);
-            Sync(_boardPieces, cell.Coord, occupant, mask.Appearing.TryGetValue(cell.Coord, out int permille) ? permille : -1, captured: false);
+            Sync(_boardPieces, cell.Coord, occupant, mask.Appearing.TryGetValue(cell.Coord, out int permille) ? permille : -1, captured: false, cell.WaterRing);
         }
 
         Drop(_boardPieces, onBoard);
@@ -3262,7 +3269,9 @@ public sealed partial class BoardView : Node3D
         foreach (CapturedPiece captured in mask.StillShown)
         {
             stillShown.Add(captured.Coord);
-            Sync(_capturedPieces, captured.Coord, new Occupant(captured.Owner, captured.Type), mask.CaptureFadePermille, captured: true);
+            // 被提的棋子格此刻已空：按该格地表与桥补判（与 BoardCellView.WaterRing 同一口径——占用者就是这枚淡出中的棋子）。
+            bool ring = board.CellOrNull(captured.Coord) is { Surface: Surface.DeepWater, HasBridge: false };
+            Sync(_capturedPieces, captured.Coord, new Occupant(captured.Owner, captured.Type), mask.CaptureFadePermille, captured: true, ring);
         }
 
         Drop(_capturedPieces, stillShown);
@@ -3308,6 +3317,26 @@ public sealed partial class BoardView : Node3D
             SetTransparency(child, transparency);
         }
     }
+
+    /// <summary>
+    /// 水纹环（terrain-bonus 段 B 裁决 6）：站在未架桥深水上的棋子脚下一圈贴水面的近白细环（不受光、不投影、拾取跳过），挂在棋子节点下，随棋子出现 / 淡出 / 缩放。
+    /// 半径 0.40（棋子底座圆环 0.36 之外），只读视图模型的 <see cref="BoardCellView.WaterRing"/>，不判规则。
+    /// </summary>
+    private static MeshInstance3D WaterRingOf() => new()
+    {
+        Name = "WaterRing",
+        Mesh = WaterRingMesh,
+        MaterialOverride = WaterRingMaterial,
+        Position = new Vector3(0f, 0.012f, 0f),
+        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+    };
+
+    private static readonly TorusMesh WaterRingMesh = new() { InnerRadius = 0.37f, OuterRadius = 0.43f, Rings = 32, RingSegments = 4 };
+
+    private static readonly StandardMaterial3D WaterRingMaterial = Visuals.Flat(new Color(Visuals.Ripple, 0.85f));
+
+    /// <summary>本进程画过的水纹环件数（自检 / 截图日志用）。</summary>
+    private int _waterRings;
 
     /// <summary>一枚棋子的节点：阵营色 + 轮廓（类型 → 轮廓只经 <see cref="PieceStyleTable"/>）。也供 <see cref="PieceGallery"/> 拍十种棋子对照图，两处同一份画法。</summary>
     internal static Node3D BuildPiece(Occupant occupant, int emphasisPercent)

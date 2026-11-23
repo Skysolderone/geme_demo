@@ -197,6 +197,12 @@ public sealed partial class BoardView
                     Mark(top, edge, -corner, width, length, light);
                     Mark(top, corner, -edge, length, width, light);
                     break;
+                case SurfaceHint.Rock:
+                    // terrain-bonus 段 B：岩石——四个格角各一块深色碎块，区别于岩台的对角石纹。
+                    foreach (float x in new[] { -corner, corner })
+                        foreach (float z in new[] { -corner, corner })
+                            Mark(top, x, z, width, width, dark);
+                    break;
                 case SurfaceHint.Shallows:
                     // 错位的两段水纹，区别于荒漠的四段沙纹。
                     Mark(top, -corner, -edge, length, width, dark);

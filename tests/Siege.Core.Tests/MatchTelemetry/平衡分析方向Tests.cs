@@ -190,8 +190,8 @@ public class 平衡分析方向Tests
         // Hash 改为每行去掉末尾 \r 后以 \n 拼接，两平台同值。实跑核对：改前代码里把报告换成 \r\n 行尾（模拟 Windows），旧值照常通过。
         // 变异（测试侧，Mac）：去掉 TrimEnd('\r') 归一并改用 "\r\n" 拼接 → 红 1（算出的正是旧值）；保留归一、把报告换成 \r\n 行尾 → 绿；
         // 去掉归一、把报告换成 \r\n 行尾 → 红 1。旧值 1EAADA2135410D536CF63EE37FB1847BDFDC16DEBCA0FD8CB86C14F5EB8E0AF7 / E06C6A1CD84A4A7E88B73E5B7BB2BB4DC3550714A09AE33707CBC18FFB31D176。
-        Assert.True("0EADC07A916D0E0836327417182EEA33B62C3A2A9E5B1E0ACA3034EA0EC37622" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("A72F0C481FB0EDEB6AB25B73A267F78BA3A040B9710CD0E7F3AAC74024675A40" == ranked, $"RankedSample 报告哈希：{ranked}");
+        Assert.True("B2992D447A03B2902121DF26A7C81FF7F23CB67CFF2E3F848312FE4AC4DDEE11" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");   // terrain-bonus 段 B 重钉（岩石写成可落子地表、link:1:4 地图变了，同一配置的走法随之变）：旧值 0EADC07A916D0E0836327417182EEA33B62C3A2A9E5B1E0ACA3034EA0EC37622
+        Assert.True("69E5E7049A6C13134830C66B21FBBDAB1199F62DEEA863297FA181E91FCCA86F" == ranked, $"RankedSample 报告哈希：{ranked}");   // terrain-bonus 段 B 重钉（岩石写成可落子地表、link:1:4 地图变了，同一配置的走法随之变）：旧值 A72F0C481FB0EDEB6AB25B73A267F78BA3A040B9710CD0E7F3AAC74024675A40
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

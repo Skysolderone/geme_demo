@@ -93,8 +93,9 @@ public class 冲突占用率口径Tests
         // map-coastline（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道，非可落子约占岛面三成；平台不变）：1927 → 1368。
         // map-coastline 裁决 F1（湖泊 / 岩区不进座位外 2 格，岸线流消费变了）：1368 → 1366。
         // terrain-bonus（深水可落子，地图不变）：首部可落子格含未架桥深水，1366 → 1683（陆地口径仍是 1366）。
-        Assert.All(sample, l => Assert.Equal(1683, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(1683, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        // terrain-bonus 段 B（岩石写成可落子地表，地图只差岩石格）：首部可落子格多出 251 格岩石，1683 → 1934（陆地口径 1366 → 1617）。
+        Assert.All(sample, l => Assert.Equal(1934, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(1934, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

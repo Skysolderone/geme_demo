@@ -125,7 +125,7 @@ public class 信物遗址Tests(ITestOutputHelper output)
         Assert.Empty(small.RelicSites);
         string smallJson = MapFile.ToJson(small);
         Assert.DoesNotContain("RelicSites", smallJson, StringComparison.Ordinal);
-        Assert.Equal("6A0ECAB53DCD1C15863F1243B5F1A8E6281893F5D2D3CBE2740169C12CCD6381", MapFile.Digest(small));
+        Assert.Equal("8829A6AFD96B14834EB46DF4E4036F0CE8B2B295DC707D53AAE2347C82C789AA", MapFile.Digest(small));   // terrain-bonus 段 B 重钉（岩石写成 K、虚空写成 V，地形逐格不变；与 Sim map --out 导出文件按同一口径算出的摘要一致）：旧值 6A0ECAB53DCD1C15863F1243B5F1A8E6281893F5D2D3CBE2740169C12CCD6381
         Assert.Empty(MapFile.FromJson(smallJson).RelicSites);
     }
 
@@ -141,11 +141,11 @@ public class 信物遗址Tests(ITestOutputHelper output)
         Assert.Contains("RELIC_SITE_COUNT", Codes(large with { RelicSites = sites.SetItem(0, sites[0] with { Tier = RelicTier.Common }) }));
         Assert.Empty(Codes(large with { RelicSites = [.. sites.Reverse()] }));   // 次序不是校验项
 
-        // 位置：挪到岸边 / 岩石旁、不可落子格、重复。
+        // 位置：挪到岸边、虚空（障碍）格、重复（terrain-bonus 段 B 起岩石是陆地，按普通陆地处理，不再是"不可落子格"的样本）。
         Coord shore = large.AllCoords().First(c => large.IsLand(c) && !Inland(large, c));
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = shore }) }));
-        Coord rock = large.Obstacles.First(c => c.X > 10 && c.Y > 10);
-        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = rock }) }));
+        Coord voidCell = large.Obstacles.First(c => c.X > 10 && c.Y > 10);
+        Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = voidCell }) }));
         // 追加裁决 13：挪到 h ≥ 1 的可落子格（平台顶 / 坡道，八邻都可落子）也不合位置规则。
         Coord high = large.AllCoords().First(c => Inland(large, c) && large.HeightAt(c) > 0);
         Assert.Contains("RELIC_SITE_GROUND", Codes(large with { RelicSites = sites.SetItem(sites.Length - 1, sites[^1] with { Cell = high }) }));

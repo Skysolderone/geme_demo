@@ -91,7 +91,7 @@ public static class RelicSites
 
     /// <summary>
     /// 该格能否放遗址（裁决 6「只在可落子格、避开岸线与障碍」+ 追加裁决 13「只落低地」的唯一判定）：本格可落子且高度 0，且八邻都在画布内且可落子——
-    /// 岛缘、岩石、湖泊、未架桥河道的旁边一圈都不放；平台顶（h ≥ 1）与坡道不放，八邻的高度不限。
+    /// 岛缘（虚空）、湖泊、未架桥河道的旁边一圈都不放（terrain-bonus 段 B 起岩石是可落子的陆地，按普通陆地处理，实现决策 J2）；平台顶（h ≥ 1）与坡道不放，八邻的高度不限。
     /// </summary>
     public static bool IsSiteGround(MapData map, Coord c)
     {

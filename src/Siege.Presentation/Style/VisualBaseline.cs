@@ -276,12 +276,12 @@ public static class GroupMarks
 
 /// <summary>
 /// 默认棋盘上"落不下"的各类在外观上的手法（tactical-layers「活形与禁入格的标示」「单子禁手的标示」）。
-/// 地形不可落子由地形本身（岩石 / 深水）表达，不加标记；超出合法落子范围不加标记（合法落点另有标记，范围外即"没有合法标记"）；
+/// 地形不可落子由地形本身（障碍格即虚空——没有地面；terrain-bonus 起岩石与深水都可落子）表达，不加标记；超出合法落子范围不加标记（合法落点另有标记，范围外即"没有合法标记"）；
 /// 活棋禁入加一枚禁入印记（叉 + 所有者阵营色的方框）；单子禁手三类各有一种带叉的标记。各类的图元组成见 <see cref="PlacementBlocks.PartsOf"/>，两两不同。
 /// </summary>
 public enum PlacementMarkStyle
 {
-    /// <summary>地形本身即表达（岩石体块 / 深水水面）。</summary>
+    /// <summary>地形本身即表达（障碍格是虚空，没有地面可点）。</summary>
     TerrainSurface,
 
     /// <summary>无标记（超出合法落子范围）。</summary>

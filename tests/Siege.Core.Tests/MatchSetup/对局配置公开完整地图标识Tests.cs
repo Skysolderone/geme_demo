@@ -103,12 +103,19 @@ public class 对局配置公开完整地图标识Tests
         Assert.False(restored.MapDigestBackfilled);
         Assert.Equal(json, restored.Serialize());
 
-        // 同一标识、改了一格（从岩石表里拿掉坐标序第一个岩石格）：恢复在地图这一关就停下，消息指明是地图不一致并给出两个摘要。
+        // 同一标识、改了一格（从障碍表里拿掉坐标序第一个障碍格，段 B 起障碍只剩虚空）：恢复在地图这一关就停下，消息指明是地图不一致并给出两个摘要。
         Coord victim = map.Obstacles.Order().First();
         string mapJson = MapFile.ToJson(map);
         string cell = $"\"{victim.ToNotation()}\",";
         Assert.Contains(cell, mapJson, StringComparison.Ordinal);
-        MapData tampered = MapFile.FromJson(mapJson.Remove(mapJson.IndexOf(cell, StringComparison.Ordinal), cell.Length));
+        // terrain-bonus 段 B（J3）：读入要求地表行的 V 格 == Obstacles，所以挖掉这一格虚空时同时把它的 V 改成 G。
+        var node = System.Text.Json.Nodes.JsonNode.Parse(mapJson.Remove(mapJson.IndexOf(cell, StringComparison.Ordinal), cell.Length))!;
+        var rows = node["Surfaces"]!.AsArray();
+        char[] row = rows[map.Height - 1 - victim.Y]!.GetValue<string>().ToCharArray();
+        Assert.Equal(MapFile.VoidCode, row[victim.X]);
+        row[victim.X] = 'G';
+        rows[map.Height - 1 - victim.Y] = new string(row);
+        MapData tampered = MapFile.FromJson(node.ToJsonString());
         Assert.Equal(map.Id, tampered.Id);
 
         FormatException mismatch = Assert.Throws<FormatException>(() => MatchFlow.Restore(tampered, json));

@@ -60,7 +60,8 @@ public static class MapFile
                     c => c.ToNotation(),
                     c => map.PocketExemptionReasons.TryGetValue(c, out string? r) ? r : string.Empty),
             Heights = Rows(map, c => (char)('0' + map.HeightAt(c))),
-            Surfaces = Rows(map, c => SurfaceCode(map.SurfaceAt(c))),
+            // terrain-bonus 段 B（J3）：虚空（障碍格）在地表行写专用码 V，与可落子的岩石 K 等地表区分；读入时要求 V 格集合与 Obstacles 一致。
+            Surfaces = Rows(map, c => map.Obstacles.Contains(c) ? VoidCode : SurfaceCode(map.SurfaceAt(c))),
             Bridges = Sorted(map.TerrainData.Bridges),
             Fences = [.. map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B).Select(f => f.ToString())],
         };
@@ -103,7 +104,7 @@ public static class MapFile
             Boards = ParseBoards(dto.Boards, profile, tier),
             MapVersion = ParseMapVersion(dto.MapVersion),
             RelicSites = ParseRelicSites(dto.RelicSites),
-            Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
+            Obstacles = ParseObstacles(dto),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
             ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
             CentralEntrance = Coord.Parse(dto.CentralEntrance),
@@ -281,6 +282,11 @@ public static class MapFile
         ImmutableDictionary<Coord, Surface>.Builder surfaces = ImmutableDictionary.CreateBuilder<Coord, Surface>();
         foreach ((Coord c, char code) in Cells(dto, surfaceRows, "Surfaces"))
         {
+            if (IsVoidCode(code))
+            {
+                continue;   // 虚空不是地表：与 Obstacles 的一致性由 ParseObstacles 校验
+            }
+
             Surface surface = SurfaceFromCode(code)
                 ?? throw new FormatException($"地图文件的 Surfaces 在 {c.ToNotation()} 处为 '{code}'：地表只能是 {LegalSurfaceCodes}。");
             if (surface != Surface.Grass)
@@ -310,6 +316,31 @@ public static class MapFile
             throw new FormatException($"地图文件的地形数据不合法：{ex.Message}", ex);
         }
     }
+
+    /// <summary>
+    /// 障碍（虚空）格（terrain-bonus 段 B，J3）：以 Obstacles 字段为准。地表行里只要出现一个 <see cref="VoidCode"/>，就要求"V 格集合 == Obstacles"，
+    /// 不一致即 <see cref="FormatException"/> 并点名不一致的格；一个 V 都没有的旧文件（虚空格写的是 G 等普通码）兼容读入。写出一律用 V。
+    /// </summary>
+    private static ImmutableHashSet<Coord> ParseObstacles(MapDto dto)
+    {
+        ImmutableHashSet<Coord> obstacles = Parse(Required(dto.Obstacles, "Obstacles"));
+        ImmutableHashSet<Coord> voids = [.. Cells(dto, Required(dto.Surfaces, "Surfaces"), "Surfaces").Where(cell => IsVoidCode(cell.Code)).Select(cell => cell.Coord)];
+        if (voids.IsEmpty || voids.SetEquals(obstacles))
+        {
+            return obstacles;
+        }
+
+        Coord[] voidOnly = [.. voids.Except(obstacles).Order()];
+        Coord[] obstacleOnly = [.. obstacles.Except(voids).Order()];
+        static string List(Coord[] cells) => cells.Length == 0
+            ? "无"
+            : string.Join(" ", cells.Take(MismatchListLimit).Select(c => c.ToNotation())) + (cells.Length > MismatchListLimit ? $" 等 {cells.Length} 格" : $"（{cells.Length} 格）");
+        throw new FormatException(
+            $"地图文件的 Surfaces 里虚空码 {VoidCode}（虚空）的格与 Obstacles 不一致：写了 {VoidCode} 但不在 Obstacles 里的格 {List(voidOnly)}；在 Obstacles 里但没写 {VoidCode} 的格 {List(obstacleOnly)}。");
+    }
+
+    /// <summary>不一致报文里每一侧最多点名的格数。</summary>
+    private const int MismatchListLimit = 20;
 
     /// <summary>按行字符串（自上而下）逐格枚举；行数或行长与外接尺寸不符即报出字段名。空列表表示缺省。</summary>
     private static IEnumerable<(Coord Coord, char Code)> Cells(MapDto dto, List<string> rows, string field)
@@ -372,9 +403,20 @@ public static class MapFile
         _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
     };
 
-    /// <summary>错误信息里的合法码清单，由 <see cref="SurfaceCode"/> 与 <see cref="SurfaceNames.DisplayName"/> 推出，不另写一份。</summary>
+    /// <summary>
+    /// 虚空（障碍格）在地表行里的专用码（terrain-bonus 段 B，J3）。虚空不是地表（不进 <see cref="Surface"/> 枚举），只是文件层的码：与 <see cref="SurfaceCode"/> 的任何码都不同，
+    /// 读入大小写不敏感（与地表码同一习惯）。
+    /// </summary>
+    public const char VoidCode = 'V';
+
+    /// <summary>虚空码的显示名。</summary>
+    public const string VoidDisplayName = "虚空";
+
+    private static bool IsVoidCode(char code) => char.ToUpperInvariant(code) == VoidCode;
+
+    /// <summary>错误信息里的合法码清单，由 <see cref="SurfaceCode"/> 与 <see cref="SurfaceNames.DisplayName"/> 推出，不另写一份；末尾附虚空码。</summary>
     private static string LegalSurfaceCodes =>
-        string.Join(" / ", Enum.GetValues<Surface>().Select(s => $"{SurfaceCode(s)}（{s.DisplayName()}）"));
+        string.Join(" / ", Enum.GetValues<Surface>().Select(s => $"{SurfaceCode(s)}（{s.DisplayName()}）").Append($"{VoidCode}（{VoidDisplayName}）"));
 
     private static Surface? SurfaceFromCode(char code) => char.ToUpperInvariant(code) switch
     {

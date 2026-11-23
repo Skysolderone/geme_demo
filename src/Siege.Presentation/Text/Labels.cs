@@ -22,6 +22,7 @@ public static class Labels
         Layers.TerrainReason.Marsh => "沼泽",
         Layers.TerrainReason.Crag => "岩台",
         Layers.TerrainReason.Shallows => "浅滩",
+        Layers.TerrainReason.Rock => "岩石",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "未知地形原因。"),
     };
 

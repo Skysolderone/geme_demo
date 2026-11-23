@@ -37,6 +37,25 @@ public class 物化状态校验Tests
         return new TerrainData(t.Heights.SetItems(extra.Heights), t.Surfaces.SetItems(extra.Surfaces), t.Bridges, t.Fences.Union(extra.Fences));
     }
 
+    [Theory]
+    [InlineData("link:1:2", "1060–1280")]
+    [InlineData("link:1:3", "1480–1760")]
+    [InlineData("link:1:4", "1500–1780")]
+    [InlineData("link:1:4:l", "2600–3100")]
+    public void 可落子格区间按档位与人数钉值(string mapId, string range)
+    {
+        // terrain-bonus 段 B（实现决策 J4）：岩石写成陆地后小样本重钉的四行区间（MapValidator 声明表；种子 1–10 小图 / 1–5 大图实测，见声明表注释）。
+        // 期望取自规格 link-map-generation「物化状态校验」的数字，不读校验器：把画布全部开放（陆地远超上界）后报文里的区间文本即声明表的取值。
+        // 生成图本身在带内（同一张图不报这一条）。
+        // 变异验证（段 B 阶段 1 实跑）：M3 小图 2 人行放空 → 地图静态校验规则Tests「可落子格越界」红 1；M3b 小图 4 人行放空 → 本条红 1（加本条之前 0 红）；
+        // M3c 大图 4 人行放空 → 本条红 1；T3 只改测试、把 3 人的期望区间写成 4 人的 → 本条红 1（不是照抄实现）。
+        MapData map = MapCatalog.Resolve(mapId);
+        Assert.DoesNotContain(Failures(map), f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        MapData open = map with { Obstacles = [] };
+        MapValidationFailure high = Assert.Single(Failures(open), f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        Assert.Contains(range, high.Message, StringComparison.Ordinal);
+    }
+
     private static MapData WithHeights(MapData map, params (Coord Cell, int Height)[] heights)
     {
         TerrainData t = map.TerrainData;
@@ -226,10 +245,45 @@ public class 物化状态校验Tests
         MapData map = Base;
         BoardPlate plate = map.Boards[0];
         MapData sealedOff = WithHeights(map, [.. Ramps(map, plate).Select(r => (r, 2))]);
+        // 段 B 追加裁决 P1：对局口径，平台内的未架桥深水也是可落子格，一并被隔开。
         MapValidationFailure split = Assert.Single(Failures(sealedOff), f => f.Code == "ISLAND_LIBERTY_SPLIT");
-        Assert.Equal(plate.Cells().Where(sealedOff.IsLand).Order(), split.Coords);
+        Assert.Equal(plate.Cells().Where(sealedOff.IsPlayable).Order(), split.Coords);
         Assert.Contains(Failures(sealedOff), f => f.Code == "PLATE_HEIGHT");   // 同时坡道数为 0
-        Assert.Empty(MapValidator.LibertySplit(map));
+        Assert.Empty(MapValidator.PlaySplit(map));
+    }
+
+    [Theory]
+    [InlineData("link:5:3", "R6 R8 R9 S6 S7 S8")]
+    [InlineData("link:7:4:l", "AJ60 AK60 AL60 AM60")]
+    public void 被深水与崖壁围住的岩区按对局口径连通_校验通过(string mapId, string pocket)
+    {
+        // terrain-bonus 段 B 追加裁决 P1：岩区四周是未架桥深水与平台崖壁，按陆地口径（深水不通）与主陆地断开；按对局口径（可落子含深水、沿气边）连通，校验通过。
+        // 测试内独立 BFS：只用可落子判定与几何四邻 + 高差 < 2 + 无栅栏，不调校验器的分片函数。
+        // 变异验证 MP1（段 B 阶段 1 实跑，过滤 物化状态校验 / 浮空岛布局 / 岛形，基线 0 红）：ValidateIsland 改回陆地口径（PlaySplit → LibertySplit）→ 红 19
+        // （本条 ×2、全图气边不连通被拒 ×1，其余 16 条是 link:5:3 生成即抛异常）。
+        MapData map = MapCatalog.Resolve(mapId);
+        Coord[] cells = [.. pocket.Split(' ').Select(Coord.Parse)];
+        Assert.All(cells, c => Assert.Equal(Surface.Rock, map.SurfaceAt(c)));
+        Assert.Equal(cells.Order(), MapValidator.LibertySplit(map));   // 陆地口径下恰是这一团断开（样本口径：确有被围住的岩区）
+        Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_LIBERTY_SPLIT");
+        Assert.True(MapValidator.Validate(map).IsValid);
+
+        var reached = new HashSet<Coord> { cells[0] };
+        var queue = new Queue<Coord>(reached);
+        while (queue.Count > 0)
+        {
+            Coord here = queue.Dequeue();
+            foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, here))
+            {
+                if (map.IsPlayable(n) && Math.Abs(map.HeightAt(n) - map.HeightAt(here)) < 2 && !map.HasFence(here, n) && reached.Add(n))
+                {
+                    queue.Enqueue(n);
+                }
+            }
+        }
+
+        Assert.Equal(map.PlayableCount, reached.Count);
+        Assert.Contains(reached, c => map.TerrainData.IsUnbridgedDeepWater(c) && cells.Any(r => Adjacency.AreAdjacent(r, c)));   // 走出口袋靠的是深水
     }
 
     [Fact]

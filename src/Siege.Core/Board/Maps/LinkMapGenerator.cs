@@ -304,7 +304,7 @@ public static partial class LinkMapGenerator
                 BoardTerrain[] boards = overlaySurfaces
                     ? OverlaySurfaces(layout.Boards, MapRandom.ForLinkSurfaces(mapSeed, players, tier))
                     : [.. layout.Boards];
-                MapData map = Assemble(id, players, tier, island, layout, boards, lowland);
+                MapData map = Assemble(id, players, tier, island, layout, boards, lowland, rocksAsSurface: true);
                 if (g.HasRelicSites)
                 {
                     // relic-sites 裁决 6：大图在成品上、校验之前用第四条流放信物遗址（消费顺序见 LinkMapGenerator.Sites.cs）；小图不派生这条流。
@@ -716,7 +716,7 @@ public static partial class LinkMapGenerator
                 HashSet<Coord> widened = WidenRiver(island, layout, water, river, [first, second], coast);
                 HashSet<Coord> trialWater = [.. water, .. river, .. widened];
                 HashSet<Coord> trialBridges = [.. bridges, first, second];
-                // 小图：组装试图、整图气边连通自检（MapValidator.LibertySplit，唯一判定）。大图：同一判定在干图气边图上做——未架桥的水格屏蔽掉，其余格的气边与试图逐格相同（见 LibertyGraph）。
+                // 小图：组装试图、整图陆地气边连通自检（MapValidator.LibertySplit，陆地口径；段 B 追加裁决 P1 起校验器改走对局口径，生成器内部不变）。大图：同一判定在干图气边图上做——未架桥的水格屏蔽掉，其余格的气边与试图逐格相同（见 LibertyGraph）。
                 bool split = graph is null
                     ? !MapValidator.LibertySplit(Assemble("link-island-preview", players, g.Tier, island, layout, layout.Boards, new Lowland([.. trialWater], [.. trialBridges], [], [], [], []))).IsEmpty
                     : !graph.ConnectedWithout([.. trialWater.Where(c => !trialBridges.Contains(c))]);
@@ -883,9 +883,14 @@ public static partial class LinkMapGenerator
         Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), 0) + Math.Max(Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1)), 0) == 1;
 
     /// <summary>
-    /// 灌成链接档地图数据：画布 (W+2M)×(H+2M)，岛外、切角与全部岩石为障碍；平台抬升（D3：外接矩形内每格 h=2、坡道 h=1，主题自带的高度——混合主题的 1 格台——一并抹平）、
+    /// 灌成链接档地图数据：画布 (W+2M)×(H+2M)，岛外与切角（虚空）为障碍；平台抬升（D3：外接矩形内每格 h=2、坡道 h=1，主题自带的高度——混合主题的 1 格台——一并抹平）、
     /// 平台地表与低地河道 / 林地、平台与河道的预置桥、平台栅栏；出生区 = 各座位（出生棋盘）核心区（按编号，中立平台不是出生区），
     /// 中央入口见 <see cref="CentralEntranceOf"/>，没有咽喉，没有信物格（D5）。
+    /// <para>
+    /// 岩石（平台散布岩石与平台岩区、低地岩区、岛缘零星岩石）的写法（terrain-bonus 段 B，裁决 1 / 实现决策 J1）：成品（<paramref name="rocksAsSurface"/> 为 <c>true</c>）写成可落子的
+    /// <see cref="Surface.Rock"/>，高度沿用该格原高度（低地 0、平台 2），<see cref="MapData.Obstacles"/> 只剩虚空；生成内部的试图（河道自检、低地收尾自检、大图干图气边图）仍把岩石写成障碍——
+    /// 岩石在生成内部按"非可落子团"计（与 <see cref="PlaceClusters"/> 的局部谓词同一口径），所以每一步的判定与随机消费次序都与段 B 之前逐步相同。
+    /// </para>
     /// </summary>
     private static MapData Assemble(
         string id,
@@ -894,7 +899,8 @@ public static partial class LinkMapGenerator
         Island island,
         PlateLayout layout,
         IReadOnlyList<BoardTerrain> boards,
-        Lowland lowland)
+        Lowland lowland,
+        bool rocksAsSurface = false)
     {
         ImmutableHashSet<Coord> rocks = [.. boards.SelectMany(b => b.Rocks), .. lowland.Rocks, .. lowland.RockClusters];
         var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
@@ -903,19 +909,22 @@ public static partial class LinkMapGenerator
             for (int x = 0; x < island.CanvasWidth; x++)
             {
                 var c = new Coord(x, y);
-                if (!island.Contains(c) || rocks.Contains(c))
+                if (!island.Contains(c) || (!rocksAsSurface && rocks.Contains(c)))
                 {
                     obstacles.Add(c);
                 }
             }
         }
 
+        // 岩石格与其余地表互不重叠（平台岩石只在中间带空格上、低地岩区不在水与岛缘、零星岩石不在林地与水上）；ToImmutableDictionary 遇重复键即抛，重叠是生成器缺陷。
+        IEnumerable<KeyValuePair<Coord, Surface>> rockSurfaces = rocksAsSurface ? rocks.Order().Select(c => KeyValuePair.Create(c, Surface.Rock)) : [];
         var terrain = new TerrainData(
             layout.Plates.SelectMany(p => p.Cells()).ToImmutableDictionary(c => c, c => layout.Ramps.Contains(c) ? 1 : 2),
             boards.SelectMany(b => b.Surfaces)
                 .Concat(lowland.Water.Select(c => KeyValuePair.Create(c, Surface.DeepWater)))
                 .Concat(lowland.Lakes.Select(c => KeyValuePair.Create(c, Surface.DeepWater)))
                 .Concat(lowland.Forest.Select(c => KeyValuePair.Create(c, Surface.Forest)))
+                .Concat(rockSurfaces)
                 .ToImmutableDictionary(),
             [.. boards.SelectMany(b => b.Bridges), .. lowland.Bridges],
             [.. boards.SelectMany(b => b.Fences)]);

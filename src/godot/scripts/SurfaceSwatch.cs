@@ -6,7 +6,8 @@ namespace Siege.Godot;
 
 /// <summary>
 /// 地表色块对照图（chibi-world 段 ②，人工检查清单用）：<c>--surface-swatch=&lt;PNG 路径&gt;</c> 时不建局，按当前色板（<c>--palette=</c>）拍一张图后退出。
-/// 三行：上行草地三片 + 六种地表 + 深水的平地色块；中行同样十块，每块四个象限各叠一个阵营的独占领地着色（与对局 α 0.62 相同）；
+/// 三行：上行草地三片 + 六种地表 + 岩石（平地与 h=2 提亮两块，terrain-bonus 段 B）+ 土路 / 草地三片 / 沼泽的 h=2 提亮块（段 B 追加裁决 Q2：岩石与同档地表的灰度对照）+ 深水的平地色块；
+/// 中行同样的十七块，每块四个象限各叠一个阵营的独占领地着色（与对局 α 0.62 相同）；
 /// 下行一座 h=1 缓坡台、一座 h=2 崖壁台（侧面、提亮色与高差描边都按对局的画法）和一块障碍格地面。去色版由 README 里的 PIL 命令从本图生成。
 /// </summary>
 /// <remarks>
@@ -16,6 +17,8 @@ namespace Siege.Godot;
 public sealed partial class SurfaceSwatch : Node3D
 {
     private const float Spacing = 1.2f;
+
+    private static Color H2(Color c) => c.Lerp(TerrainPalette.Current.HighWash, TerrainPalette.Current.HighWashHigh);
 
     private readonly string _path;
     private readonly List<(string Name, Vector3 At)> _probes = [];
@@ -36,7 +39,9 @@ public sealed partial class SurfaceSwatch : Node3D
         [
             ("grass", palette.GrassPatchA), ("grass-2", palette.GrassPatchB), ("grass-3", palette.GrassPatchC),
             ("road", palette.Road), ("forest", palette.Forest), ("desert", palette.Desert), ("marsh", palette.Marsh),
-            ("crag", palette.Crag), ("shallows", palette.Shallows), ("water", palette.DeepWater),
+            ("crag", palette.Crag), ("shallows", palette.Shallows),
+            ("rock", palette.Rock), ("rock-h2", palette.Rock.Lerp(palette.HighWash, palette.HighWashHigh)),
+            ("road-h2", H2(palette.Road)), ("grass-h2", H2(palette.GrassPatchA)), ("grass-2-h2", H2(palette.GrassPatchB)), ("grass-3-h2", H2(palette.GrassPatchC)), ("marsh-h2", H2(palette.Marsh)), ("water", palette.DeepWater),
         ];
         Color[] factions = [.. Enumerable.Range(0, 4).Select(p => Visuals.FactionColorOf(new PlayerId(p)))];
 
@@ -76,7 +81,7 @@ public sealed partial class SurfaceSwatch : Node3D
         _probes.Add(("obstacle", new Vector3(3.6f, 0f, 2.1f)));
 
         float pitch = Mathf.DegToRad(60f);
-        const float distance = 8.2f;
+        const float distance = 12.5f;   // terrain-bonus 段 B：加岩石与 h=2 对照共七块（十七块）后拉远，左右两端不出画（原 8.2）
         var focus = new Vector3(0f, 0f, 0.55f);
         AddChild(_camera = new Camera3D
         {

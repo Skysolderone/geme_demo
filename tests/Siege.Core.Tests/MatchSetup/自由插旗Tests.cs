@@ -223,6 +223,7 @@ public class 自由插旗Tests
         Assert.Equal(7, FlagRules.SiteClearance);
         Assert.NotEmpty(Large.RelicSites);
         int rejectedBySite = 0;
+        int commonNamed = 0;
         foreach (RelicSite site in Large.RelicSites)
         {
             for (int dy = -6; dy <= 6; dy++)
@@ -242,7 +243,19 @@ public class 自由插旗Tests
                     {
                         if (site.Tier == RelicTier.Common)
                         {
-                            Assert.Contains(site.Cell.ToNotation(), problem, StringComparison.Ordinal);
+                            // 判据次序（FlagCellProblem）：稀有遗址区域先于普通遗址——同时离稀有区域不足 7 的格报区域（terrain-bonus 段 B：遗址候选变了，link:1:4:l 的普通遗址挨着稀有区域）。
+                            if (!problem.Contains("稀有信物遗址区域", StringComparison.Ordinal))
+                            {
+                                Assert.Contains(site.Cell.ToNotation(), problem, StringComparison.Ordinal);
+                                commonNamed++;
+                            }
+                            else
+                            {
+                                // 报区域的格确实离某个稀有区域不足 7（测试内按区域外接矩形独立算切比雪夫距离）。
+                                Assert.Contains(RelicSites.RareZones(Large), z => Math.Max(
+                                    Math.Max(0, Math.Max(z.Origin.X - c.X, c.X - (z.Origin.X + z.Width - 1))),
+                                    Math.Max(0, Math.Max(z.Origin.Y - c.Y, c.Y - (z.Origin.Y + z.Height - 1)))) < FlagRules.SiteClearance);
+                            }
                         }
                         else
                         {
@@ -258,6 +271,7 @@ public class 自由插旗Tests
         }
 
         Assert.True(rejectedBySite > 0, "没有任何格是因为遗址被拒的（都被更早的判据挡下），测不到遗址文案。");
+        Assert.True(commonNamed > 0, "样本口径：没有任何格的原因点名普通遗址。");
 
         // 普通遗址距离恰 7 的环上至少有一格合规（样本口径：规则是 ≥ 7 而不是 > 7；稀有遗址的口径是区域，见「稀有遗址区域」）。
         Assert.Contains(Large.RelicSites.Where(s => s.Tier == RelicTier.Common), s => Enumerable.Range(-7, 15).SelectMany(dx => new[] { (dx, -7), (dx, 7), (-7, dx), (7, dx) })

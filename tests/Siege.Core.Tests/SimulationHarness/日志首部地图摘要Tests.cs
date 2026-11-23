@@ -133,11 +133,19 @@ public class 日志首部地图摘要Tests
     /// <summary>经导出文本改一格：从岩石表里拿掉按坐标序的第一个岩石格（它变成可落子的空地）。不过校验也无妨——这里只比摘要。</summary>
     private static MapData TamperOneCell(MapData map)
     {
+        // terrain-bonus 段 B（J3）：地表行在虚空格写 V、读入要求 V 格 == Obstacles，所以挖掉一格虚空要同时改两处——从 Obstacles 移走，并把该格的 V 改成 G（草地）。
         Coord victim = map.Obstacles.Order().First();
         string json = MapFile.ToJson(map);
         string pattern = $"\"{victim.ToNotation()}\",";
         int at = json.IndexOf(pattern, StringComparison.Ordinal);
-        Assert.True(at > 0, $"导出文本里找不到岩石格 {victim.ToNotation()}。");
-        return MapFile.FromJson(json.Remove(at, pattern.Length));
+        Assert.True(at > 0, $"导出文本里找不到障碍格 {victim.ToNotation()}。");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json.Remove(at, pattern.Length))!;
+        var rows = node["Surfaces"]!.AsArray();
+        int row = map.Height - 1 - victim.Y;
+        char[] cells = rows[row]!.GetValue<string>().ToCharArray();
+        Assert.Equal(MapFile.VoidCode, cells[victim.X]);
+        cells[victim.X] = 'G';
+        rows[row] = new string(cells);
+        return MapFile.FromJson(node.ToJsonString());
     }
 }

@@ -166,15 +166,8 @@ internal sealed class BoardRenderer
                 }
                 else if (cell.Terrain == Terrain.Obstacle)
                 {
-                    // 不可落子格有两种：岩石与未架桥深水，只读地表区分（terrain-model 裁决 A-2），不做任何规则计算。
-                    if (map.SurfaceAt(c) == Surface.DeepWater)
-                    {
-                        Ink(" ~ ", ConsoleColor.DarkBlue);
-                    }
-                    else
-                    {
-                        Ink(" # ", ConsoleColor.DarkGray);
-                    }
+                    // terrain-bonus 段 B：不可落子格只剩障碍（虚空）；岩石与未架桥深水都可落子，空着时在最后的空格分支按地表画 k / ~。
+                    Ink(" # ", ConsoleColor.DarkGray);
                 }
                 else if (staged.TryGetValue(c, out PieceType st))
                 {
@@ -213,6 +206,15 @@ internal sealed class BoardRenderer
                 {
                     Ink(" + ", ConsoleColor.DarkGreen);
                 }
+                else if (map.SurfaceAt(c) == Surface.Rock)
+                {
+                    // terrain-bonus 段 B：空的岩石地表（可落子，不在合法范围时）；小写 k 与新棋子字母、信物字母都不混。只读地表，不做规则计算。
+                    Ink(" k ", ConsoleColor.DarkGray);
+                }
+                else if (map.TerrainData.IsUnbridgedDeepWater(c))
+                {
+                    Ink(" ~ ", ConsoleColor.DarkBlue);
+                }
                 else
                 {
                     Ink(" . ", ConsoleColor.Gray);
@@ -228,7 +230,7 @@ internal sealed class BoardRenderer
             _out.WriteLine($"  插旗：数字=出生座位编号（可选，共 {map.BirthZones.Length} 个）  {NeutralMark}=中立平台（不可出生，第 {MatchFlow.BuildProtectionRounds + 1} 大回合起可落子）  空白=低地");
         }
 
-        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=岩石  ~=深水");
+        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=虚空  k=岩石  ~=深水");
         _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
 
         // 图例按对局内容集（公开、开局固定）：v2 另列新四种棋子。

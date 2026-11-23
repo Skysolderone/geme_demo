@@ -260,7 +260,7 @@ public static class Program
         }
 
         Console.WriteLine(
-            $"可落子格 {map.PlayableCount}   岩石 {map.Obstacles.Count}   深水 {all.Count(c => map.SurfaceAt(c) == Surface.DeepWater)}（其中桥 {terrain.Bridges.Count}）"
+            $"可落子格 {map.PlayableCount}   虚空 {map.Obstacles.Count}   岩石 {all.Count(c => map.SurfaceAt(c) == Surface.Rock)}   深水 {all.Count(c => map.SurfaceAt(c) == Surface.DeepWater)}（其中桥 {terrain.Bridges.Count}）"
             + $"   栅栏 {terrain.Fences.Count}   林地 {all.Count(c => map.SurfaceAt(c) == Surface.Forest)}   土路 {all.Count(c => map.SurfaceAt(c) == Surface.Road)}"
             + string.Concat(new[] { Surface.Desert, Surface.Marsh, Surface.Crag, Surface.Shallows }
                 .Select(s => (s, n: all.Count(c => map.SurfaceAt(c) == s)))
@@ -358,7 +358,7 @@ public static class Program
         return 0;
     }
 
-    /// <summary>文本图的单格两字符：高度数字 + 标记。岩石与未架桥深水不可落子，画成 ## / ~~，桥格按可落子格画并标 =。</summary>
+    /// <summary>文本图的单格两字符：高度数字 + 标记。障碍（虚空）画成 ##，未架桥深水画成 ~~（terrain-bonus 起可落子，仍单独画出），岩石按地表标 K，桥格按可落子格画并标 =。</summary>
     private static string Glyph(MapData map, Coord c)
     {
         if (map.Obstacles.Contains(c))

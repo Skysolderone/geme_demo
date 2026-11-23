@@ -54,7 +54,9 @@ public class 大图档Tests(ITestOutputHelper output)
                 Assert.Equal((Rect, Rect), (cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1));
 
                 int count = map.LandCount;
-                int share = (Rect * Rect - count) * 100 / (Rect * Rect);
+                // terrain-bonus 段 B（J1）：岩石是陆地，但生成器的非可落子占比口径仍把岩石算作非可落子团，占比按"陆地 − 岩石"算。
+                int rocks = map.AllCoords().Count(c => map.SurfaceAt(c) == Surface.Rock);
+                int share = (Rect * Rect - (count - rocks)) * 100 / (Rect * Rect);
                 Assert.InRange(share, 25, 35);
                 Assert.Empty(map.BirthZones);
                 Assert.Empty(map.BirthBoards());
@@ -68,12 +70,14 @@ public class 大图档Tests(ITestOutputHelper output)
 
                 Assert.All(map.Boards, b => Assert.Contains(LinkMapGenerator.LargePlateTiers, t => t.Side == b.Width && t.Side == b.Height));
                 Assert.Equal(neutral, map.Boards.Length);
-                Assert.Empty(MapValidator.LibertySplit(map));
+                Assert.Empty(MapValidator.PlaySplit(map));   // 段 B 追加裁决 P1：对局口径
 
                 int legal = FlagRules.LegalFlagCells(map).Length;
-                int flagShare = legal * 100 / count;
+                // terrain-bonus 段 B（追加裁决 P4，规格 link-map-generation「大图档布局」）：分母沿用生成器的口径"陆地 − 岩石"（与上面的非可落子占比同一口径），否则岩石入陆地会把占比无端稀释约 12%。
+                // 遗址候选随岩石入陆地而变，遗址的禁插块挪了位置，个别图合规旗格明显减少（link:5:3:l 535 → 407，即 21% → 16%）。
+                int flagShare = legal * 100 / (count - rocks);
                 // large-60：60×60 上三档高台的禁插圈占去大半，合规旗格占比实测 19%–29%（种子 1–20 × 2 / 3 / 4 人），下限 15%。
-                Assert.True(flagShare >= 15, $"{id} 合规旗格 {legal} / 可落子 {count} = {flagShare}%，低于 15%。");
+                Assert.True(flagShare >= 15, $"{id} 合规旗格 {legal} / 陆地减岩石 {count - rocks} = {flagShare}%，低于 15%。");
                 // large-60 追加裁决 3：四角预留旗位恒为合规旗格，两两相距 ≥ 旗距——任何人数都插得下。
                 Assert.All(LinkMapGenerator.LargeReservedFlags, f => Assert.True(FlagRules.IsLegalFlagCell(map, f), $"{id} 预留旗位 {f.ToNotation()} 不合规：{FlagRules.FlagCellProblem(map, f)}"));
                 Assert.All(LinkMapGenerator.LargeReservedFlags, f => Assert.All(LinkMapGenerator.LargeReservedFlags.Where(g => g != f), g => Assert.True(FlagRules.Distance(f, g) >= FlagRules.FlagGap)));

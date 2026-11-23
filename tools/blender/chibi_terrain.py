@@ -1,4 +1,4 @@
-"""卡通地形装饰（chibi-world 段 ①）：在 Blender 里用代码生成 18 类（19 种 Kind）装饰的 glb，风格同 chibi_pieces.py。
+"""卡通地形装饰（chibi-world 段 ①）：在 Blender 里用代码生成 19 类（20 种 Kind；terrain-bonus 段 B 加岩石平板 rock_slab）装饰的 glb，风格同 chibi_pieces.py。
 
 运行（无界面，全部）：
   "C:/Program Files/Blender Foundation/Blender 5.3/blender.exe" -b --factory-startup \
@@ -42,7 +42,7 @@ FLAT = "chibi_flat"   # 物体自定义属性：贴地薄片，不进描边外�
 OUTLINE = {
     "rock": 0.022, "ruins": 0.02, "pines": 0.02, "crystal": 0.02, "brazier": 0.018, "arch": 0.02, "chest": 0.018,
     "trees": 0.015, "desert": 0.014, "marsh": 0.012, "crag": 0.014, "shallows": 0.010,
-    "fence_x": 0.014, "fence_z": 0.014, "bridge": 0.013, "stele": 0.014,
+    "fence_x": 0.014, "fence_z": 0.014, "bridge": 0.013, "stele": 0.014, "rock_slab": 0.012,
     "grass": 0.010, "pebble": 0.010, "flower": 0.007,
 }
 
@@ -50,11 +50,11 @@ OUTLINE = {
 VARIANTS = {
     "rock": 6, "ruins": 4, "pines": 7, "trees": 4, "desert": 6, "marsh": 6, "crag": 4, "shallows": 6,
     "fence_x": 1, "fence_z": 1, "bridge": 1, "grass": 4, "crystal": 3, "brazier": 2, "arch": 2, "chest": 2,
-    "pebble": 3, "flower": 3, "stele": 2,
+    "pebble": 3, "flower": 3, "stele": 2, "rock_slab": 4,
 }
 
 # 放在可落子格上的装饰：格心圆内只许贴地薄片。
-PLAYABLE = {"trees", "desert", "marsh", "crag", "shallows", "bridge", "grass", "pebble", "flower", "stele"}
+PLAYABLE = {"trees", "desert", "marsh", "crag", "shallows", "bridge", "grass", "pebble", "flower", "stele", "rock_slab"}
 
 # terrain_full_art 现有部件的包围盒（Godot 坐标 min x,y,z / max x,y,z；2026-11-21 从 .tscn 实测）。
 # 格角类（grass / pebble / flower / stele）逐档核对；其余按同类各档的并集核对。
@@ -88,6 +88,8 @@ OLD_BOUNDS = {
     "stele_0": ((-0.390, 0.000, -0.365), (-0.210, 0.340, -0.235)),
     "stele_1": ((-0.390, 0.000, -0.365), (-0.210, 0.370, -0.235)),
     "trees": ((-0.426, 0.000, -0.427), (0.430, 0.254, 0.428)),
+    # terrain-bonus 段 B 新件（没有 terrain_full_art 旧件）：与岩台同一地砖范围，顶高 ≤ 0.06（格角岩片），格心只许贴地石缝。
+    "rock_slab": ((-0.450, -0.030, -0.450), (0.450, 0.060, 0.450)),
 }
 
 # 格角序（同 LowPoly.Trees / Grass）：Godot (x, z) → Blender (x, -z)。
@@ -698,11 +700,33 @@ def build_stele(v):
         prism("Gold_Crown", crown, 0.06, (at.x, at.y, 0.04))
 
 
+def build_rock_slab(v):
+    """岩石地表的平板岩片（terrain-bonus 段 B 裁决 4）：可落子，格心是岩石色地砖本身（不挡格心、单位站上去看得清）；
+    四个格角各一块压扁的圆胖岩片（奇数档少一块），两三道贴地石缝穿过格心。岩片全在棋子底座圆环（半径 0.36）之外，顶高 ≤ 0.05。"""
+    rng = random.Random(1301 + v * 16)
+    for k in range(4 - (v % 2)):
+        cx, cy = CORNERS[(k + v) % 4]
+        reach = 0.34 + 0.01 * (rng.random() * 2 - 1)
+        blob("Stone_Slab", (cx * reach, cy * reach, 0.012), 0.085, scale=(1.15, 1.0, 0.42), rng=rng, jitter=0.10)
+    turn = math.radians((v * 37) % 90)
+    cracks = [((-0.06, -0.04), 0.34, 20), ((0.08, 0.06), 0.24, -55), ((0.02, -0.14), 0.16, 80)]
+    for (x, y), ln, ang in cracks[:len(cracks) - (v % 2)]:
+        a = math.radians(ang) + turn
+        d = Vector((math.cos(a), math.sin(a), 0))
+        n = Vector((-d.y, d.x, 0))
+        c = Vector((x, y, 0))
+        bend = n * (0.02 * (rng.random() * 2 - 1))
+        pts = [c - d * (ln / 2), c + bend, c + d * (ln / 2)]
+        ribbon("Shade_Crack", [(p.x, p.y) for p in pts], 0.02)
+    sx = 1 if v % 2 == 0 else -1
+    blob("Shade_Chip", (0.0, 0.40 * sx, 0.012), 0.03, scale=(1.2, 1.0, 0.7), rng=rng, subdiv=1)
+
+
 BUILDERS = {
     "rock": build_rock, "ruins": build_ruins, "pines": build_pines, "trees": build_trees, "desert": build_desert,
     "marsh": build_marsh, "crag": build_crag, "shallows": build_shallows, "fence_x": build_fence_x, "fence_z": build_fence_z,
     "bridge": build_bridge, "grass": build_grass, "crystal": build_crystal, "brazier": build_brazier, "arch": build_arch,
-    "chest": build_chest, "pebble": build_pebble, "flower": build_flower, "stele": build_stele,
+    "chest": build_chest, "pebble": build_pebble, "flower": build_flower, "stele": build_stele, "rock_slab": build_rock_slab,
 }
 
 

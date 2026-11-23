@@ -68,7 +68,7 @@ public class 候选格上限Tests
     /// <para>map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了，link:1:4 可落子 1368 → 1366；AI 未改，同一配置的走法随之变）：
     /// 旧值 80E6545E46FB86F01D287C519D0E91E25622CEB3E0ECF171424C90ED259660A2；四条路径实跑仍得到同一新值。</para>
     // terrain-bonus 重钉（深水可落子、地形修正进军势、快照新增 TerrainBonus 字段；走法与文本都变）。
-    internal const string LinkGoldenTurnHash = "AB5E95C7B47C00BBAEAD97800D9AC25BF73371DCE807BAC997E1DA4CBDD2A0FF";
+    internal const string LinkGoldenTurnHash = "83D25C79D6DB389B997C9441E4CB8AE23D360080CF7E43BB134E1A0CD4148877";   // terrain-bonus 段 B 重钉（岩石写成可落子地表、link:1:4 地图变了，同一配置的走法随之变）：旧值 AB5E95C7B47C00BBAEAD97800D9AC25BF73371DCE807BAC997E1DA4CBDD2A0FF
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
@@ -82,7 +82,7 @@ public class 候选格上限Tests
     /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。
     /// map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改）：旧值 BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44，仍与另一开关 0 路径同值。</remarks>
     // terrain-bonus 重钉（深水可落子、地形修正进军势、快照新增 TerrainBonus 字段；走法与文本都变）。
-    internal const string LinkGoldenTurnHashWholeBatchOff = "085C4E27047C509B456C0332C63CA0B8B683DAA6372BBB21B5B4E8EF3A8522A9";
+    internal const string LinkGoldenTurnHashWholeBatchOff = "DA9CCCEE5DD331AF06B277EEE2175C93637A342EA1E8BC8A4DBCD4076AFBA42A";   // terrain-bonus 段 B 重钉（岩石写成可落子地表、link:1:4 地图变了，同一配置的走法随之变）：旧值 085C4E27047C509B456C0332C63CA0B8B683DAA6372BBB21B5B4E8EF3A8522A9
 
     /// <summary>
     /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
@@ -95,7 +95,7 @@ public class 候选格上限Tests
     /// seat-gap-25 段 A 重钉（地图变了：四角出生座位岛 + 中立平台，盲选座位互斥；AI 未改）：旧值 D0173938F25DEB73846035FC0EB280D60353D61F50267924B9121B792692C47C，仍与另一开关 0 路径同值。
     /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。
     /// map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改）：旧值 BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44，仍与另一开关 0 路径同值。</remarks>
-    internal const string LinkGoldenTurnHashEditSeedOff = "085C4E27047C509B456C0332C63CA0B8B683DAA6372BBB21B5B4E8EF3A8522A9";
+    internal const string LinkGoldenTurnHashEditSeedOff = "DA9CCCEE5DD331AF06B277EEE2175C93637A342EA1E8BC8A4DBCD4076AFBA42A";   // terrain-bonus 段 B 重钉（岩石写成可落子地表、link:1:4 地图变了，同一配置的走法随之变）：旧值 085C4E27047C509B456C0332C63CA0B8B683DAA6372BBB21B5B4E8EF3A8522A9
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

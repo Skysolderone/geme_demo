@@ -52,10 +52,11 @@ public class 按座位视图Tests
         // 载体：从 link:1:4 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（seat-gap-25：只在每张图的 4 个出生座位里找，原为前 5 块平台）。
         (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s, 4))
             .SelectMany(m => Enumerable.Range(0, 4).Select(z => (Map: m, Zone: z)))
-            .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.Obstacles.Contains(c)));
+            .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.SurfaceAt(c) == Surface.Rock));
         BoardPlate plate = map.BirthBoard(zone);
         Coord[] water = [.. plate.Cells().Where(map.TerrainData.IsUnbridgedDeepWater)];
-        Coord[] rocks = [.. plate.Cells().Where(map.Obstacles.Contains)];
+        // terrain-bonus 段 B（裁决 1）：棋盘里的岩石是可落子的岩石地表（不再是障碍），视图照样给出、地形为可落子。
+        Coord[] rocks = [.. plate.Cells().Where(c => map.SurfaceAt(c) == Surface.Rock)];
         Assert.NotEmpty(water);   // 样本口径
         Assert.NotEmpty(rocks);
         int[] others = [.. Enumerable.Range(0, 4).Where(z => z != zone)];
@@ -69,7 +70,7 @@ public class 按座位视图Tests
         Assert.Equal((Terrain.Playable, Surface.DeepWater, false), (w.Terrain, w.Surface, w.Bridge));
         Assert.True(w.Ownership is { Kind: OwnershipKind.Neutral }, $"{w.Ownership}");   // terrain-bonus：空的未架桥深水不是覆盖目标，恒为中立
         SeatCellView r = a.CellAt(rocks[0])!;
-        Assert.Equal((Terrain.Obstacle, Surface.Grass), (r.Terrain, r.Surface));
+        Assert.Equal((Terrain.Playable, Surface.Rock), (r.Terrain, r.Surface));
 
         // 其他棋盘（open-map）：整块外接矩形（含它们的岩石与深水）也全部出现。
         // map-expand-25 段 A2：浮空岛有 10–12 块平台，原"5 块里除自己外的 4 块"改为全部其他平台；seat-gap-25：其他座位与中立平台都在内。

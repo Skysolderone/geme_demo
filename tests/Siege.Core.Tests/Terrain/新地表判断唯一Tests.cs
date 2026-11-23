@@ -23,13 +23,16 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/MapFile.cs",       // 映射：地表 ↔ 地图文件字符码
         "Siege.Core/Board/MapValidator.cs",  // 校验：出生区内无新地表（map-definition「地图静态校验规则」第 6 条；MapValidator 内注释沿用旧编号第 9 条）；链接档清单"新地表只在中间带、每块至多 4 格"（link-map-surfaces D4）
         "Siege.Core/Board/Maps/LinkMapGenerator.Surfaces.cs",  // 生成：链接档中间带新地表投放的主题 ↔ 地表配对表与各自的候选条件（link-map-surfaces D2），只写地图数据、不判规则
+        "Siege.Core/Board/Maps/LinkMapGenerator.cs",  // 生成：组装成品时把岩石写成岩石地表（terrain-bonus 段 B 实现决策 J1），只写地图数据、不判规则
         "Siege.Core/Scoring/TerrainEffects.cs",       // 规则：terrain-bonus 地形军势修正表（唯一一份）
         "Siege.Core/Scoring/PowerCalculator.cs",      // 规则：段 1 荒漠——独占计分谓词 ScoresTerritory
         "Siege.Core/Board/Adjacency.cs",              // 规则：段 2 沼泽源、段 3 岩台远格（覆盖关系唯一实现）
         "Siege.Core/Board/GameBoard.MapTables.cs",    // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty（board-link-mode 裁决 P7：派生表抽成 partial 文件，谓词随之搬入）
         "Siege.Presentation/Layers/LayerContents.cs", // 表现：盘面层差集原因查表（沼泽源）
         "Siege.Presentation/Text/Labels.cs",          // 映射：图例里各地表的一句规则说明
+        "Siege.Presentation/Visibility/DefaultBoardView.cs",   // 表现：岩石造型分流 ObstacleArtAt（terrain-bonus 段 B：按岩石地表取平板岩片，只给造型类别、不判规则）
         "Siege.Sim/Program.cs",              // 映射：终端文本图字符；map 子命令每块出生棋盘的新地表格数（只计数输出，link-map-surfaces D3）
+        "Siege.Sim/Play/BoardRenderer.cs",   // 映射：终端对局盘面空岩石格的字码 k（terrain-bonus 段 B，只读地表画字，不判规则）
         "godot/scripts/BoardView.cs",        // 映射：地砖色
     ];
 

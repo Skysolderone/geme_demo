@@ -48,6 +48,16 @@ public sealed record TerrainPalette
     /// <summary>浅滩。</summary>
     public required Color Shallows { get; init; }
 
+    /// <summary>
+    /// 岩石（terrain-bonus 段 B 裁决 5：可落子的岩石地表，地砖底色 + 平板岩片 glb 的石面槽都取它）。四阵营独占着色叠上去前后的渲染距离须 ≥ 45；
+    /// 追加裁决 Q2：渲染灰度与相邻地表（土路、草地三片、沼泽，及 h=2 提亮后的同档地表）差 ≥ 17——取暗色玄武岩，排在灰度最暗一档（沼泽之下）。
+    /// 实测见色块图 art/terrain-bonus-b/palette-rock.png：灰度 68.3（h=2 119.7），色差最小 109.0（h=2 73.2）。
+    /// </summary>
+    public required Color Rock { get; init; }
+
+    /// <summary>岩石平板的深色石缝 / 碎石（比 <see cref="Rock"/> 深一档）。</summary>
+    public required Color RockShade { get; init; }
+
     /// <summary>深水水体。</summary>
     public required Color DeepWater { get; init; }
 
@@ -113,6 +123,8 @@ public sealed record TerrainPalette
         Marsh = Color.Color8(39, 82, 68),
         Crag = Color.Color8(92, 100, 94),
         Shallows = Color.Color8(107, 212, 216),
+        Rock = Color.Color8(50, 44, 40),
+        RockShade = Color.Color8(30, 26, 24),
         DeepWater = Color.Color8(32, 133, 199),
         Obstacle = Color.Color8(114, 115, 139),
         SlopeSide = Color.Color8(176, 112, 62),

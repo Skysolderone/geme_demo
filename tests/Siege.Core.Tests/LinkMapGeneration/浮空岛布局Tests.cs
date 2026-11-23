@@ -37,7 +37,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// 岛面（map-coastline 裁决 1 / 7，测试内独立实现）：从画布四边的障碍格出发沿几何四邻在障碍格里泛洪，泛到的是虚空（岛外、切角、海湾、贴岸的零星岩石）；其余格是岛上的格。
+    /// 岛面（map-coastline 裁决 1 / 7，测试内独立实现）：从画布四边的障碍格出发沿几何四邻在障碍格里泛洪，泛到的是虚空（岛外、切角、海湾；terrain-bonus 段 B 起贴岸的零星岩石是地表，不再泛到）；其余格是岛上的格。
     /// 按地图实例记忆，避免每条用例重算。
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MapData, HashSet<Coord>> IslandMemo = new();
@@ -259,14 +259,15 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     public void 全图可落子格沿气边连通(int players)
     {
         // design D4 连通硬约束：全部可落子格沿气边（Adjacency.LibertyNeighbors）连成一片；几何战场恰 1 个。测试内独立 BFS。
+        // terrain-bonus 段 B 追加裁决 P1：按对局口径（可落子含未架桥深水与岩石），原陆地口径作废（被深水与崖壁围住的岩区按陆地口径断开，如 link:5:3）。
         foreach ((ulong seed, MapData map) in Maps(players))
         {
-            Coord[] playable = [.. map.AllCoords().Where(map.IsLand)];
+            Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
             var reached = new HashSet<Coord> { playable[0] };
             var queue = new Queue<Coord>(reached);
             while (queue.Count > 0)
             {
-                foreach (Coord n in Adjacency.LandLibertyNeighbors(map, queue.Dequeue()))
+                foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()))
                 {
                     if (reached.Add(n))
                     {
@@ -330,9 +331,9 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     [MemberData(nameof(Players))]
     public void 岛缘林地与少量岩石(int players)
     {
-        // design D4：低地的林地只在岛缘一圈。map-coastline 裁决 3 / 7：低地障碍只有岩区——3–6 格一团、不在岛缘（贴岸的障碍在数据上就是岸线凹口，表现层也当虚空）；
-        // 生成器仍在岛缘放 2–(n+1) 格零星岩石，但它们贴岸、四邻有掩码外的格，按留白泛洪口径与岸外连通而算虚空（贴岸的障碍与海湾在数据上无法区分，表现层同样不铺岛面），
-        // 所以泛洪岛面上的低地障碍只剩岩区；零星岩石落在掩码内、泛洪岛面外这一点由 岛形Tests「岛面四邻连通且没有内部虚空」断言。
+        // design D4：低地的林地只在岛缘一圈。map-coastline 裁决 3 / 7：低地岩石只有两种——岩区 3–6 格一团、不在岛缘；岛缘 2–(n+1) 格零星岩石（贴岸）。
+        // terrain-bonus 段 B（裁决 1，实现决策 J1）：两种都写成可落子的岩石地表（不再是障碍；原先贴岸的零星岩石按留白泛洪口径算虚空，现在在岛面上）：
+        // 低地岩石格按几何四邻分团，不贴岸的团是岩区（3–6 格），贴岸的团全部在岛缘，零星岩石合计不超过 n+1 格。
         int forestTotal = 0;
         int clustersTotal = 0;
         foreach ((ulong seed, MapData map) in Maps(players))
@@ -343,9 +344,13 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             Assert.All(forest, c => Assert.True(OnIslandEdge(c, map), $"{at}：林地 {c.ToNotation()} 不在岛缘"));
             forestTotal += forest.Length;
 
-            List<List<Coord>> clusters = Clumps([.. lowland.Where(map.Obstacles.Contains)]);
+            Assert.DoesNotContain(lowland, map.Obstacles.Contains);   // 岛面上没有障碍：障碍只剩虚空
+            List<List<Coord>> rockClumps = Clumps([.. lowland.Where(c => map.SurfaceAt(c) == Surface.Rock)]);
+            List<List<Coord>> clusters = [.. rockClumps.Where(k => !k.Any(c => OnIslandEdge(c, map)))];
+            List<Coord> edgeRocks = [.. rockClumps.Where(k => k.Any(c => OnIslandEdge(c, map))).SelectMany(k => k)];
             Assert.All(clusters, k => Assert.InRange(k.Count, LinkMapGenerator.RockClusterMin, LinkMapGenerator.RockClusterMax));
-            Assert.All(clusters, k => Assert.DoesNotContain(k, c => OnIslandEdge(c, map)));
+            Assert.All(edgeRocks, c => Assert.True(OnIslandEdge(c, map), $"{at}：贴岸的岩石团里有不在岛缘的格 {c.ToNotation()}"));
+            Assert.InRange(edgeRocks.Count, 0, players + 1);
             clustersTotal += clusters.Count;
         }
 
