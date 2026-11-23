@@ -34,10 +34,10 @@ public class 信物遗址刷新Tests
         GameBoard small = GameBoard.Load(MapCatalog.Resolve("link:1:4"));
         Assert.Equal(MapTier.Small, small.Map.Tier);
         Assert.Equal(
-            "Z10:Watchtower;AM5:Command|P16:WarDrum;AQ21:Banner|AS28:Watchtower;AH17:Command",
+            "AW24:Watchtower;U18:Command|AE36:WarDrum;P20:Banner|AB31:Watchtower;AC44:Command",   // terrain-bonus 段 B 重钉（J2：岩石成了空陆地、进入小图刷新候选，同一子流抽到别的格）：旧值 Z10:Watchtower;AM5:Command|P16:WarDrum;AQ21:Banner|AS28:Watchtower;AH17:Command
             string.Join("|", new[] { 3, 5, 7 }.Select(r => Text(RelicSpawner.Forecast(small, Birth(small), new GameSeed(7), r, 4, 0)!))));
         Assert.Equal(
-            "M18#1;J46#3",
+            "Q18#1;P39#3",   // terrain-bonus 段 B 重钉（同上，掉落候选同口径）：旧值 M18#1;J46#3
             string.Join(";", RelicSpawner.Drop(small, Birth(small), new GameSeed(7), TestMaps.P1, [Carried(3, RelicKind.Command, TestMaps.P1), Carried(1, RelicKind.WarDrum, TestMaps.P1)]).Select(r => $"{r.Cell.ToNotation()}#{r.Token.Id}")));
     }
 

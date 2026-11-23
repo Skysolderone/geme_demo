@@ -61,13 +61,14 @@ public class 岛形Tests(ITestOutputHelper output)
     public void 非可落子格占岛面25到35(int players)
     {
         // 裁决 2：非可落子格（障碍 + 未架桥深水，含平台自带的）占岛面 30% ± 5；岛面按留白泛洪独立求。
+        // terrain-bonus 段 B（实现决策 J1）：岩石改为可落子的陆地，但生成器内部仍按"非可落子团"计它（PlaceClusters 的目标占比口径不改），所以分子 = 非陆地格 + 岩石格。
         // 变异：生成器 TargetNonPlayableMin / Max 改 20 / 22 → 本条 ×3 红（占比降到约 20–23%）。
         var permille = new List<int>();
         foreach ((ulong seed, LinkMapGenerator.IslandGeneration gen) in Generations(players))
         {
             MapData map = gen.Map;
             HashSet<Coord> face = 浮空岛布局Tests.IslandOf(map);
-            int nonPlayable = face.Count(c => !map.IsLand(c));
+            int nonPlayable = face.Count(c => !map.IsLand(c) || map.SurfaceAt(c) == Surface.Rock);
             Assert.True(nonPlayable * 100 >= 25 * face.Count && nonPlayable * 100 <= 35 * face.Count,
                 $"link:{seed}:{players}：非可落子 {nonPlayable} / 岛面 {face.Count}");
             Assert.All(map.AllCoords().Where(map.IsLand), c => Assert.Contains(c, face));   // 可落子格都在岛面上（分子分母同一片）
@@ -82,8 +83,9 @@ public class 岛形Tests(ITestOutputHelper output)
     [MemberData(nameof(Players))]
     public void 岛面四邻连通且没有内部虚空(int players)
     {
-        // 裁决 1：只啃岛缘、不挖内部虚空；掩码 4 邻连通。掩码外（岛外、切角、海湾）全是障碍，且全部与留白连通（留白泛洪求出的岛面 ⊆ 掩码）；
-        // 掩码内被留白泛洪划成虚空的只能是贴岸的障碍格（四邻有掩码外的格）。
+        // 裁决 1：只啃岛缘、不挖内部虚空；掩码 4 邻连通。掩码外（岛外、切角、海湾）全是障碍，且全部与留白连通（留白泛洪求出的岛面 ⊆ 掩码）。
+        // terrain-bonus 段 B（裁决 1 / 2，实现决策 J1）：障碍只剩虚空——掩码内一格障碍都没有（原先贴岸的零星岩石是掩码内的障碍、被留白泛洪划成虚空；现在岩石是地表），
+        // 所以留白泛洪的岛面恰等于掩码。
         // 变异：DraftCoast 返回前在掩码中间一行挖 2 格洞 → 本条 ×3 红（同批 保护区 / 切角海湾 / 占比 一起红，共 10）。掩码不连通这一半没有单独变异：掩码断开即可落子格断开，生成器自检先抛异常。
         (int W, int H) size = LinkMapGenerator.IslandSize(players);
         foreach ((ulong seed, LinkMapGenerator.IslandGeneration gen) in Generations(players))
@@ -95,11 +97,8 @@ public class 岛形Tests(ITestOutputHelper output)
             Assert.All(mask, c => Assert.True(InRectangle(c, size), $"{at}：掩码格 {c.ToNotation()} 越出外接矩形"));
             Assert.All(map.AllCoords().Where(c => !mask.Contains(c)), c => Assert.True(map.Obstacles.Contains(c), $"{at}：掩码外 {c.ToNotation()} 不是障碍"));
             Assert.True(face.IsSubsetOf(mask), $"{at}：留白泛洪的岛面越出掩码（掩码外有不与留白连通的格，即内部虚空）");
-            Assert.All(mask.Where(c => !face.Contains(c)), c =>
-            {
-                Assert.True(map.Obstacles.Contains(c), $"{at}：{c.ToNotation()}");
-                Assert.Contains(Adjacency.Neighbors(map.Width, map.Height, c), n => !mask.Contains(n));
-            });
+            Assert.All(mask, c => Assert.False(map.Obstacles.Contains(c), $"{at}：掩码内 {c.ToNotation()} 是障碍（障碍只许是虚空）"));
+            Assert.True(face.SetEquals(mask), $"{at}：留白泛洪的岛面（{face.Count}）与掩码（{mask.Count}）不等");
 
             // 掩码 4 邻连通（测试内独立泛洪）。
             var reached = new HashSet<Coord> { gen.IslandCells[0] };
@@ -229,6 +228,62 @@ public class 岛形Tests(ITestOutputHelper output)
 
         output.WriteLine($"{players} 人 种子 1–20：中立平台外 3 格内（不含座位外 2 格）的湖泊 / 岩区格 共 {neutralRingCells}");
         Assert.True(neutralRingCells > 0, $"样本口径：{players} 人 20 张图中立平台外 3 格内一格湖泊 / 岩区都没有");
+    }
+
+    public static IEnumerable<object[]> Tiers() => [[2, MapTier.Small], [3, MapTier.Small], [4, MapTier.Small], [4, MapTier.Large]];
+
+    [Theory]
+    [MemberData(nameof(Tiers))]
+    public void 岩石是可落子地表且只在合规位置(int players, MapTier tier)
+    {
+        // 规格 Requirement 岛形「内陆要素」/ terrain「格属性」（terrain-bonus 段 B 裁决 1，实现决策 J1）：生成器的三种岩石（平台散布岩石与平台岩区、低地岩区、岛缘零星岩石）
+        // 全部写成可落子的岩石地表（是陆地、不是障碍），格集合恰等于生成器的岩石来源；高度沿用该格原高度（低地 0、平台 2）。位置：
+        // 低地岩石不在任何平台内、不在桥 / 深水 / 坡道朝外格上，岩区（不贴岸）不进座位外 2 格；平台岩石只在中间带（不在外圈、核心区、坡道）。全部岩石不在出生区与坡道上。
+        // 偏离 J1 的前提（"岩石只在低地"）：平台中间带本来就有岩石（ScatterRocks / PlaceCluster），段 B 照样转成地表，高度 2——见任务回传待决项。
+        // 小图种子 1–20、大图（4 人）种子 1–5。
+        // 变异验证（段 B 阶段 1 实跑，过滤本条 + 岛面四邻连通 + 岛缘林地，基线 3 红全为 link:5:3 待决项）：M1a 平台岩石又写进障碍 → 红 8（本条 ×4、岛面四邻连通 ×3、岛缘林地 ×1）；
+        // M1b 岛缘零星岩石又写进障碍 → 红 8（同上分布）。还原后逐字节比对并刷新时间戳。
+        int plateRocks = 0, clusterRocks = 0, edgeRocks = 0;
+        for (ulong seed = 1; seed <= (tier == MapTier.Small ? 20UL : 5UL); seed++)
+        {
+            string at = LinkMapId.Format(seed, players, tier);
+            LinkMapGenerator.IslandGeneration gen = LinkMapGenerator.GenerateDetailed(seed, players, tier);
+            MapData map = gen.Map;
+            HashSet<Coord> mask = [.. gen.IslandCells];
+            HashSet<Coord> rocks = [.. map.AllCoords().Where(c => map.SurfaceAt(c) == Surface.Rock)];
+            HashSet<Coord> fromPlates = [.. gen.Boards.SelectMany(b => b.Rocks)];
+            Coord[] edge = [.. rocks.Where(c => !fromPlates.Contains(c) && !gen.RockClusters.Contains(c))];
+
+            Assert.All(rocks, c => Assert.True(map.IsPlayable(c) && map.IsLand(c) && !map.Obstacles.Contains(c), $"{at}：岩石 {c.ToNotation()} 不是可落子陆地"));
+            Assert.True(fromPlates.IsSubsetOf(rocks) && gen.RockClusters.IsSubsetOf(rocks), $"{at}：生成器的平台岩石 / 岩区没有全部写成岩石地表");
+            Assert.All(edge, c => Assert.True(mask.Contains(c) && Adjacency.Neighbors(map.Width, map.Height, c).Any(n => !mask.Contains(n)), $"{at}：岩石 {c.ToNotation()} 不属于任何来源（不是平台岩石、岩区，也不贴岸）"));
+
+            HashSet<Coord> ramps = [.. gen.Ramps];
+            HashSet<Coord> outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(ramps.Contains).Select(c => Outward(p, c)!.Value))];
+            HashSet<Coord> seatRing = [.. map.BirthBoards().SelectMany(p => Enumerable.Range(p.Origin.Y - 2, p.Height + 4).SelectMany(y => Enumerable.Range(p.Origin.X - 2, p.Width + 4).Select(x => new Coord(x, y))))];
+            foreach (Coord c in rocks)
+            {
+                Assert.False(map.BirthZoneOf(c) is not null || ramps.Contains(c) || outlets.Contains(c) || map.HasBridge(c), $"{at}：岩石 {c.ToNotation()} 在出生区 / 坡道 / 坡道朝外格 / 桥上");
+                BoardPlate[] onPlate = [.. map.Boards.Where(q => q.Contains(c))];
+                if (onPlate.Length > 0)
+                {
+                    BoardPlate p = onPlate[0];
+                    Assert.True(fromPlates.Contains(c) && p.InMiddleBand(c) && map.HeightAt(c) == 2, $"{at}：平台岩石 {c.ToNotation()} 不在中间带或高度不是 2");
+                }
+                else
+                {
+                    Assert.True(!fromPlates.Contains(c) && map.HeightAt(c) == 0, $"{at}：低地岩石 {c.ToNotation()} 高度不是 0");
+                }
+            }
+
+            Assert.All(gen.RockClusters, c => Assert.False(seatRing.Contains(c), $"{at}：岩区 {c.ToNotation()} 在座位外 2 格内"));
+            plateRocks += fromPlates.Count;
+            clusterRocks += gen.RockClusters.Count;
+            edgeRocks += edge.Length;
+        }
+
+        output.WriteLine($"{players} 人 {tier}：平台岩石 {plateRocks}、岩区 {clusterRocks}、岛缘零星岩石 {edgeRocks}");
+        Assert.True(plateRocks > 0 && clusterRocks > 0 && edgeRocks > 0, "样本口径：三种岩石都要出现");
     }
 
     [Theory]

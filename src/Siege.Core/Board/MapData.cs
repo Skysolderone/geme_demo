@@ -34,7 +34,7 @@ public sealed record MapData
     /// </summary>
     public MapTier Tier { get; init; } = MapTier.Small;
 
-    /// <summary>障碍格：岩石等不可通行地块。</summary>
+    /// <summary>障碍格：虚空（不可落子、不可通行）。terrain-bonus 段 B 起岩石是可落子的地表（<see cref="Surface"/> 的岩石），不再写进这里；地图文件的地表行在障碍格写虚空码 V（<see cref="MapFile.VoidCode"/>）。</summary>
     public required ImmutableHashSet<Coord> Obstacles { get; init; }
 
     /// <summary>

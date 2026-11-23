@@ -93,10 +93,14 @@ public static class MapValidator
     /// 吸取上一轮「按 1–20 钉的下限在更大种子上撞线」的教训，另用种子 0–1000（只生成地图、不跑局）复核：2 人 933–1019、3 人 1301–1428、4 人 1331–1431，全部在带内，离边最近 31 格（3 人下限）。
     /// map-coastline 裁决 F1（湖泊 / 岩区不进座位外 2 格）后复测，仍在带内、区间不重钉：种子 1–20 为 954–1001 / 1337–1398 / 1366–1420，种子 0–1000 为 933–1018 / 1301–1429 / 1330–1430（无生成失败），离边最近仍 31 格（3 人下限）。
     /// 平台清单规则：平台（座位与中立平台）边长 6–8、座位恰 8×8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个、任意两座位间距 ≥ 25。
+    /// terrain-bonus 段 B（裁决 1 / 3，实现决策 J4，2026-11-23）：生成器把岩石写成可落子的岩石地表（不再是障碍），陆地格（<see cref="MapData.LandCount"/>）随之多出全部岩石格，上面两组区间作废、按小样本实测重钉（只生成地图、不跑局）：
+    /// 种子 1–10 实测陆地 2 人 1124–1216、3 人 1562–1669（link:5:3 未生成，见任务 11-23-terrain-bonus-b 待决项）、4 人 1579–1686（其中岩石 158–295 格），下限 ×0.95 向下取整到十、上限 ×1.05 向上取整到十，得 1060–1280 / 1480–1760 / 1500–1780；
+    /// 另用种子 1–50 复核：2 人 1121–1228、3 人 1562–1681、4 人 1547–1701，全部在带内（离边最近 47 格，4 人下限 1547 对 1500；3 人样本种子 1–10 只有 9 张、1–50 只有 48 张——link:5:3 / link:11:3 未生成）。四行（含下面大图行）按段 B 追加裁决 P3 定稿，不再扩大样本；追加裁决 P1（整图连通改对局口径）不改任何地图，原先生成不了的 link:5:3 / link:11:3 等随之可生成。
     /// </para>
     /// <para>
     /// big-map D2（2026-11-01）：链接行按<b>档位</b>（<see cref="MapData.Tier"/>）分成两组预算与两组清单规则，小图一组一字不改。大图：外接矩形恒 60×60、画布 64×64（large-60，2026-11-07 由 150 缩小）、
-    /// 中立平台 5–8 块（plate-tiers：15×15 / 10×10 / 8×8 三档，边长区间 8–15）、可落子格区间 2300–2680（large-60 种子 1–20 × 2 / 3 / 4 人实测 2437–2552，下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十）；
+    /// 中立平台 5–8 块（plate-tiers：15×15 / 10×10 / 8×8 三档，边长区间 8–15）、可落子（陆地）格区间 2600–3100（terrain-bonus 段 B 重钉：岩石改为可落子地表后，种子 1–5 × 2 / 3 / 4 人实测陆地 2817–2948、其中岩石 349–492 格，
+    /// 下限 ×0.95 向下取整到百、上限 ×1.05 向上取整到十；种子 1–10 复核 2817–2994，在带内；原 large-60 的 2300–2680 按种子 1–20 实测 2437–2552 钉，随岩石入陆地作废）；
     /// 基图不预置出生座位（出生区 0），锁定时物化的落座图恰 n 个出生区——
     /// 预算行的出生区数区间写成 (0, n)，"出生棋盘数 = 出生区数"由两档共用的 <c>BIRTH_BOARD_MISMATCH</c> 守住。清单规则分流（design D2 末段）：
     /// 只对小图生效——出生区 = 出生棋盘 3×3 核心区、出生棋盘与中立平台同样是带主题 / 抬高 / 坡道的地形平台（<see cref="PlateRules.BirthTerrain"/>）、座位 8×8、座位间距 25；
@@ -117,15 +121,15 @@ public static class MapValidator
                 {
                     [MapTier.Small] = new Dictionary<int, Budget>
                     {
-                        [2] = new(900, 1060, (2, 2), (9, 9), (2, 3), Island: (45, 33), Canvas: (49, 37)),
-                        [3] = new(1270, 1470, (3, 3), (9, 9), (3, 4), Island: (45, 45), Canvas: (49, 49)),
-                        [4] = new(1280, 1490, (4, 4), (9, 9), (4, 5), Island: (45, 45), Canvas: (49, 49)),
+                        [2] = new(1060, 1280, (2, 2), (9, 9), (2, 3), Island: (45, 33), Canvas: (49, 37)),
+                        [3] = new(1480, 1760, (3, 3), (9, 9), (3, 4), Island: (45, 45), Canvas: (49, 49)),
+                        [4] = new(1500, 1780, (4, 4), (9, 9), (4, 5), Island: (45, 45), Canvas: (49, 49)),
                     }.ToImmutableDictionary(),
                     [MapTier.Large] = new Dictionary<int, Budget>
                     {
-                        [2] = new(2300, 2680, (0, 2), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
-                        [3] = new(2300, 2680, (0, 3), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
-                        [4] = new(2300, 2680, (0, 4), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
+                        [2] = new(2600, 3100, (0, 2), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
+                        [3] = new(2600, 3100, (0, 3), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
+                        [4] = new(2600, 3100, (0, 4), null, (5, 8), Island: (60, 60), Canvas: (64, 64)),
                     }.ToImmutableDictionary(),
                 }.ToImmutableDictionary(),
                 new Dictionary<MapTier, PlateRules>
@@ -357,7 +361,7 @@ public static class MapValidator
         if (badRamps.Length > 0)
         {
             f.Add(new MapValidationFailure(
-                "PLATE_HEIGHT", $"{Describe(plate)} 的坡道必须是外圈非角格上的草地，且朝外的邻格是高度 0 的可落子低地（不是深水、岩石、岛外或另一块平台）。", [.. badRamps]));
+                "PLATE_HEIGHT", $"{Describe(plate)} 的坡道必须是外圈非角格上的草地，且朝外的邻格是高度 0 的可落子低地（不是深水、障碍（虚空）或另一块平台；terrain-bonus 段 B 起岩石是陆地）。", [.. badRamps]));
         }
 
         List<Barrier> barriers = BarriersOf(map, plate);
@@ -447,7 +451,7 @@ public static class MapValidator
             ImmutableArray<Coord> cut = [.. parts.Where(p => !ReferenceEquals(p, main)).SelectMany(p => p).Order()];
             f.Add(new MapValidationFailure(
                 "BOARD_SPLIT",
-                $"{Describe(plate)} 内的可落子格沿几何四邻不连通：被岩石或深水隔开了 {cut.Length} 格。",
+                $"{Describe(plate)} 内的可落子格沿几何四邻不连通：被障碍或深水隔开了 {cut.Length} 格。",
                 cut));
         }
 
@@ -591,12 +595,14 @@ public static class MapValidator
             }
         }
 
-        ImmutableArray<Coord> split = LibertySplit(map);
+        // terrain-bonus 段 B 追加裁决 P1：整图连通按对局口径（可落子格含未架桥深水，沿 Adjacency.LibertyNeighbors）——被深水与崖壁围住的岩区在对局里踩着深水走得到，不算断开；
+        // 生成器内部的河道 / 低地自检仍走陆地口径（LibertySplit），随机消费与地图逐格不变。
+        ImmutableArray<Coord> split = PlaySplit(map);
         if (!split.IsEmpty)
         {
             f.Add(new MapValidationFailure(
                 "ISLAND_LIBERTY_SPLIT",
-                $"全图可落子格沿气边不连通：有 {split.Length} 格与最大的一片隔着崖壁、栅栏、深水或障碍。",
+                $"全图可落子格沿气边不连通：有 {split.Length} 格与最大的一片隔着崖壁、栅栏或障碍。",
                 split));
         }
 
@@ -702,7 +708,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "RELIC_SITE_GROUND",
-                $"信物遗址 {string.Join(" ", bad.Select(c => c.ToNotation()))} 不合位置规则：每处须是高度 0 的可落子格（低地）、八邻都可落子（不贴岸线、岩石与深水），且不重复。",
+                $"信物遗址 {string.Join(" ", bad.Select(c => c.ToNotation()))} 不合位置规则：每处须是高度 0 的可落子格（低地）、八邻都是陆地（不贴岸线与深水；terrain-bonus 段 B 起岩石是陆地，可以贴），且不重复。",
                 bad));
         }
 
@@ -743,8 +749,52 @@ public static class MapValidator
         || a.Origin.Y + a.Height + gap <= b.Origin.Y || b.Origin.Y + b.Height + gap <= a.Origin.Y;
 
     /// <summary>
-    /// 全部可落子格沿气边（<see cref="Adjacency.LibertyNeighbors"/>）分片后，最大一片之外的格（并列取先出现的一片为最大，按坐标升序）；连成一片时为空。
-    /// <c>ISLAND_LIBERTY_SPLIT</c> 的唯一判定，生成器的低地自检也调它。
+    /// 对局口径的整图连通（<c>ISLAND_LIBERTY_SPLIT</c> 的唯一判定，terrain-bonus 段 B 追加裁决 P1）：全部可落子格（<see cref="MapData.IsPlayable"/>，含未架桥深水与岩石）
+    /// 沿气边（<see cref="Adjacency.LibertyNeighbors"/>，与对局同一份）分片后，最大一片之外的格（并列取先出现的一片为最大，按坐标升序）；连成一片时为空。不给岩石开特判。
+    /// </summary>
+    internal static ImmutableArray<Coord> PlaySplit(MapData map)
+    {
+        var visited = new HashSet<Coord>();
+        List<ImmutableArray<Coord>> parts = [];
+        foreach (Coord start in map.AllCoords())
+        {
+            if (visited.Contains(start) || !map.IsPlayable(start))
+            {
+                continue;
+            }
+
+            var component = new List<Coord>();
+            var queue = new Queue<Coord>();
+            queue.Enqueue(start);
+            visited.Add(start);
+            while (queue.Count > 0)
+            {
+                Coord current = queue.Dequeue();
+                component.Add(current);
+                foreach (Coord n in Adjacency.LibertyNeighbors(map, current))
+                {
+                    if (visited.Add(n))
+                    {
+                        queue.Enqueue(n);
+                    }
+                }
+            }
+
+            parts.Add([.. component.Order()]);
+        }
+
+        if (parts.Count <= 1)
+        {
+            return [];
+        }
+
+        ImmutableArray<Coord> main = parts.MaxBy(p => p.Length);
+        return [.. parts.Where(p => p != main).SelectMany(p => p).Order()];
+    }
+
+    /// <summary>
+    /// 陆地口径的整图连通（terrain-bonus 实现决策 I7）：全部陆地格沿陆地气边（<see cref="Adjacency.LandLibertyNeighbors"/>）分片后，最大一片之外的格；连成一片时为空。
+    /// 段 B 追加裁决 P1 起只供生成器内部的河道 / 低地自检（试图里岩石仍是障碍），校验器的 <c>ISLAND_LIBERTY_SPLIT</c> 改走 <see cref="PlaySplit"/>。
     /// </summary>
     internal static ImmutableArray<Coord> LibertySplit(MapData map)
     {
