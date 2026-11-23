@@ -95,7 +95,7 @@ public class 终端新棋子与新信物Tests
         new BoardRenderer(output).Board(match.Publish(), Me);
         string text = output.ToString();
 
-        Assert.Contains("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=岩石  ~=深水" + Environment.NewLine, text, StringComparison.Ordinal);
+        Assert.Contains("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=虚空  k=岩石  ~=深水" + Environment.NewLine, text, StringComparison.Ordinal);   // terrain-bonus 段 B：# 只剩虚空，岩石另记 k
         Assert.Contains("        信物（空格上即地图信物，落子拾取）：d战鼓 o号令 w望台 v百变 g军旗  !x=预告下一批落位" + Environment.NewLine, text, StringComparison.Ordinal);
         Assert.DoesNotContain("旗手", text, StringComparison.Ordinal);
         Assert.DoesNotContain("驿站", text, StringComparison.Ordinal);

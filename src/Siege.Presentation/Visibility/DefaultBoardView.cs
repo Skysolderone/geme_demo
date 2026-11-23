@@ -29,7 +29,7 @@ public enum RelicMarker
 /// 默认棋盘的一格：地形（可落子 / 障碍、高度、地表、桥）、出生区、正式盘面上的棋子与信物标记。
 /// 结构上<b>没有</b>分区 / 预算档位字段——分区只在信物层可见；也没有暂放字段——暂放由本人的预演呈现单独叠加。
 /// </summary>
-/// <param name="Terrain">可落子 / 障碍（未架桥深水按障碍报，见 <see cref="MapData.TerrainAt"/>）。</param>
+/// <param name="Terrain">可落子 / 障碍（障碍只有虚空；terrain-bonus 起岩石与未架桥深水都按可落子报，见 <see cref="MapData.TerrainAt"/>）。</param>
 /// <param name="Height">高度 0–2（terrain-model）：Godot 按它堆叠地砖与抬升落点，不自己推。</param>
 /// <param name="Surface">地表：草地 / 土路 / 林地 / 深水。</param>
 /// <param name="HasBridge">
@@ -68,6 +68,11 @@ public sealed record BoardCellView(
     public bool RelicInsured { get; init; }
 
     /// <summary>
+    /// 该格的棋子是否站在<b>未架桥深水</b>上（terrain-bonus 段 B 裁决 6）：图形版在这枚棋子脚下挂一圈水纹环；桥格上、空格上都不挂。只读本格的地表、桥与占用，不判规则。
+    /// </summary>
+    public bool WaterRing => Occupant is not null && Surface == Surface.DeepWater && !HasBridge;
+
+    /// <summary>
     /// 该格为什么落不下（对当前行动玩家）。超出合法落子范围不在此列——范围来自合法落子范围契约，默认棋盘不推断它。
     /// 先后：地形 → 活棋禁入 → 单子禁手（禁入格不在合法落子范围里，不会同时是单子禁手）。
     /// </summary>
@@ -87,7 +92,7 @@ public enum PlacementBlock
     /// <summary>无阻断（空格、棋子格，或只是范围外）。</summary>
     None,
 
-    /// <summary>地形不可落子（岩石 / 未架桥深水）。</summary>
+    /// <summary>地形不可落子（障碍格，即虚空；terrain-bonus 起岩石与未架桥深水都可落子）。</summary>
     Terrain,
 
     /// <summary>活棋禁入：他人已确定活形棋串的眼空间。</summary>
@@ -124,14 +129,14 @@ public sealed record BoardPlaceholderView(int Zone, Coord Origin, int Width, int
 }
 
 /// <summary>
-/// 不可落子格的造型类别（visual-style-baseline「棋盘台面的可视表现」，link-map-terrain 6.1）：由棋盘清单决定，渲染层不自行推断。
+/// 岩石 / 场景格的造型类别（visual-style-baseline「棋盘台面的可视表现」；terrain-bonus 段 B 起由该格的地表决定，原 link-map-terrain 6.1 按棋盘清单）：由视图模型给出，渲染层不自行推断。
 /// </summary>
 public enum ObstacleArt
 {
     /// <summary>场景格（棋盘之外）：只作装饰，铺满整格、不留格缝，装饰件按坐标散列挑选。</summary>
     Scenery,
 
-    /// <summary>棋盘内的岩石（链接档中间带，D4）：本战场的一格地形，按棋盘格画（地砖 + 岩石部件）。</summary>
+    /// <summary>岩石地表（terrain-bonus 段 B：可落子，平台上与低地都有）：按地表格画（岩石色地砖 + 平板岩片，不挡格心）。</summary>
     BoardRock,
 }
 
@@ -232,11 +237,11 @@ public sealed record DefaultBoardView(
     }
 
     /// <summary>
-    /// 某个不可落子格（未架桥深水除外，深水另有画法）该画成什么（link-map-terrain 6.1）：落在本视图棋盘清单的某块外接矩形内 → <see cref="ObstacleArt.BoardRock"/>，
-    /// 否则 → <see cref="ObstacleArt.Scenery"/>。清单为空（手写夹具）时一律是场景装饰。只读清单的外接矩形，不判规则。
+    /// 某格该不该画成岩石（terrain-bonus 段 B 裁决 1 / 4，取代 link-map-terrain 6.1 的"棋盘清单内的不可落子格"口径）：本视图里可落子的岩石地表格 → <see cref="ObstacleArt.BoardRock"/>
+    /// （岩石色地砖 + 平板岩片，平台上与低地一样）；其余格——包括全部障碍格（虚空）——→ <see cref="ObstacleArt.Scenery"/>。只读视图里该格的地形与地表，不判规则。
     /// </summary>
     public ObstacleArt ObstacleArtAt(Coord coord) =>
-        !Boards.IsDefault && Boards.Any(b => b.Contains(coord)) ? ObstacleArt.BoardRock : ObstacleArt.Scenery;
+        CellOrNull(coord) is { Terrain: Terrain.Playable, Surface: Surface.Rock } ? ObstacleArt.BoardRock : ObstacleArt.Scenery;
 
     /// <summary>某格。不在本视图里（插旗阶段未展开的占位格、场景格）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>

@@ -75,6 +75,12 @@ public static class Visuals
     /// <summary>浅滩地表：亮青水色，与草地拉开灰度；与深水靠高度、水纹和鹅卵石区分。</summary>
     public static Color TileShallows => TerrainPalette.Current.Shallows;
 
+    /// <summary>岩石地表（terrain-bonus 段 B）：灰绿石面，可落子；形状提示是格角的平板岩片与石缝（不再是挡格心的巨石）。</summary>
+    public static Color TileRock => TerrainPalette.Current.Rock;
+
+    /// <summary>岩石平板的石缝 / 碎石色。</summary>
+    public static Color RockShade => TerrainPalette.Current.RockShade;
+
     /// <summary>深水：低于地砖的亮青绿水面（map-restyle 段A），不可落子。</summary>
     public static Color DeepWater => TerrainPalette.Current.DeepWater;
 

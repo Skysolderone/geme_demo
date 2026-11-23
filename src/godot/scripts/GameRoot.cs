@@ -510,6 +510,13 @@ public sealed partial class GameRoot : Node3D
         Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(path);
         GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
+        if (_shotCell is { } aimed && GetViewport().GetCamera3D() is { } eye)
+        {
+            // terrain-bonus 段 B：对准格格心（含层高）在画面上的像素位置——对照图按它取样，不靠"画面正中"（层高与纵深夹取会让格心偏离正中）。
+            Vector2 at = eye.UnprojectPosition(_board.CenterOf(aimed));
+            GD.Print($"[siege] 截图对准格 {aimed.ToNotation()} 格心在画面 ({at.X:0}, {at.Y:0})");
+        }
+
         DefaultBoardView shot = _session.World.Board();
 
         // 势力栏与独占格（取景自证：HUD 概览栏的"领地 + 棋串"文字、势力层着色的独占格数，都读视图模型）。

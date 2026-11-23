@@ -326,6 +326,9 @@ public static class LowPoly
     /// <summary>浅滩点缀档数。</summary>
     public const int ShallowsVariants = 6;
 
+    /// <summary>岩石平板点缀档数（terrain-bonus 段 B 裁决 4）。</summary>
+    public const int RockSlabVariants = 4;
+
     /// <summary>草丛档数（map-restyle 段C；每档对应一个格角，角序同林地小树）。</summary>
     public const int GrassVariants = 4;
 
@@ -1002,6 +1005,46 @@ public static class LowPoly
         var root = new Node3D { Name = "Crag" };
         root.AddChild(Merged("Rim", rim, Visuals.TileCrag.Lightened(0.08f)));
         root.AddChild(Merged("Crack", crack, Visuals.CragCrack));
+        return root;
+    }
+
+    /// <summary>
+    /// 岩石地表的平板岩片（terrain-bonus 段 B 裁决 4：可落子的岩石，"平板 glb 不挡格心，单位能站上去看得清"）：格心是岩石色地砖本身（领地着色叠在地砖上，色差在
+    /// art/terrain-bonus-b/palette-rock.png 量过），四个格角各一块压扁的多面岩片（三块或四块，按档），两三道贴地石缝穿过格心。岩片全在棋子底座（半径 0.36）之外、
+    /// 顶高 ≤ 0.05；石缝高 0.004。返回节点原点在地砖上表面。卡通 glb 由 tools/blender/chibi_terrain.py 的 build_rock_slab 生成，这里是没有 glb 时的程序退路。
+    /// </summary>
+    public static Node3D RockSlab(int variant)
+    {
+        int v = Wrap(variant, RockSlabVariants);
+        int seed = 1301 + (v * 16);
+        var slab = new List<(ArrayMesh, Transform3D)>();
+        var crack = new List<(ArrayMesh, Transform3D)>();
+        (float X, float Z)[] corners = [(-1f, -1f), (1f, -1f), (1f, 1f), (-1f, 1f)];
+        for (int k = 0; k < corners.Length - (v % 2); k++)
+        {
+            (float cx, float cz) = corners[(k + v) % corners.Length];
+            float reach = 0.31f + (0.02f * LowPolyMesh.Signed(seed, k));
+            slab.Add((LowPolyMesh.FacetRock(0.11f, 7, 0.18f, seed + k, new Vector3(1.2f, 0.32f, 1f)),
+                new Transform3D(Basis.Identity, new Vector3(cx * reach, 0.012f, cz * reach))));
+        }
+
+        float turn = Mathf.DegToRad((v * 37f) % 90f);
+        (Vector2 At, float Len, float Angle)[] cracks = [(new(-0.06f, 0.04f), 0.34f, 20f), (new(0.08f, -0.06f), 0.24f, -55f), (new(0.02f, 0.14f), 0.16f, 80f)];
+        for (int i = 0; i < cracks.Length - (v % 2); i++)
+        {
+            (Vector2 at, float len, float angle) = cracks[i];
+            float a = Mathf.DegToRad(angle) + turn;
+            var dir = new Vector3(Mathf.Cos(a), 0f, -Mathf.Sin(a));
+            var normal = new Vector3(-dir.Z, 0f, dir.X);
+            var c = new Vector3(at.X, 0.004f, at.Y);
+            Vector3 bend = normal * (0.02f * LowPolyMesh.Signed(seed, 30 + i));
+            Vector3[] points = [c - (dir * (len * 0.5f)), c + bend, c + (dir * (len * 0.5f))];
+            crack.Add((LowPolyMesh.Ribbon(points, 0.02f), Transform3D.Identity));
+        }
+
+        var root = new Node3D { Name = "RockSlab" };
+        root.AddChild(Merged("Slab", slab, Visuals.TileRock.Lightened(0.10f)));
+        root.AddChild(Merged("Crack", crack, Visuals.RockShade));
         return root;
     }
 

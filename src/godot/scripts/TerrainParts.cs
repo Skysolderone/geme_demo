@@ -73,6 +73,9 @@ public static class TerrainParts
     public static readonly Kind Marsh = new("marsh", LowPoly.MarshVariants, v => Themed("marsh", LowPoly.Marsh(v), v));
     public static readonly Kind Crag = new("crag", LowPoly.CragVariants, v => Themed("crag", LowPoly.Crag(v), v));
     public static readonly Kind Shallows = new("shallows", LowPoly.ShallowsVariants, v => Themed("shallows", LowPoly.Shallows(v), v));
+
+    /// <summary>岩石地表的平板岩片（terrain-bonus 段 B 裁决 4）：可落子格上的点缀，格心不挡（与 <see cref="Rock"/> 障碍巨石不同——巨石现在只用于场景格）。</summary>
+    public static readonly Kind RockSlab = new("rock_slab", LowPoly.RockSlabVariants, v => Themed("rock_slab", LowPoly.RockSlab(v), v));
     public static readonly Kind FenceX = new("fence_x", 1, _ => Themed("fence", LowPoly.Fence(alongX: true), 0));
     public static readonly Kind FenceZ = new("fence_z", 1, _ => Themed("fence", LowPoly.Fence(alongX: false), 0));
     public static readonly Kind Bridge = new("bridge", 1, _ => Themed("bridge", LowPoly.Bridge(), 0));
@@ -182,7 +185,7 @@ public static class TerrainParts
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
-        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower, Stele,
+        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower, Stele, RockSlab,
     ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
@@ -436,6 +439,8 @@ public static class TerrainParts
         ("pines", "Leaf") => ChibiPine,
         ("pines", "Moss") => ChibiPineLight,
         ("desert", "Shade") => Color.Color8(204, 150, 86),       // 沙纹：比荒漠地砖深一档的砂色
+        ("rock_slab", "Stone") => TerrainPalette.Current.Rock.Lightened(0.10f),   // terrain-bonus 段 B：岩片比岩石地砖亮一档
+        ("rock_slab", "Shade") => TerrainPalette.Current.RockShade,
         ("crag", "Stone") => Color.Color8(188, 170, 150),
         ("crag", "Shade") => Color.Color8(78, 70, 82),
         ("shallows", "Stone") => Color.Color8(206, 198, 186),
@@ -788,6 +793,7 @@ public static class TerrainParts
         "desert" => part == "Cactus" ? ArtTeal : part == "Bone" ? ArtIvory : ArtDarkStone,
         "marsh" => part == "Puddle" ? ArtWater : ArtLightTeal,
         "crag" => part == "Rim" ? ArtStone.Lightened(0.13f) : ArtDarkStone,
+        "rock_slab" => part == "Slab" ? Visuals.TileRock.Lightened(0.10f) : Visuals.RockShade,
         "shallows" => part == "Pebble" ? ArtStone.Lightened(0.24f) : ArtLightTeal.Lightened(0.45f),
         "fence" => ArtWood,
         "bridge" => part == "Deck" ? ArtDeck : part == "Rope" ? ArtIvory : ArtWood,

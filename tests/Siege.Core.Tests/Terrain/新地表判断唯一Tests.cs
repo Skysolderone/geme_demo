@@ -30,7 +30,9 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/GameBoard.MapTables.cs",    // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty（board-link-mode 裁决 P7：派生表抽成 partial 文件，谓词随之搬入）
         "Siege.Presentation/Layers/LayerContents.cs", // 表现：盘面层差集原因查表（沼泽源）
         "Siege.Presentation/Text/Labels.cs",          // 映射：图例里各地表的一句规则说明
+        "Siege.Presentation/Visibility/DefaultBoardView.cs",   // 表现：岩石造型分流 ObstacleArtAt（terrain-bonus 段 B：按岩石地表取平板岩片，只给造型类别、不判规则）
         "Siege.Sim/Program.cs",              // 映射：终端文本图字符；map 子命令每块出生棋盘的新地表格数（只计数输出，link-map-surfaces D3）
+        "Siege.Sim/Play/BoardRenderer.cs",   // 映射：终端对局盘面空岩石格的字码 k（terrain-bonus 段 B，只读地表画字，不判规则）
         "godot/scripts/BoardView.cs",        // 映射：地砖色
     ];
 

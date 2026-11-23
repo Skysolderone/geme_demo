@@ -63,6 +63,23 @@ public class 新地表的规则标示Tests
     }
 
     [Fact]
+    public void 差集可由岩石源解释()
+    {
+        // terrain-bonus 段 B（阶段 2 Godot 自检 link:9:4:l 抛出"P44 是气但未被覆盖"暴露）：岩石上的棋子不产生覆盖（裁决 7，同沼泽源分支），
+        // P0 单子在岩石 G7、四邻空草地 → 四个邻格都是它的气却无人覆盖，原因都是"岩石"。修改前 ReadingDiff 在这里抛出。
+        // 变异验证（段 B 阶段 2 实跑）：NoCoverageSides 去掉岩石一支 → 本条红 1（抛出）。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("G7", Surface.Rock)])).Pieces(P0, PieceType.Basic, "G7");
+
+        var groups = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);
+        BoardReadingDiff diff = groups.Diff;
+
+        Assert.Empty(diff.CoveredNotLiberty);
+        Assert.Equal(["G6", "F7", "H7", "G8"], diff.LibertyNotCovered.Select(d => d.Coord).Notations());
+        Assert.All(diff.LibertyNotCovered, d => Assert.Equal([TerrainReason.Rock], d.Reasons));
+        Assert.Equal("岩石", Siege.Presentation.Text.Labels.TerrainReason(TerrainReason.Rock));
+    }
+
+    [Fact]
     public void 岩台远格的归属()
     {
         // 规格 Scenario「岩台远格的归属」：A 在岩台 G7，J7 为空草地且只被它覆盖 → 归属读法显示 J7 为 A 独占，样式与其他独占格相同（不另设状态）。
