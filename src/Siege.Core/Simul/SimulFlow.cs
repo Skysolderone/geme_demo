@@ -251,6 +251,13 @@ public sealed class SimulFlow
         return SimulRules.Validate(_s0, _s0Life, player, seat.BirthZone!.Value, Round, stock, seat.Staged);
     }
 
+    /// <summary>本人此刻可部署的格（单枚口径，见 <see cref="SimulRules.DeployableCells"/>）。</summary>
+    internal ImmutableArray<Coord> DeployableCells(PlayerId player)
+    {
+        RequirePrep(player);
+        return SimulRules.DeployableCells(_s0, _s0Life, player, _seats[player].BirthZone!.Value, Round);
+    }
+
     internal void RequirePrep(PlayerId player)
     {
         RequirePhase(SimulPhase.InProgress);
@@ -423,7 +430,10 @@ public sealed class SimulFlow
             .. _players.Select(p => new SimulSeatView(p, _seats[p].Status, _seats[p].Submitted, Hands.PublicView(p).Types)),
         ];
         return new SimulPublicView(Round, Phase, _order, board, LifeShapeReport.Analyze(board), Power, seats,
-            _reports.Count > 0 ? _reports[^1] : null, Result);
+            _reports.Count > 0 ? _reports[^1] : null, Result)
+        {
+            ScoringVersion = Options.ScoringVersion,
+        };
     }
 
     // ---------- 内部 ----------

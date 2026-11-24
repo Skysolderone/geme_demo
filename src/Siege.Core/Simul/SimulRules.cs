@@ -300,6 +300,37 @@ public static class SimulRules
         return new SimulPowerSnapshot(@base, players.MoveToImmutable());
     }
 
+    /// <summary>
+    /// 本人此刻可部署的格（单枚口径，坐标序）：合法范围内（<see cref="PublicRules.LegalRange"/>）、S0 上是空格、不是活形内部格。
+    /// 与 <see cref="Validate"/> 的逐枚检查同一组判定（只差批次级的上限、库存、八邻禁落与改造），供 AI 枚举候选与界面标示；提交前仍以 <see cref="Validate"/> 为准。
+    /// </summary>
+    public static ImmutableArray<Coord> DeployableCells(GameBoard s0, LifeShapeReport life, PlayerId player, int birthZone, int round)
+    {
+        ArgumentNullException.ThrowIfNull(s0);
+        ArgumentNullException.ThrowIfNull(life);
+        IReadOnlySet<Coord> range = PublicRules.LegalRange(s0, birthZone, player, life, round);
+        return [.. range.Where(c => s0[c].Occupant is null && !IsLocked(life, c)).Order()];
+    }
+
+    /// <summary>
+    /// "只有本人落下"的推演盘面（J4 贪心 AI 的评价口径）：在 <paramref name="s0"/> 的副本上放下 <paramref name="player"/> 的全部 <paramref name="placements"/>（不含地形改造），
+    /// 提走非本人的无气整体，再移除本人仍然无气的整体（结算时它们会在别人的顺位上被提走）。不看任何别人的部署，不判冲突；零副作用。
+    /// </summary>
+    public static GameBoard ProjectAlone(GameBoard s0, PlayerId player, IEnumerable<Placement> placements)
+    {
+        ArgumentNullException.ThrowIfNull(s0);
+        ArgumentNullException.ThrowIfNull(placements);
+        GameBoard board = s0.Clone();
+        foreach (Placement p in placements)
+        {
+            board.Place(p.Coord, player, p.Type);
+        }
+
+        board.RemoveStones(CaptureResolver.FindCaptured(board, player).Select(s => s.Coord));
+        board.RemoveStones(board.GroupsOf(player).Where(board.IsCaptured).SelectMany(g => g.Stones));
+        return board;
+    }
+
     /// <summary>占满（J2-9 第 2 条）：盘面上不存在"非活形锁定的空可部署格"。活形内部格不需要补。</summary>
     public static bool IsFull(GameBoard board, LifeShapeReport life)
     {

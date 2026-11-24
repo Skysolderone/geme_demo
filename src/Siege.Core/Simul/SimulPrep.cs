@@ -126,6 +126,9 @@ public sealed class SimulPrep
 
     // ---------- 预检、提交、撤回 ----------
 
+    /// <summary>本人此刻可部署的格（单枚口径：合法范围内、回合开始时为空、不是活形内部格），坐标序。批次级约束仍以 <see cref="Check"/> 为准。</summary>
+    public ImmutableArray<Coord> DeployableCells() => _flow.DeployableCells(Player);
+
     /// <summary>预检：按回合开始盘面与本人此刻的暂放、手牌校验，返回全部不通过原因。零副作用。</summary>
     public SimulBatchCheck Check()
     {

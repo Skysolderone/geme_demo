@@ -259,4 +259,8 @@ public sealed record SimulPublicView(
     SimulPowerSnapshot? Power,
     ImmutableArray<SimulSeatView> Seats,
     SimulRoundReport? LastReport,
-    SimulResult? Result);
+    SimulResult? Result)
+{
+    /// <summary>对局的计分规则版本（AI 推演势力时传它，与结算同一口径）。</summary>
+    public ScoringVersion ScoringVersion { get; init; } = ScoringVersions.Default;
+}
