@@ -48,6 +48,37 @@ public static class SimulTexts
     /// <summary>选座阶段的提示（D6：复用 3D 座位点选）。</summary>
     public const string PickSeat = "点一个带编号的出生座位开始新玩法（选中即锁定）";
 
+    /// <summary>选座阶段中央说明的标题。</summary>
+    public const string PickSeatTitle = "新玩法：选出生座位";
+
+    /// <summary>选座阶段中央说明的补充（其余玩家怎么选、锁定后怎样）。</summary>
+    public const string PickSeatDetail = "其余玩家盲选空座位，互不相撞；锁定后整座浮空岛展开，第 1 回合开始，全员同时准备。";
+
+    /// <summary>地图一屏看不全时的镜头操作提示。</summary>
+    public const string CameraHint = "地图一屏看不全：按住左键拖动，或贴边 / 方向键 / WASD 推屏；滚轮缩放，空格回家。";
+
+    /// <summary>手牌为空时的一行。</summary>
+    public const string HandEmpty = "手牌为空：打开征召补充单位";
+
+    /// <summary>座位提交状态区的标题。</summary>
+    public const string SeatsTitle = "本回合提交状态";
+
+    /// <summary>手牌面板头部一行：类型槽占用与本回合征召所得（0 部署也保留，G2）。</summary>
+    public static string HandHeader(int occupied, int? slots, int gained) =>
+        $"类型槽 {occupied} / {(slots is int s ? s.ToString(System.Globalization.CultureInfo.InvariantCulture) : "—")}　本回合征召 {gained} 个";
+
+    /// <summary>一名玩家的提交状态（座位区第二列）。</summary>
+    public static string SeatState(PlayerStatus status, bool submitted) =>
+        status == PlayerStatus.Active ? Labels.SimulSubmitted(submitted) : "已认输";
+
+    /// <summary>终局面板的胜利名额行（Q07：2 / 3 / 4 人局取 1 / 1 / 2 名）。</summary>
+    public static string WinnerSlots(int slots, IEnumerable<PlayerId> winners) =>
+        $"胜利名额 {slots} 名：{string.Join("、", winners.Select(Labels.Player))}";
+
+    /// <summary>终局面板的一行名次（含终局势力）。</summary>
+    public static string PlacingRow(int place, PlayerId player, bool winner, System.Numerics.BigInteger power) =>
+        $"{PlacingRow(place, player, winner)}　势力 {power}";
+
     /// <summary>手牌里某类的一行：名称与数量。</summary>
     public static string HandRow(string name, int count) => $"{name} ×{count}";
 

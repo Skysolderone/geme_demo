@@ -60,6 +60,11 @@ public sealed partial class GameRoot
             throw new System.FormatException($"--map-select 只能用完整的链接图标识预填种子与人数（{LinkMapId.Prefix}:<地图种子>:<人数>），{preselect} 不是：新局界面只有 {LinkMapId.Prefix}: 一种地图。");
         }
 
+        if (_simulMode)
+        {
+            _select.SelectMode(GameMode.Simul);   // --map-select --simul：预选新玩法（simul-a A3 S3，截图与直达用）
+        }
+
         MatchSession preview = PreviewSession();
         _select.Accept();
         _selectEntryId = _select.CurrentId;

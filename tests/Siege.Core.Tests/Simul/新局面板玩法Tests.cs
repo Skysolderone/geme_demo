@@ -104,6 +104,8 @@ public sealed class 新局面板玩法Tests
             SimulTexts.HandRow("普通", 3), SimulTexts.SeatLine(new Core.Board.PlayerId(0), Core.Scoring.PlayerStatus.Active, true),
             SimulTexts.SeatLine(new Core.Board.PlayerId(1), Core.Scoring.PlayerStatus.Resigned, false), SimulTexts.RoundResolved(2, 1, 5, 0),
             SimulTexts.PlacingRow(1, new Core.Board.PlayerId(0), true), SimulTexts.ResultReason(Core.Simul.SimulEndReason.BoardFull, 9),
+            SimulTexts.HandHeader(2, 5, 1), SimulTexts.SeatState(Core.Scoring.PlayerStatus.Active, false), SimulTexts.SeatState(Core.Scoring.PlayerStatus.Resigned, true),
+            SimulTexts.WinnerSlots(2, [new Core.Board.PlayerId(0), new Core.Board.PlayerId(2)]), SimulTexts.PlacingRow(2, new Core.Board.PlayerId(1), false, 42),
         ];
         Assert.True(texts.Length >= 30, "样本口径：新玩法文案条数过少");
         Assert.All(texts, t =>

@@ -263,13 +263,10 @@ public sealed partial class GameRoot : Node3D
 
             // --mute：结算演出不发任何声音（show-sound-cues）。只有这一个音量开关，没有设置界面。
             _mute = args.Flag("mute");
-            // --simul：新玩法（同时决策，simul-a A3 D8）的无人值守探针，只能与 --auto-demo 同用；有人值守在新局面板里选"新玩法"。
-            _simulMode = args.Flag("simul");
+            // 新玩法（同时决策，simul-a A3）的命令行入口，见 GameRoot.Simul.ReadSimulArgs：--simul / --simul-hold= / --simul-check。
+            ReadSimulArgs(args);
             args.EnsureRecognized();
-            if (_simulMode && (!_autoDemo || mapSelect))
-            {
-                throw new System.FormatException("--simul 须与 --auto-demo 同用，且不与 --map-select 同用（有人值守请在新局面板里选「新玩法」）。");
-            }
+            CheckSimulArgs(mapSelect, mapId);
 
             CheckRevealArgs(mapSelect);
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
@@ -289,9 +286,9 @@ public sealed partial class GameRoot : Node3D
 
             if (_shotShow is not null)
             {
-                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "power-card" or "power-card-roll"))
+                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "power-card" or "power-card-roll" or "conflict"))
                 {
-                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、power-card 或 power-card-roll（open-map：expand / field 随拼接演出与战场横幅删除）。");
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、power-card、power-card-roll 或 conflict（conflict 只在 --simul 下有：新玩法的冲突节拍；open-map：expand / field 随拼接演出与战场横幅删除）。");
                 }
 
                 if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
@@ -422,7 +419,10 @@ public sealed partial class GameRoot : Node3D
             {
                 MapData map = MapCatalog.Resolve(mapId);
                 _session = MatchSession.Create(map, seed, map.MaxPlayers, 1, _difficulty, cellLimit);
-                BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
+                if (!_simulMode)
+                {
+                    BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
+                }
             }
 
             // --zone= 越界：按本图出生座位数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
@@ -872,7 +872,7 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0)
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0 && SimulShotReady())
         {
             _screenshotFrame = -1;
             BeginCapture();
@@ -1103,6 +1103,10 @@ public sealed partial class GameRoot : Node3D
         SyncRecruitCollapse();
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
+        if (_simulMode)
+        {
+            _hud.RefreshSimulPickSeat();   // 新玩法选座阶段（simul-a A3 S3）：中央说明换成新玩法版
+        }
         RefreshCarry();
     }
 
@@ -1743,6 +1747,7 @@ public sealed partial class GameRoot : Node3D
         "capture" => beat is CaptureBeat,
         "power" or "power-card" or "power-card-roll" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
+        "conflict" => beat is ConflictBeat,   // 新玩法（simul-a A3 S3）
         _ => false,
     };
 

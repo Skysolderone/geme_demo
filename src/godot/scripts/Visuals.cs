@@ -162,6 +162,12 @@ public static class Visuals
     /// <summary>紧急。</summary>
     public static readonly Color Urgent = Color.Color8(236, 76, 60);
 
+    /// <summary>新玩法同格冲突的飘字（simul-a D3）：与落子（坐标标注色）、提子（<see cref="Urgent"/>）、信物（<see cref="RelicMark"/>）三种飘字区分开的洋红。</summary>
+    public static readonly Color ConflictMark = Color.Color8(255, 120, 196);
+
+    /// <summary>新玩法本机可部署格的半透明铺色（simul-a D5）：只在本机准备中、未提交时铺。</summary>
+    public static readonly Color DeployableFill = Color.Color8(150, 236, 255, 72);
+
     // ---------- 活形（life-shape 3.4）----------
 
     /// <summary>已活棋串的标记色（翠绿）：只是第二通道，第一通道是悬浮的环形"眼"徽记（<see cref="GroupMarkShape.SolidRingWithEyeBadge"/>）。</summary>

@@ -3107,6 +3107,7 @@ public sealed partial class BoardView : Node3D
             {
                 CalloutKind.Capture => Visuals.Urgent,
                 CalloutKind.Relic => Visuals.RelicMark,
+                CalloutKind.Conflict => Visuals.ConflictMark,   // 新玩法的同格冲突（simul-a D3）
                 _ => Visuals.CoordinateLabel,
             };
             Label3D label = Label(callout.Text, CenterOf(callout.Coord) + offset, style.FontSize, style.OutlineSize);

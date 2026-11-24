@@ -105,9 +105,9 @@ public sealed class SimulSession
     /// <summary>本机此刻的暂放。</summary>
     public ImmutableArray<Placement> Staged => CanEdit ? Prep.Placements : [];
 
-    /// <summary>每名玩家的状态行（对手只显示提交状态）。</summary>
-    public ImmutableArray<string> SeatLines =>
-        [.. _flow.Players.Select(p => SimulTexts.SeatLine(p, _flow.StatusOf(p), _flow.IsSubmitted(p)))];
+    /// <summary>每名玩家本回合的公开状态：参赛状态与是否已提交（对手只公开这两项，Q09）。按玩家编号。</summary>
+    public ImmutableArray<(PlayerId Player, PlayerStatus Status, bool Submitted)> Seats =>
+        [.. _flow.Players.Select(p => (p, _flow.StatusOf(p), _flow.IsSubmitted(p)))];
 
     /// <summary>本机此刻的可部署格（单枚口径，S3 的高亮层读它）；不在准备中为空。</summary>
     public ImmutableArray<Coord> DeployableCells => CanEdit ? Prep.DeployableCells() : [];
@@ -265,6 +265,21 @@ public sealed class SimulSession
         if (CanEdit)
         {
             SimulGreedyAi.Play(_flow.PublicView(), Prep);
+            Rebuild();
+        }
+    }
+
+    /// <summary>
+    /// 截图专用（<c>--simul-hold</c>）：本机由贪心 AI 暂放一批再撤回提交，停在"有暂放、可编辑"的准备状态，供定帧截图。
+    /// 暂放内容与 <see cref="AutoPlayMe"/> 相同，只是不提交。
+    /// </summary>
+    public void AutoStageMe()
+    {
+        if (CanEdit)
+        {
+            SimulGreedyAi.Play(_flow.PublicView(), Prep);
+            Prep.Withdraw();
+            Notice = string.Empty;
             Rebuild();
         }
     }
