@@ -137,6 +137,7 @@ public sealed partial class GameRoot : Node3D
     /// <inheritdoc/>
     public override void _Ready()
     {
+        InstallEngineErrorCounter();
         _bindings.Install();
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
@@ -820,7 +821,7 @@ public sealed partial class GameRoot : Node3D
             {
                 if (!passed || !_autoDemo)   // retire-legacy-maps 3.6：图形版只有链接模式，模式判定删除
                 {
-                    GetTree().Quit(passed && !_flagCheckFailed ? 0 : 1);
+                    QuitChecked(passed && !_flagCheckFailed ? 0 : 1);
                 }
             }
 
@@ -828,7 +829,7 @@ public sealed partial class GameRoot : Node3D
             {
                 // open-map 实施裁决 A7：锁定后全图已可见，拾取只在锁定后对全图跑这一轮；"链接后重跑"随拼接一并取消（段 B 删代码），通过即退出。
                 GD.Print("[pick-check] 锁定后全图一轮通过；open-map 起不再有链接，退出");
-                GetTree().Quit(_flagCheckFailed ? 1 : 0);   // 大图插旗点击路径自检（[flag]）失败也要以失败退出
+                QuitChecked(_flagCheckFailed ? 1 : 0);   // 大图插旗点击路径自检（[flag]）失败也要以失败退出
             }
 
             return;
@@ -1130,7 +1131,7 @@ public sealed partial class GameRoot : Node3D
                 + $"图元 {Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame):0}；垂直同步 {DisplayServer.WindowGetVsyncMode()}");
         }
 
-        GetTree().Quit(0);
+        QuitChecked(0);
     }
 
     /// <summary>
@@ -1150,7 +1151,7 @@ public sealed partial class GameRoot : Node3D
         string collapsed = System.IO.Path.ChangeExtension(path, null) + "-collapsed" + System.IO.Path.GetExtension(path);
         PrintRecruitShot();
         Capture(collapsed);
-        GetTree().Quit(_recruitCollapse.IsCollapsed && _hud.RecruitBarOpen && !_hud.CenterPanelOpen ? 0 : 1);
+        QuitChecked(_recruitCollapse.IsCollapsed && _hud.RecruitBarOpen && !_hud.CenterPanelOpen ? 0 : 1);
     }
 
     /// <summary>
@@ -1688,7 +1689,7 @@ public sealed partial class GameRoot : Node3D
             RefreshViews();
             GD.Print($"[show] 第 {_frame} 帧 横幅播完：遮罩 {(_show.Mask().IsEmpty ? "空" : "非空")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}（终局面板 {(_session.IsOver ? "应显示" : "无终局")}）");
             SetProcess(false);
-            GetTree().Quit(_hud.CenterPanelOpen ? 0 : 1);
+            QuitChecked(_hud.CenterPanelOpen ? 0 : 1);
         }
     }
 
@@ -1909,7 +1910,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         bool framed = HomePlatformFramed();
-        GetTree().Quit(framed && _audit.AllOk && !_flagCheckFailed ? 0 : 1);
+        QuitChecked(framed && _audit.AllOk && !_flagCheckFailed ? 0 : 1);
     }
 
     /// <summary>打一行全流程自检结论（<c>[flow]</c>）；失败的条目另以错误打印，退出码由 <see cref="FinishAutoDemo"/> 汇总。</summary>
