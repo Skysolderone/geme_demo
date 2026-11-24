@@ -58,6 +58,99 @@ public class 棋盘台面的可视表现Tests
         Assert.True(obstacles >= 1, "样本口径：视图里要有障碍格（虚空），才证明它们取场景装饰");
     }
 
+    /// <summary>链接图锁定后（P0 锁 1 号棋盘、四人依次插旗）的默认棋盘，与「岩石地表取岩石造型」同一取法。</summary>
+    private static DefaultBoardView LockedView(int seed)
+    {
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve($"link:{seed}:4"), TestMaps.Seed, All, Options);
+        match.PlantSequentially(All.Select((p, i) => (p, i)));
+        return match.World(P0).Board();
+    }
+
+    [Fact]
+    public void 场景装饰落在岛外浮石上()
+    {
+        // shore-islets 方案 A：浮石只在紧贴岛缘的虚空格上；瀑布口正前方、两侧岸线对夹的格不放；任意两块不八邻相接；七种装饰在种子 1–20 里都出现。
+        // 变异实跑（shore-islets，过滤本类）：去掉瀑布口判据 → 本测试红；去掉八邻间隔 → 本测试红；去掉对夹判据 → 本测试红。
+        var kinds = new HashSet<SceneryKind>();
+        int total = 0;
+        for (int seed = 1; seed <= SeedSpan; seed++)
+        {
+            DefaultBoardView board = LockedView(seed);
+            HashSet<Coord> island = ShoreScenery.IslandCells(board);
+            Dictionary<Coord, BoardCellView> cellAt = board.Cells.ToDictionary(c => c.Coord);
+            ImmutableArray<SceneryIslet> islets = board.SceneryIslets();
+            Assert.NotEmpty(islets);
+            foreach (SceneryIslet islet in islets)
+            {
+                Coord at = islet.Cell;
+                Assert.Equal(Terrain.Obstacle, cellAt[at].Terrain);
+                Assert.DoesNotContain(at, island);
+                // 先判界再建 Coord（Coord 拒绝负下标）。
+                bool IslandAt((int Dx, int Dy) d) => at.X + d.Dx >= 0 && at.Y + d.Dy >= 0 && island.Contains(new Coord(at.X + d.Dx, at.Y + d.Dy));
+                (int Dx, int Dy)[] shore = [.. new (int Dx, int Dy)[] { (1, 0), (-1, 0), (0, 1), (0, -1) }.Where(IslandAt)];
+                Assert.NotEmpty(shore);
+                Assert.All(shore, d => Assert.NotEqual(Surface.DeepWater, cellAt[new Coord(at.X + d.Dx, at.Y + d.Dy)].Surface));
+                Assert.False(shore.Any(d => shore.Contains((-d.Dx, -d.Dy))), $"link:{seed}:4 的浮石 {at.ToNotation()} 夹在两侧岸线之间");
+
+                // 背离岛面的方向与岸线方向相反。
+                Assert.Equal(-Math.Sign(shore.Sum(d => d.Dx)), islet.OutX);
+                Assert.Equal(-Math.Sign(shore.Sum(d => d.Dy)), islet.OutY);
+                Assert.True(islet.Variant >= 0);
+                kinds.Add(islet.Kind);
+            }
+
+            foreach (SceneryIslet a in islets)
+            {
+                Assert.DoesNotContain(islets, b => b.Cell != a.Cell && Math.Abs(b.Cell.X - a.Cell.X) <= 1 && Math.Abs(b.Cell.Y - a.Cell.Y) <= 1);
+            }
+
+            total += islets.Length;
+        }
+
+        Assert.Equal(Enum.GetValues<SceneryKind>().Length, kinds.Count);
+        Assert.True(total >= SeedSpan * 20, $"样本口径：link:1–{SeedSpan}:4 一共只有 {total} 块浮石");
+    }
+
+    [Fact]
+    public void 浮石装饰由地图确定()
+    {
+        // 同一张图两次建视图（两次独立建局）逐项相同；换一张图不同。散列只用整数算术，不依赖进程随机种子。
+        Assert.Equal(LockedView(1).SceneryIslets(), LockedView(1).SceneryIslets());
+        Assert.NotEqual(LockedView(1).SceneryIslets(), LockedView(2).SceneryIslets());
+    }
+
+    [Fact]
+    public void 岛形不完整时不放浮石()
+    {
+        // 插旗阶段：P0 还没插旗，视图里只有没展开的座位占位，岛形不完整。
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve("link:1:4"), TestMaps.Seed, All, Options);
+        DefaultBoardView board = match.World(P0).Board();
+        Assert.Contains(board.Placeholders, p => !p.Expanded);   // 样本口径：确有未展开的占位
+        Assert.Empty(board.SceneryIslets());
+
+        // 判据本身：同一份锁定后的全图格子，只要还挂着一块没展开的占位（或中立平台轮廓）就不放——不靠"插旗阶段恰好看不到虚空格"。
+        // 变异实跑（shore-islets）：去掉"有未展开占位即返回空" → 本测试红（只靠上面的插旗阶段断言时该变异存活）；去掉"有中立平台轮廓即返回空" → 本测试红。
+        DefaultBoardView locked = LockedView(1);
+        Assert.NotEmpty(locked.SceneryIslets());   // 样本口径：不挂占位时确有浮石
+        BoardPlate seat = locked.Boards.First(b => b.Kind == BoardPlateKind.Birth);
+        Assert.Empty((locked with { Placeholders = [new BoardPlaceholderView(1, seat.Origin, seat.Width, seat.Height, Expanded: false, Own: false, Theme: null)] }).SceneryIslets());
+        BoardPlate neutral = locked.Boards.First(b => b.Kind == BoardPlateKind.Public);
+        Assert.Empty((locked with { NeutralPlates = [neutral] }).SceneryIslets());
+    }
+
+    [Fact]
+    public void Godot浮石只经视图模型取用()
+    {
+        // BoardView 只按视图模型的浮石清单放浮石与装饰件，档号取清单里的散列（不走常驻路径的递增计数器 Variant()）。
+        string boardView = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
+        Assert.Contains("board.SceneryIslets()", boardView, StringComparison.Ordinal);
+        Assert.Contains("sink.Parts.Add(Decor(TerrainParts.Islet, islet.Cell), islet.Variant,", boardView, StringComparison.Ordinal);
+        Assert.Contains("sink.Parts.Add(Decor(SceneryPartOf(islet.Kind), islet.Cell), islet.Variant >> 3,", boardView, StringComparison.Ordinal);
+
+        // 岛面判定只有一份：BoardView.IslandCells 转调视图模型。
+        Assert.Contains("IslandCells(DefaultBoardView board) => ShoreScenery.IslandCells(board);", boardView, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void 棋盘清单为空时一律是场景装饰()
     {
