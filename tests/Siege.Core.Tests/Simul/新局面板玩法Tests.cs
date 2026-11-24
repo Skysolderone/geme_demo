@@ -99,7 +99,13 @@ public sealed class 新局面板玩法Tests
             Labels.GameModeName(GameMode.Classic), Labels.GameModeName(GameMode.Simul), Labels.SimulIntro, Labels.SimulTierLocked,
             Labels.SimulRoundTitle(3), Labels.SimulSubmitted(true), Labels.SimulSubmitted(false), Labels.SimulAiThinking,
             .. Enum.GetValues<Core.Simul.SimulEndReason>().Select(Labels.SimulEndReason),
+            // 图形版新玩法界面文案（A3-S2）：常量全部 + 拼句函数各取一例。
+            .. typeof(SimulTexts).GetFields().Where(f => f.IsLiteral).Select(f => (string)f.GetRawConstantValue()!),
+            SimulTexts.HandRow("普通", 3), SimulTexts.SeatLine(new Core.Board.PlayerId(0), Core.Scoring.PlayerStatus.Active, true),
+            SimulTexts.SeatLine(new Core.Board.PlayerId(1), Core.Scoring.PlayerStatus.Resigned, false), SimulTexts.RoundResolved(2, 1, 5, 0),
+            SimulTexts.PlacingRow(1, new Core.Board.PlayerId(0), true), SimulTexts.ResultReason(Core.Simul.SimulEndReason.BoardFull, 9),
         ];
+        Assert.True(texts.Length >= 30, "样本口径：新玩法文案条数过少");
         Assert.All(texts, t =>
         {
             Assert.False(string.IsNullOrWhiteSpace(t));

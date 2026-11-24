@@ -3,6 +3,7 @@ using Siege.Core.Tests.SimulationHarness;
 namespace Siege.Core.Tests.Simul;
 
 /// <summary>openspec/specs/simultaneous-round —— Requirement: 跑局入口（design J5，Sim 部分）。</summary>
+[Collection(ConsoleRedirect.Collection)]   // 经 Program.Execute 重定向 Console：与其他重定向控制台的测试类串行（A3-S2 补，A2 漏了）
 public sealed class 跑局入口Tests
 {
     [Fact]

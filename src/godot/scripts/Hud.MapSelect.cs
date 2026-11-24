@@ -23,6 +23,7 @@ public sealed partial class Hud
     private readonly List<Button> _difficultyButtons = [];
     private readonly List<Button> _playerButtons = [];
     private readonly List<Button> _tierButtons = [];
+    private readonly List<Button> _modeButtons = [];
     private Label _mapIntroText = null!;
     private Control? _selectRoot;
     private PanelContainer? _selectPanel;
@@ -49,6 +50,9 @@ public sealed partial class Hud
     public event Action<int>? MapPlayersPicked;
     /// <summary>点选尺寸（小 / 大，big-map 裁决 11）。</summary>
     public event Action<MapTier>? MapTierPicked;
+
+    /// <summary>选择玩法（simul-a G5）：经典 / 新玩法。</summary>
+    public event Action<GameMode>? MapModePicked;
 
     /// <summary>点选 AI 难度（四档之一）。</summary>
     public event Action<AiDifficulty>? MapDifficultyPicked;
@@ -149,10 +153,20 @@ public sealed partial class Hud
             Button button = _tierButtons[i];
             button.Text = (active ? "● " : "○ ") + Labels.TierName(tier);
             Ui.Selected(button, active);
+            button.Disabled = model.TierLocked && tier != MapTier.Small;   // 新玩法只开小图（K4）
+        }
+
+        for (int i = 0; i < _modeButtons.Count; i++)
+        {
+            GameMode mode = MapSelectModel.ModeOptions[i];
+            bool active = mode == model.Mode;
+            Button button = _modeButtons[i];
+            button.Text = (active ? "● " : "○ ") + Labels.GameModeName(mode);
+            Ui.Selected(button, active);
         }
 
         // 说明随尺寸切换：大图是全图自由插旗（缺省，large-default 裁决 1 / 3），小图（旧模式）是座位盲选；两句都经 Labels 取 Core 常量。
-        _mapIntroText.Text = model.Tier == MapTier.Large ? Labels.LargeMapIntro : Labels.SmallMapIntro;
+        _mapIntroText.Text = model.Mode == GameMode.Simul ? Labels.SimulIntro : model.Tier == MapTier.Large ? Labels.LargeMapIntro : Labels.SmallMapIntro;
 
         for (int i = 0; i < _difficultyButtons.Count; i++)
         {
@@ -180,6 +194,7 @@ public sealed partial class Hud
             _difficultyButtons.Clear();
             _playerButtons.Clear();
             _tierButtons.Clear();
+            _modeButtons.Clear();
         }
 
         _root.Visible = true;
@@ -299,6 +314,19 @@ public sealed partial class Hud
 
         body.AddChild(playersRow);
         body.AddChild(Ui.Text("你和 AI 一共几名玩家；岛的大小与平台块数随人数变。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        // 玩法（simul-a G5）：经典 / 新玩法（同时部署）；选新玩法锁定小图（K4），尺寸按钮随之禁用。
+        body.AddChild(Ui.Separator());
+        body.AddChild(Ui.Heading("玩法"));
+        var modeRow = new HBoxContainer();
+        foreach (GameMode mode in MapSelectModel.ModeOptions)
+        {
+            Button option = Ui.Action(Labels.GameModeName(mode), 160);
+            option.Pressed += () => MapModePicked?.Invoke(mode);
+            _modeButtons.Add(option);
+            modeRow.AddChild(option);
+        }
+
+        body.AddChild(modeRow);
         // 尺寸（big-map 裁决 11 / large-default 裁决 1–2）：大 = 150×150 大陆、全图自由插旗（标识带 :l），小 = 浮空岛旧模式（三段标识）；缺省大，按钮顺序跟随 TierOptions（大在前）。
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("尺寸"));
