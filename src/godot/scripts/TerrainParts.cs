@@ -181,11 +181,18 @@ public static class TerrainParts
     /// <summary>浮岛云团：半径 1、厚 0.55 的扁平多面团（与改前的扁球同尺寸），BoardView 按大小等比缩放。不受光、半透明，材质内置。</summary>
     public static readonly Kind Cloud = new("cloud", 3, v => Single("Cloud", CloudMesh(v), CloudMaterial()), "云心");
 
+    /// <summary>
+    /// 岛外浮石（shore-islets 方案 A）：紧贴岛缘的虚空格上的一小块浮空岩，场景装饰立在它顶面上。自上而下：九边形不规则草皮（直径 ≈ 0.80，不画格线、不是方砖）、
+    /// 土层与岩层两段收口的八边形岩块（与浮岛岩层同一网格与岩色）、一根短垂岩。三档只换大小与垂岩长短。原点在草皮顶面中心。
+    /// </summary>
+    public static readonly Kind Islet = new("islet", 3, IsletNode, "顶面中心（浮石上的装饰件立在这里）");
+
     /// <summary>全部部件，导出顺序即此顺序（新部件追加在末尾，既有部件的导出顺序不变）。</summary>
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
         Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower, Stele, RockSlab,
+        Islet,
     ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
@@ -1105,6 +1112,45 @@ public static class TerrainParts
             _ => new Vector3(1.08f, 0.26f, 0.92f),
         };
         return LowPolyMesh.FacetRock(1f, v switch { 0 => 8, 1 => 9, _ => 7 }, 0.10f, 1001 + v, stretch);
+    }
+
+    /// <summary>浮石节点（<see cref="Islet"/>）：各段都是普通网格子节点（无孙节点、无逐面材质），可整件合批。</summary>
+    private static Node3D IsletNode(int variant)
+    {
+        int v = Wrap(variant, Islet.Variants);
+        float width = 0.76f + (0.04f * v);
+        float spike = 0.42f + (0.12f * ((v + 1) % 3));
+        var root = new Node3D { Name = "Islet" };
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Turf",
+            // 九边形不规则草皮（不是方砖）：半径按散列错开 ±10%。
+            Mesh = LowPolyMesh.Patch(width * 0.5f, 9, 0.05f, 1101 + v, 0.10f),
+            MaterialOverride = VertexMaterial(Visuals.TilePlayableGreen, 1f),
+            Position = new Vector3(0f, -0.05f, 0f),
+        });
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Soil",
+            Mesh = IslandLayerMesh(0),
+            MaterialOverride = VertexMaterial(IslandColor(0), 1f),
+            Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(width * 0.98f, 0.14f, width * 0.98f)), new Vector3(0f, -0.05f, 0f)),
+        });
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Stone",
+            Mesh = IslandLayerMesh(1),
+            MaterialOverride = VertexMaterial(IslandColor(1), 1f),
+            Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(width * 0.84f, 0.22f, width * 0.84f)), new Vector3(0f, -0.19f, 0f)),
+        });
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Spike",
+            Mesh = IslandSpikeMesh(v),
+            MaterialOverride = VertexMaterial(IslandColor(2), 1f),
+            Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(width * 0.30f, spike, width * 0.30f)), new Vector3(0f, -0.41f - spike, 0f)),
+        });
+        return root;
     }
 
     /// <summary>浮岛三档岩色（改前 AddFloatingIsland 的三份材质色）：0 土层、1 岩层、2 深岩。</summary>

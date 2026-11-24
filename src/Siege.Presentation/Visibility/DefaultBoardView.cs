@@ -243,6 +243,12 @@ public sealed record DefaultBoardView(
     public ObstacleArt ObstacleArtAt(Coord coord) =>
         CellOrNull(coord) is { Terrain: Terrain.Playable, Surface: Surface.Rock } ? ObstacleArt.BoardRock : ObstacleArt.Scenery;
 
+    /// <summary>
+    /// 岛外浮石装饰（shore-islets，方案 A）：场景装饰只放在紧贴岛缘的虚空格上、各垫一块浮石，哪格放、放哪件只由坐标散列决定（见 <see cref="ShoreScenery.Islets"/>）。
+    /// 渲染层按这份清单画，不自己挑格。
+    /// </summary>
+    public ImmutableArray<SceneryIslet> SceneryIslets() => ShoreScenery.Islets(this);
+
     /// <summary>某格。不在本视图里（插旗阶段未展开的占位格、场景格）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>
         CellOrNull(coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标不在本视图的格里（超出棋盘范围或未展开）。");

@@ -278,6 +278,8 @@ public sealed partial class BoardView : Node3D
             .ToDictionary(g => g.Key, g => (g.Min(kv => kv.Key.X), g.Min(kv => kv.Key.Y), g.Max(kv => kv.Key.X), g.Max(kv => kv.Key.Y)));
         HashSet<Coord> blocked = [.. board.Cells.Where(c => c.Terrain != Terrain.Playable).Select(c => c.Coord)];
         HashSet<Coord> islandCells = IslandCells(board);
+        // 岛外浮石（shore-islets 方案 A）：哪格放、放哪件只读视图模型的清单，这里不挑格。
+        Dictionary<Coord, SceneryIslet> isletAt = board.SceneryIslets().ToDictionary(i => i.Cell);
 
         // 棋盘台面（board-map D10）：只在棋盘清单非空的地图上生效；清单为空（全部既有地图）时下面每一处都走原路径，画面不变。
         // 哪些格属于哪块棋盘一律读清单，不从格子数据推断。retire-legacy-maps 3.7（L10）：通道（可落子且不属于任何棋盘）只出现在已删除的棋盘档地图上，
@@ -366,11 +368,27 @@ public sealed partial class BoardView : Node3D
         // "建一格"（D9）：常驻路径紧接着对全部格按视图次序各调一遍——节点、计数与画面与改前的逐格循环逐位相同；流式路径存成委托，加载区块时只对该区块的格调用，
         // 节点落进区块自己的 sink（地砖 / 石沿 / 亮条 / 水面合成 MultiMesh，装饰按区块合批）。流式下装饰档号按坐标散列（variant 计数器随加载次序变、不可复现），常驻下仍是递增计数器。
         int Variant(Coord at, int salt) => _streaming ? TileVariant(at, 50 + salt) : variant++;
+
+        // 浮石落点（shore-islets）：格心往背离岛面的方向让 IsletShift（避开岛缘外凸 ≤ 0.16 的第一道岩沿），顶面比 h=0 地砖低 IsletDrop，读成岛外另一块浮空岩。
+        // 档号取视图模型给的散列，不走 Variant()——常驻路径的递增计数器一插调用，其后林地小树、草丛等的档号全都会错位。
+        void EmitIslet(SceneryIslet islet, CellSink sink)
+        {
+            Vector3 top = BoardGeometry.Center(islet.Cell, _width, _height) + (new Vector3(islet.OutX, 0f, -islet.OutY).Normalized() * IsletShift);
+            top.Y -= IsletDrop;
+            sink.Parts.Add(Decor(TerrainParts.Islet, islet.Cell), islet.Variant, top, sink.Decoration);
+            sink.Parts.Add(Decor(SceneryPartOf(islet.Kind), islet.Cell), islet.Variant >> 3, top, sink.Decoration);
+        }
         void EmitCell(BoardCellView cell, CellSink sink)
         {
             // 虚空格（外圈留白、切角与海湾——与画布外圈连通的障碍格，map-coastline 裁决 7）没有地面：不铺面砖、不放装饰、不铺衬底。
             if (!islandCells.Contains(cell.Coord))
             {
+                // 例外是紧贴岛缘、视图模型选中的那些虚空格：垫一块浮石、上面放一件场景装饰（不铺地砖、不进拾取登记）。
+                if (isletAt.TryGetValue(cell.Coord, out SceneryIslet islet))
+                {
+                    EmitIslet(islet, sink);
+                }
+
                 return;
             }
             bool playable = cell.Terrain == Terrain.Playable;
@@ -1327,49 +1345,8 @@ public sealed partial class BoardView : Node3D
         _ => null,
     };
 
-    internal static HashSet<Coord> IslandCells(DefaultBoardView board)
-    {
-        var ground = new HashSet<Coord>(board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater).Select(c => c.Coord));
-        var hollow = new HashSet<Coord>();
-        var frontier = new Queue<Coord>();
-        void Seep(int x, int y)
-        {
-            // 先判界再建 Coord：Coord 的构造会拒绝负下标，画布外不必建格。
-            if (x < 0 || y < 0 || x >= board.Width || y >= board.Height)
-            {
-                return;
-            }
-
-            var at = new Coord(x, y);
-            if (!ground.Contains(at) && hollow.Add(at))
-            {
-                frontier.Enqueue(at);
-            }
-        }
-
-        // 种子 = 画布四边上的非地面格（等价于从画布外那一圈留白往里渗）。
-        for (int y = 0; y < board.Height; y++)
-        {
-            for (int x = 0; x < board.Width; x++)
-            {
-                if (x == 0 || y == 0 || x + 1 == board.Width || y + 1 == board.Height)
-                {
-                    Seep(x, y);
-                }
-            }
-        }
-
-        while (frontier.Count > 0)
-        {
-            Coord c = frontier.Dequeue();
-            Seep(c.X + 1, c.Y);
-            Seep(c.X - 1, c.Y);
-            Seep(c.X, c.Y + 1);
-            Seep(c.X, c.Y - 1);
-        }
-
-        return [.. board.Cells.Select(c => c.Coord).Where(c => !hollow.Contains(c))];
-    }
+    /// <summary>岛面格：判定唯一在视图模型（<see cref="ShoreScenery.IslandCells"/>，shore-islets 自此处挪过去、逐位同口径），3D 场景与小地图共用。</summary>
+    internal static HashSet<Coord> IslandCells(DefaultBoardView board) => ShoreScenery.IslandCells(board);
 
     private static bool IslandAt(HashSet<Coord> cells, int x, int y, int width, int height) =>
         x >= 0 && y >= 0 && x < width && y < height && cells.Contains(new Coord(x, y));
@@ -2589,6 +2566,24 @@ public sealed partial class BoardView : Node3D
         _decoration.AddChild(ring);
         _runeRings++;
     }
+
+    /// <summary>浮石往背离岛面方向让出的距离（格）。</summary>
+    private const float IsletShift = 0.12f;
+
+    /// <summary>浮石顶面比 h=0 地砖上表面低多少：高件（松树 ≈ 0.75）在 60° 俯角下的投影不盖到岸边格。</summary>
+    private const float IsletDrop = 0.30f;
+
+    /// <summary>浮石装饰件 → 部件（与原场景格同一批部件）。</summary>
+    private static TerrainParts.Kind SceneryPartOf(SceneryKind kind) => kind switch
+    {
+        SceneryKind.Boulder => TerrainParts.Rock,
+        SceneryKind.Pines => TerrainParts.Pines,
+        SceneryKind.Ruins => TerrainParts.Ruins,
+        SceneryKind.Crystal => TerrainParts.Crystal,
+        SceneryKind.Brazier => TerrainParts.Brazier,
+        SceneryKind.Arch => TerrainParts.Arch,
+        _ => TerrainParts.Chest,
+    };
 
     /// <summary>不可落子格的造型散列（0–99）：只按坐标，同一张图永远同一副样子；棋盘内岩石格与场景格共用这一个散列、各有一张阈值表。</summary>
     private static int ObstacleHash(Coord coord) =>

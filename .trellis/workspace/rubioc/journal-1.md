@@ -371,3 +371,37 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 结果：快测 2131 / 0 / 1，构建 0 警告，Godot 自检两图退出 0。
 - AI 观察（只记录）：6 大回合 5 局 212 子只有 1 子落岩石、0 子落未架桥深水。
 - 遗留（另立项）：小图场景装饰随障碍消失（link:1:4 246 格）；Godot 关机偶发崩溃（main 也有）；自检记录异常仍退出 0。岩石暗色观感待用户实机看。
+
+
+## Session 1: shore-islets：小图场景装饰挪到岛外浮石
+
+**Date**: 2026-11-24
+**Task**: shore-islets：小图场景装饰挪到岛外浮石
+**Branch**: `claude/vigilant-swanson-3050f1`
+
+### Summary
+
+terrain-bonus 段 B 裁决 Q1 后续，方案 A：紧贴岛缘的虚空格放浮石 + 原七种场景装饰（视图模型 ShoreScenery 选格，只按坐标散列；插旗阶段不放）；新部件 islet 走合批；link:1:4 放 50 块；全局绘制调用 +8.8%；规格 visual-style-baseline 4 条 Scenario + 同名测试，变异 5 条均红；快测 2135 全绿；对照图 art/shore-islets/，用户已定稿；大图画面未核实；未合并、未推送
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `296074d2` | (see git log) |
+| `777edd11` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
