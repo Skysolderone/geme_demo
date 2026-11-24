@@ -493,6 +493,80 @@ public sealed class HandLedger
         }
     }
 
+    // ---------- 同时决策模式的增量入口（simul-a K5 / G2；现有模式不调用） ----------
+
+    /// <summary>
+    /// 新玩法（simul-a K5）：在整理手牌阶段为该玩家<b>预抽</b>本小回合的征募候选，玩家停在整理阶段、看不到候选。
+    /// 抽法与 <see cref="EnterRecruit"/> 相同（按快照展示数逐位从 <c>recruit</c> 子流加权抽取），只是时点提前到回合开始、按结算顺位逐人调用，
+    /// 因此候选与界面上各人打开征募面板的先后无关。之后经 <see cref="EnterRecruitPredrawn"/> 进入征募阶段。
+    /// </summary>
+    internal void PredrawCandidates(PlayerId player)
+    {
+        PlayerState state = Require(player);
+        RequirePhase(player, state, TurnPhase.Organize, "预抽征募候选");
+        if (!state.Turn!.Predrawn.IsDefault)
+        {
+            throw new SiegeRuleException($"玩家 {player} 本小回合的征募候选已经抽过。");
+        }
+
+        int[] table = RecruitWeights.SamplingTable(_artisanWeight, ContentSet);
+        ImmutableArray<PieceType>.Builder candidates = ImmutableArray.CreateBuilder<PieceType>(state.Snapshot!.RevealCount);
+        for (int i = 0; i < state.Snapshot.RevealCount; i++)
+        {
+            candidates.Add(RecruitWeights.Order[_recruit.WeightedPick(table)]);
+        }
+
+        state.Turn.Predrawn = candidates.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// 新玩法（simul-a K5）：结束整理、进入征募阶段，面板候选取 <see cref="PredrawCandidates"/> 预抽好的那一组，<b>不</b>再消费 <c>recruit</c> 子流。
+    /// 槽位超限门与 <see cref="EnterRecruit"/> 相同。
+    /// </summary>
+    internal RecruitPanelView EnterRecruitPredrawn(PlayerId player)
+    {
+        PlayerState state = Require(player);
+        if (state.Phase != TurnPhase.Organize)
+        {
+            throw new SiegeRuleException($"玩家 {player} 当前阶段为 {state.Phase}，不能进入征募阶段。");
+        }
+
+        if (state.Turn!.Predrawn.IsDefault)
+        {
+            throw new SiegeRuleException($"玩家 {player} 本小回合的征募候选尚未预抽。");
+        }
+
+        EffectSnapshot snapshot = state.Snapshot!;
+        int overflow = state.Hand.Count - snapshot.TypeSlots;
+        if (overflow > 0)
+        {
+            throw new SiegeRuleException(
+                $"玩家 {player} 持有 {state.Hand.Count} 种类型，超出本小回合的 {snapshot.TypeSlots} 个类型槽；须先整类弃牌至少 {overflow} 种，征募阶段才能开始。");
+        }
+
+        state.Turn.Candidates = state.Turn.Predrawn;
+        state.Phase = TurnPhase.Recruit;
+        return PanelOf(player);
+    }
+
+    /// <summary>
+    /// 新玩法（simul-a G2）：本回合部署 0 枚时的结算——<b>不</b>撤销本小回合征募（与 <see cref="OnPass"/> 相反），本轮新增全部折进基数，进入已结算阶段。
+    /// 须在征募阶段调用（整理阶段的玩家先经 <see cref="EnterRecruitPredrawn"/>）。
+    /// </summary>
+    internal void SettleWithoutDeploy(PlayerId player)
+    {
+        PlayerState state = Require(player);
+        RequirePhase(player, state, TurnPhase.Recruit, "以 0 部署结算");
+        foreach (PieceType type in state.Hand.Keys.ToArray())
+        {
+            HandEntry e = state.Hand[type];
+            state.Hand[type] = new HandEntry(e.Total, 0);
+        }
+
+        state.Turn!.Passed = true;
+        state.Phase = TurnPhase.Settled;
+    }
+
     // ---------- 内部 ----------
 
     private static string? RejectReason(PlayerState state, EffectSnapshot snapshot, PieceType type)
@@ -551,6 +625,9 @@ public sealed class HandLedger
     private sealed class TurnState(int sequence, int majorRound)
     {
         internal ImmutableArray<PieceType> Candidates { get; set; } = [];
+
+        /// <summary>新玩法（simul-a K5）预抽的候选；未预抽为 default。现有模式不读写。</summary>
+        internal ImmutableArray<PieceType> Predrawn { get; set; }
 
         internal List<int> Picked { get; } = [];
 

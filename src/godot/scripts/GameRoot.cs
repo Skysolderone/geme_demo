@@ -263,7 +263,11 @@ public sealed partial class GameRoot : Node3D
 
             // --mute：结算演出不发任何声音（show-sound-cues）。只有这一个音量开关，没有设置界面。
             _mute = args.Flag("mute");
+            // 新玩法（同时决策，simul-a A3）的命令行入口，见 GameRoot.Simul.ReadSimulArgs：--simul / --simul-hold= / --simul-check。
+            ReadSimulArgs(args);
             args.EnsureRecognized();
+            CheckSimulArgs(mapSelect, mapId);
+
             CheckRevealArgs(mapSelect);
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
             {
@@ -282,9 +286,9 @@ public sealed partial class GameRoot : Node3D
 
             if (_shotShow is not null)
             {
-                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "power-card" or "power-card-roll"))
+                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "power-card" or "power-card-roll" or "conflict"))
                 {
-                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、power-card 或 power-card-roll（open-map：expand / field 随拼接演出与战场横幅删除）。");
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、power-card、power-card-roll 或 conflict（conflict 只在 --simul 下有：新玩法的冲突节拍；open-map：expand / field 随拼接演出与战场横幅删除）。");
                 }
 
                 if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
@@ -415,7 +419,10 @@ public sealed partial class GameRoot : Node3D
             {
                 MapData map = MapCatalog.Resolve(mapId);
                 _session = MatchSession.Create(map, seed, map.MaxPlayers, 1, _difficulty, cellLimit);
-                BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
+                if (!_simulMode)
+                {
+                    BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
+                }
             }
 
             // --zone= 越界：按本图出生座位数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
@@ -432,6 +439,12 @@ public sealed partial class GameRoot : Node3D
             else if (AutoZone > seats)
             {
                 throw new System.FormatException($"--zone={AutoZone} 越界：地图 {_session.Match.Map.Id} 的出生座位共 {seats} 个（中立平台不可出生），应为 1–{seats}。");
+            }
+
+            // 新玩法只开小图（K4）：大图在开局之前报错退出。
+            if (_simulMode && _session.IsLargeMap)
+            {
+                throw new System.FormatException($"--simul 只开小图：地图 {CurrentMap.Id} 是大图。");
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
@@ -468,6 +481,7 @@ public sealed partial class GameRoot : Node3D
         Connect();
         ConnectMapSelect();
         ConnectCarry();
+        ConnectSimul();
         ShowCarryPreview();
 
         GD.Print(Selecting
@@ -510,7 +524,7 @@ public sealed partial class GameRoot : Node3D
 
         Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(path);
-        GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
+        GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {CurrentRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
         if (_shotCell is { } aimed && GetViewport().GetCamera3D() is { } eye)
         {
             // terrain-bonus 段 B：对准格格心（含层高）在画面上的像素位置——对照图按它取样，不靠"画面正中"（层高与纵深夹取会让格心偏离正中）。
@@ -518,10 +532,10 @@ public sealed partial class GameRoot : Node3D
             GD.Print($"[siege] 截图对准格 {aimed.ToNotation()} 格心在画面 ({at.X:0}, {at.Y:0})");
         }
 
-        DefaultBoardView shot = _session.World.Board();
+        DefaultBoardView shot = CurrentWorld.Board();
 
         // 势力栏与独占格（取景自证：HUD 概览栏的"领地 + 棋串"文字、势力层着色的独占格数，都读视图模型）。
-        var powerLayer = (PowerLayerContent)_session.World.Layer(TacticalLayer.Power);
+        var powerLayer = (PowerLayerContent)CurrentWorld.Layer(TacticalLayer.Power);
         GD.Print("[siege] 势力栏：" + string.Join("；", powerLayer.Players.Select(p => $"{Labels.Player(p.Player)} {p.CompactText}")));
         GD.Print($"[siege] 独占格 {powerLayer.Territory.Length}（" + string.Join("、", powerLayer.Territory.GroupBy(c => c.Owner!.Value).OrderBy(g => g.Key.Value).Select(g => $"{Labels.Player(g.Key)} {g.Count()}")) + "）");
         Rect2 rank = _hud.RankPanelRect;
@@ -535,7 +549,7 @@ public sealed partial class GameRoot : Node3D
             .OrderBy(g => g.Key)
             .Select(g => $"{Labels.Piece(g.Key)} {g.Count()}（{string.Join("、", g.Select(c => c.Coord.ToNotation()))}）")));
         GD.Print($"[siege] 本局改造 {shot.Edits.Length} 处：" + string.Join("、", shot.Edits.Select(Labels.TerrainEdit)));
-        if (_session.World.Preview() is { } shownPreview)
+        if (CurrentWorld.Preview() is { } shownPreview)
         {
             GD.Print("[siege] 暂放：" + string.Join("；", shownPreview.StagedPieces.Select(s =>
                 $"{s.Coord.ToNotation()} {Labels.Piece(s.Type)}{(s.EditText is null ? string.Empty : " + " + s.EditText)}")));
@@ -667,7 +681,7 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+        _follow.ManualInput(opponentActing: !MyTurnNow);
         if (_board.Rig.ToggleOverview())
         {
             ApplyCamera("全局预览");
@@ -677,7 +691,7 @@ public sealed partial class GameRoot : Node3D
     /// <summary>小地图点击（big-map 裁决 8）：注视点跳到该格（缩放不变，经视图模型夹取）。</summary>
     private void JumpTo(Coord cell)
     {
-        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+        _follow.ManualInput(opponentActing: !MyTurnNow);
         (float x, float z) = _board.PlaneCenterOf(cell);
         _board.Rig.Home(x, z);
         ApplyCamera("小地图跳转");
@@ -762,9 +776,16 @@ public sealed partial class GameRoot : Node3D
 
         try
         {
-            TakeLocalShow();
-            Drive(delta);
-            CheckCarrySettlement();
+            if (_simulMode)
+            {
+                DriveSimul(delta);   // 新玩法（simul-a A3）：取代经典的本机演出 / 回合推进 / 带入结算三步
+            }
+            else
+            {
+                TakeLocalShow();
+                Drive(delta);
+                CheckCarrySettlement();
+            }
         }
         catch (System.Exception ex) when (Unattended)
         {
@@ -800,7 +821,7 @@ public sealed partial class GameRoot : Node3D
             {
                 _flash = _flash with { Edits = fresh };
                 _flashTimer = FlashSeconds;
-                GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
+                GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {CurrentRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
             }
 
             RefreshViews();
@@ -851,7 +872,7 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0)
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0 && SimulShotReady())
         {
             _screenshotFrame = -1;
             BeginCapture();
@@ -881,7 +902,7 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private bool FrameBoardForShot(int index)
     {
-        ImmutableArray<BoardPlate> plates = _session.World.Board().Boards;
+        ImmutableArray<BoardPlate> plates = CurrentWorld.Board().Boards;
         if (index >= plates.Length || CameraHome.Platform(plates[index].Cells(), _board.PlaneCenterOf) is not { } rect)
         {
             GD.PrintErr($"[siege] 错误：--shot-board={index} 越界，本图的棋盘清单共 {plates.Length} 块。");
@@ -923,7 +944,7 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private bool AimForShot()
     {
-        DefaultBoardView board = _session.World.Board();
+        DefaultBoardView board = CurrentWorld.Board();
         Coord? target = _shotCell ?? (_shotForbidden ? board.Cells.FirstOrDefault(c => c.Forbidden is not null)?.Coord : null);
         if (target is { } cell && !_board.Rig.IsOverview)
         {
@@ -1022,8 +1043,8 @@ public sealed partial class GameRoot : Node3D
         RefreshViews();
 
         // life-shape 3.4 取景自证：打印本帧视图模型里的禁入格与已活棋串数量（都取自 Presentation，不在引擎侧判活形）。
-        DefaultBoardView shotBoard = _session.World.Board();
-        int alive = _session.World.Layer(TacticalLayer.Board, BoardReading.Groups) is LibertyLayerContent groups
+        DefaultBoardView shotBoard = CurrentWorld.Board();
+        int alive = CurrentWorld.Layer(TacticalLayer.Board, BoardReading.Groups) is LibertyLayerContent groups
             ? groups.Groups.Count(g => g.Mark == GroupMark.Alive)
             : 0;
         GD.Print($"[life-shape] 截图取景：当前行动 {(_session.Match.CurrentPlayer is { } actor ? Labels.Player(actor) : "无")}，禁入格 {shotBoard.Cells.Count(c => c.Block == PlacementBlock.LifeForbidden)}，已活棋串 {alive}，棋串读法 {(_layers.Active == TacticalLayer.Board && _layers.Reading == BoardReading.Groups ? "开" : "关")}");
@@ -1043,6 +1064,12 @@ public sealed partial class GameRoot : Node3D
     /// <summary>把当前状态刷到棋盘与 HUD。选图阶段 HUD 只显示选图面板（对局面板隐藏），棋盘照常刷新——预览与插旗前的盘面是同一条渲染路径。</summary>
     private void RefreshViews()
     {
+        if (_simul is not null)
+        {
+            RefreshViewsSimul();   // 新玩法开局之后（simul-a A3）；选座阶段仍走下面的现有刷新
+            return;
+        }
+
         ShowMask mask = ShownMask();
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask, GridRange());
         _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
@@ -1076,6 +1103,10 @@ public sealed partial class GameRoot : Node3D
         SyncRecruitCollapse();
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
+        if (_simulMode)
+        {
+            _hud.RefreshSimulPickSeat();   // 新玩法选座阶段（simul-a A3 S3）：中央说明换成新玩法版
+        }
         RefreshCarry();
     }
 
@@ -1163,8 +1194,8 @@ public sealed partial class GameRoot : Node3D
         Rect2 bar = _hud.RecruitBarRect;
         Rect2 grown = bar.Grow(20f);
         Rect2 view = GetViewport().GetVisibleRect();
-        int width = _session.Match.Map.Width;
-        int height = _session.Match.Map.Height;
+        int width = CurrentMap.Width;
+        int height = CurrentMap.Height;
         (Coord low, Coord high) = _board.Extent;
         Vector3[] anchors =
         [
@@ -1658,8 +1689,8 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        _board.RefreshShow(_session.World, _layers.Treatment, mask);
-        _hud.RefreshShow(_session.World, mask);
+        _board.RefreshShow(CurrentWorld, _layers.Treatment, mask);
+        _hud.RefreshShow(CurrentWorld, mask);
     }
 
     /// <summary>
@@ -1716,6 +1747,7 @@ public sealed partial class GameRoot : Node3D
         "capture" => beat is CaptureBeat,
         "power" or "power-card" or "power-card-roll" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
+        "conflict" => beat is ConflictBeat,   // 新玩法（simul-a A3 S3）
         _ => false,
     };
 
@@ -1930,7 +1962,7 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private ImmutableArray<TerrainEdit> NewEdits()
     {
-        ImmutableArray<TerrainEdit> edits = _session.World.Board().Edits;
+        ImmutableArray<TerrainEdit> edits = CurrentWorld.Board().Edits;
         if (edits.Length <= _seenEdits)
         {
             _seenEdits = edits.Length;
@@ -1960,7 +1992,7 @@ public sealed partial class GameRoot : Node3D
         {
             _hover = hover;
             _board.SetCursor(hover);
-            _hud.SetHoverReadout(HoverReadout.Of(hover, _session.World.Board()));
+            _hud.SetHoverReadout(HoverReadout.Of(hover, CurrentWorld.Board()));
             // 大图插旗阶段（big-map D9）：光标处画 9×9 出生圈 / 13×13 构筑范围的预览，合规与否只问 Core 的唯一实现。
             _board.SetFlagPreview(_session.AwaitingZone && _session.IsLargeMap ? hover : null, hover is { } at && _session.IsLegalFlagCell(at));
         }
@@ -2032,7 +2064,7 @@ public sealed partial class GameRoot : Node3D
 
         if (right != 0f || up != 0f)
         {
-            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+            _follow.ManualInput(opponentActing: !MyTurnNow);
             _board.Rig.Pan(right, up, (float)delta);
         }
         else if (_follow.IsTravelling)
@@ -2100,8 +2132,8 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private Coord[] HomeCells()
     {
-        DefaultBoardView board = _session.World.Board();
-        if (_session.World.OwnZone is { } zone)
+        DefaultBoardView board = CurrentWorld.Board();
+        if (CurrentWorld.OwnZone is { } zone)
         {
             return [.. board.Cells.Where(c => c.BirthZone == zone).Select(c => c.Coord)];
         }
@@ -2194,7 +2226,7 @@ public sealed partial class GameRoot : Node3D
                 // 演出期间空格是提速（按住状态由 AdvanceShow 逐帧轮询），不回家；非演出期间仍是镜头回家。
                 if (!ShowPlaying)
                 {
-                    _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+                    _follow.ManualInput(opponentActing: !MyTurnNow);
                     FocusHome(opening: false);
                     _dirty = true;
                 }
@@ -2237,7 +2269,7 @@ public sealed partial class GameRoot : Node3D
         if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } wheel)
         {
             bool wasOverview = _board.Rig.IsOverview;
-            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+            _follow.ManualInput(opponentActing: !MyTurnNow);
             _board.Rig.Zoom(wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1);
             ApplyCamera("缩放");
             _dirty |= wasOverview != _board.Rig.IsOverview;
@@ -2263,6 +2295,11 @@ public sealed partial class GameRoot : Node3D
                     _dirty = true;
                 }
             }
+        }
+
+        if (_simulMode && HandleSimulInput(@event))
+        {
+            return;   // 新玩法的按键（simul-a A3，D13）
         }
 
         if (@event.IsActionPressed(InputBindings.CycleReadingAction))
@@ -2357,7 +2394,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _dragging = true;
-        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
+        _follow.ManualInput(opponentActing: !MyTurnNow);
         ApplyCamera("拖动");
         // 相机只平移，移完后指针底下正是抓点；夹到地图边时则不是——重新锚定，下一步从此刻的地面点量起，回拖时不会跳。
         _dragGround = BoardGeometry.TryGround(_board.Camera, mouse, out Vector3 anchored) ? anchored : null;
@@ -2402,6 +2439,12 @@ public sealed partial class GameRoot : Node3D
 
     private void OnBoardClicked(Coord coord)
     {
+        if (_simulMode)
+        {
+            OnBoardClickedSimul(coord);   // 新玩法（simul-a A3）：选座即开局，开局后切换本机暂放
+            return;
+        }
+
         if (_session.AwaitingZone)
         {
             if (_session.IsLargeMap)

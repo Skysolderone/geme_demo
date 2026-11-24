@@ -5,6 +5,13 @@ using Siege.Core.Board.Maps;
 
 namespace Siege.Presentation.MapSelect;
 
+/// <summary>新局面板的玩法（simul-a G5）：经典（轮流决策）/ 新玩法（同时决策，只开小图）。</summary>
+public enum GameMode
+{
+    Classic,
+    Simul,
+}
+
 /// <summary>
 /// 新局界面的视图模型（board-link-mode D8 / 实现裁决 D7，tasks 4.1；零引擎依赖）：整个游戏只剩链接模式一种地图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>，
 /// 界面只有"当前地图种子 + 完整标识、种子输入、换一张、人数（map-expand-25 D1：2 / 3 / 4，缺省 4）、尺寸（big-map 裁决 11：大 / 小；large-default 裁决 1：缺省大，小图标"旧模式"）、AI 难度、开始"。
@@ -36,6 +43,9 @@ public sealed class MapSelectModel
     private int _acceptedPlayers;
     private MapTier _acceptedTier;
     private AiDifficulty _difficulty;
+    private GameMode _mode;
+    private GameMode _acceptedMode;
+    private MapTier _tierBeforeSimul = DefaultTier;
 
     /// <summary>以调用方注入的初始地图种子建模（"已取好一个地图种子"），人数为 <see cref="DefaultPlayers"/>。</summary>
     /// <param name="difficulty">难度的预选（expert-lookahead D10：图形版 <c>--difficulty=</c>），缺省标准。</param>
@@ -80,6 +90,43 @@ public sealed class MapSelectModel
     /// <summary>难度选择的选项：四档，按枚举次序（显示名见 <c>Labels.Difficulty</c>）。</summary>
     public static IReadOnlyList<AiDifficulty> DifficultyOptions { get; } = Enum.GetValues<AiDifficulty>();
 
+    /// <summary>当前玩法（simul-a G5，缺省经典）。</summary>
+    public GameMode Mode => _mode;
+
+    /// <summary>玩法选项：经典在前、新玩法在后。</summary>
+    public static IReadOnlyList<GameMode> ModeOptions { get; } = [GameMode.Classic, GameMode.Simul];
+
+    /// <summary>尺寸是否被玩法锁定（新玩法只开小图，K4）：锁定时尺寸选项不可切。</summary>
+    public bool TierLocked => _mode == GameMode.Simul;
+
+    /// <summary>
+    /// 选择玩法（simul-a G5 / K4）：切到新玩法时记下当前尺寸并锁定为小图；切回经典时恢复切换前的尺寸。返回"标识是否变了"（尺寸变了即变）——
+    /// 变了调用方重新解析并重搭预览（同 <see cref="SelectTier"/>）。未定义的玩法抛出；确认开局后不再接受。
+    /// </summary>
+    public bool SelectMode(GameMode mode)
+    {
+        EnsureOpen();
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "玩法只能是经典或新玩法。");
+        }
+
+        if (mode == _mode)
+        {
+            return false;
+        }
+
+        if (mode == GameMode.Simul)
+        {
+            _tierBeforeSimul = _tier;
+            _mode = mode;
+            return Move(_current, _players, MapTier.Small);
+        }
+
+        _mode = mode;
+        return Move(_current, _players, _tierBeforeSimul);
+    }
+
     /// <summary>所选难度（开局时交给建局）。</summary>
     public AiDifficulty Difficulty => _difficulty;
 
@@ -116,6 +163,14 @@ public sealed class MapSelectModel
         {
             throw new ArgumentOutOfRangeException(nameof(tier), tier, "尺寸只能是小图或大图。");
         }
+
+        if (TierLocked && tier != MapTier.Small)
+        {
+            // 新玩法只开小图（K4）：尺寸不可切，只给提示、标识不变。
+            Notice = Text.Labels.SimulTierLocked;
+            return false;
+        }
+
         return Move(_current, _players, tier);
     }
 
@@ -135,6 +190,11 @@ public sealed class MapSelectModel
         {
             // 裸 link（没有种子）、已作废的两段写法与写错的标识都由唯一实现的 Parse 抛出 FormatException → 拒绝。
             (ulong seed, int players, MapTier tier) = LinkMapId.Parse(mapId);
+            if (TierLocked && tier != MapTier.Small)
+            {
+                return false;   // 新玩法只开小图（K4）
+            }
+
             Move(seed, players, tier);
             return true;
         }
@@ -181,7 +241,7 @@ public sealed class MapSelectModel
     }
 
     /// <summary>调用方已按 <see cref="CurrentId"/> 解析出地图并搭好预览：当前状态成为"上一张成功的图"。</summary>
-    public void Accept() => (_accepted, _acceptedPlayers, _acceptedTier) = (_current, _players, _tier);
+    public void Accept() => (_accepted, _acceptedPlayers, _acceptedTier, _acceptedMode) = (_current, _players, _tier, _mode);
 
     /// <summary>调用方解析 / 搭预览失败：回到上一张成功的图（种子、人数与尺寸一起），面板显示 <paramref name="message"/>。</summary>
     public void RollBack(string message)
@@ -189,6 +249,7 @@ public sealed class MapSelectModel
         _current = _accepted;
         _players = _acceptedPlayers;
         _tier = _acceptedTier;
+        _mode = _acceptedMode;
         SeedText = Invariant(_current);
         Notice = message ?? string.Empty;
     }
@@ -200,6 +261,7 @@ public sealed class MapSelectModel
         _current = _accepted;
         _players = _acceptedPlayers;
         _tier = _acceptedTier;
+        _mode = _acceptedMode;
         SeedText = Invariant(_current);
         IsConfirmed = true;
         return CurrentId;

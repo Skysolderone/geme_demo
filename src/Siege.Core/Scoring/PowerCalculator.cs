@@ -192,7 +192,7 @@ public static class PowerCalculator
     /// <see cref="RankGroup.Rank"/> 取竞争名次（并列后跳号，1、1、3）；稠密名次（1、1、2）= 组在数组中的下标 + 1。
     /// 两种都能从返回值无损得到，§11.2 先手值该用哪一种由 add-match-flow 裁决，本层不定。
     /// </summary>
-    private static ImmutableArray<RankGroup> Rank(ImmutableArray<PlayerPower> players)
+    internal static ImmutableArray<RankGroup> Rank(ImmutableArray<PlayerPower> players)
     {
         ImmutableArray<RankGroup>.Builder ranking = ImmutableArray.CreateBuilder<RankGroup>();
         var byPower = players

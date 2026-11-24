@@ -60,6 +60,11 @@ public sealed partial class GameRoot
             throw new System.FormatException($"--map-select 只能用完整的链接图标识预填种子与人数（{LinkMapId.Prefix}:<地图种子>:<人数>），{preselect} 不是：新局界面只有 {LinkMapId.Prefix}: 一种地图。");
         }
 
+        if (_simulMode)
+        {
+            _select.SelectMode(GameMode.Simul);   // --map-select --simul：预选新玩法（simul-a A3 S3，截图与直达用）
+        }
+
         MatchSession preview = PreviewSession();
         _select.Accept();
         _selectEntryId = _select.CurrentId;
@@ -83,6 +88,7 @@ public sealed partial class GameRoot
         _hud.MapStartPressed += StartMatch;
         _hud.MapPlayersPicked += players => OnSelectionChanged(_select?.SelectPlayers(players));   // 人数是标识的一部分：变了即重解析、重搭预览
         _hud.MapTierPicked += tier => OnSelectionChanged(_select?.SelectTier(tier));   // 尺寸同理（big-map 裁决 11）：选大即四段标识、预览换成 150×150 大陆
+        _hud.MapModePicked += mode => OnSelectionChanged(_select?.SelectMode(mode));   // 玩法（simul-a G5 / K4）：选新玩法即锁定小图，尺寸变了同样重解析、重搭预览
         // 大图缩略上的插旗（relic-sites 裁决 1 / 2）：悬停只换读数与框，点格经视图模型判合规（不合规只提示）；都只刷面板。
         _hud.MapThumbnailHovered += cell =>
         {
@@ -456,6 +462,7 @@ public sealed partial class GameRoot
         }
 
         _difficulty = _select.Difficulty;
+        _simulMode = _select.Mode == GameMode.Simul;   // 新玩法（simul-a A3 D6）：照常建未插旗的会话显示座位，点座位后由 GameRoot.Simul 开局
         _pendingFlag = _pick.Enabled ? _pick.Picked : null;   // 面板上选的旗格（裁决 3）：建局后立即插；带入带出开启时等补给阶段重建会话之后再插
         _pick.Bind(null);
         _session = MatchSession.Create(_previewMap, _matchSeed, _previewMap.MaxPlayers, 1, _difficulty, _cellLimit);
@@ -463,7 +470,10 @@ public sealed partial class GameRoot
         _previewThumbnail = null;   // 面板连同缩略一起撤掉（HideMapSelect 帧末释放节点），主场景不再持有那张纹理
         _previewThumbnailId = string.Empty;
         _previewBoard = null;
-        BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
+        if (!_simulMode)
+        {
+            BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
+        }
         if (!PlantPendingFlag())
         {
             _board.Build(_session.World.Board(), _session.ZoneOwners);

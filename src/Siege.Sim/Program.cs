@@ -74,6 +74,7 @@ public static class Program
                 "run" => Run(cli, mapSeedSource),
                 "replay" => Replay(cli),
                 "analyze" => Analyze(cli),
+                "simul" => Simul.SimulCommand.Run(args.Skip(1), mapSeedSource, Console.Out),
                 _ => Unknown(args[0]),
             };
         }
@@ -112,6 +113,7 @@ public static class Program
         Console.WriteLine("    人数：--players 决定人数；不给 --map 即 link:1:<人数>；--map 给了完整标识而不给人数即按标识的人数；两者不一致报错退出。");
         Console.WriteLine($"    地图：每名玩家一个 8×8 出生座位（座位数 = 人数，开局盲选、座位互斥），座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场，其余为中立平台（不可出生，第 {Core.Match.MatchFlow.BuildProtectionRounds + 1} 大回合起可落子）。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
+        Console.WriteLine(Simul.SimulCommand.Usage + "（新玩法：同时决策 + 同格冲突，全 AI 跑局）");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--review-cycles] [--out <报告文件>]");
         Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
         Console.WriteLine("    --review-artisan：按日志回放每局，诊断每次 AI 匠人可改造时三类改造（立栅 / 搭桥 / 烧林）的合法候选与评价（耗时约为跑局的一到两倍；缺省不做）");

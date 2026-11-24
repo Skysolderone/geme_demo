@@ -57,6 +57,9 @@ public enum CalloutKind
 
     /// <summary>信物揭示：信物名。</summary>
     Relic,
+
+    /// <summary>新玩法的同格冲突（simul-a D3）：战力比与胜方。只由 <see cref="ConflictBeat"/> 产生，现有模式的节拍里没有。</summary>
+    Conflict,
 }
 
 /// <summary>一条活跃飘字（design.md D4）：所在格、文案、来源、年龄（0..1000‰，满即淡出完毕、不再列出）。</summary>
@@ -320,6 +323,13 @@ public sealed class ShowTimeline
                     }
 
                     break;
+                case ConflictBeat conflict:
+                    for (int k = 0; k < conflict.Conflicts.Length; k++)
+                    {
+                        AddCallout(callouts, conflict.Conflicts[k].Coord, conflict.Conflicts[k].CalloutText, CalloutKind.Conflict, nowMs - startMs - (k * ConflictBeat.PerConflictMs));
+                    }
+
+                    break;
                 case PowerRevealBeat reveal:
                     AddReveals(reveal, nowMs - startMs, reveals, rings, groupLabels, ref shake);
                     if (i == _index)
@@ -379,6 +389,15 @@ public sealed class ShowTimeline
                     }
 
                     break;
+                case ConflictBeat conflict:
+                    if (current && !conflict.Conflicts.IsEmpty)
+                    {
+                        int index = Math.Min(conflict.Conflicts.Length - 1, _elapsedMs / ConflictBeat.PerConflictMs);
+                        int within = Math.Min(PowerInterpolation.FullPermille, (_elapsedMs - (index * ConflictBeat.PerConflictMs)) * PowerInterpolation.FullPermille / ConflictBeat.PerConflictMs);
+                        banner = new BannerDisplay(conflict.Conflicts[index].BannerText, index, conflict.Conflicts.Length, within);
+                    }
+
+                    break;
                 case BannerBeat banners:
                     if (current && !banners.Banners.IsEmpty)
                     {
@@ -415,6 +434,9 @@ public sealed class ShowTimeline
                 case CaptureBeat { Pieces.IsEmpty: false }:
                 case RelicRevealBeat { Relics.IsEmpty: false }:
                     endMs = Math.Max(endMs, startMs + Callout.LifetimeMs);
+                    break;
+                case ConflictBeat { Conflicts.IsEmpty: false } conflict:
+                    endMs = Math.Max(endMs, startMs + ((conflict.Conflicts.Length - 1) * ConflictBeat.PerConflictMs) + Callout.LifetimeMs);
                     break;
                 case PowerRevealBeat reveal:
                     for (int e = 0; e < reveal.Entries.Length; e++)

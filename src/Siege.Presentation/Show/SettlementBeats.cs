@@ -382,6 +382,22 @@ public sealed record BannerBeat(ImmutableArray<string> Banners) : SettlementBeat
     public static string EliminatedText(PlayerId player) => $"{FactionTable.For(player).Name}出局";
 }
 
+/// <summary>新玩法一格冲突的演出内容（simul-a D3）：所在格、横幅文字与格上飘字，文案经 <c>Labels</c> 取自 Core 的冲突记录。</summary>
+public sealed record ConflictCallout(Coord Coord, string BannerText, string CalloutText);
+
+/// <summary>
+/// 新玩法的冲突节拍（simul-a D3）：冲突格按 Core 的报告次序（坐标字典序）逐个显示横幅文字，同时在该格出飘字（<see cref="CalloutKind.Conflict"/>）。
+/// 只由 <see cref="SimulBeats"/> 生成，排在落子节拍之前；现有模式的节拍生成不产生它。
+/// </summary>
+public sealed record ConflictBeat(ImmutableArray<ConflictCallout> Conflicts) : SettlementBeat
+{
+    /// <summary>每格冲突的时长（毫秒）。</summary>
+    public const int PerConflictMs = 900;
+
+    /// <inheritdoc/>
+    public override int DurationMs => PerConflictMs * Conflicts.Length;
+}
+
 /// <summary>
 /// 结算的一侧（结算前或结算后）供节拍生成读取的公开数据：盘面（含信物层，信物节拍读它）、势力读数、逐棋串军势明细（军势揭示的算式）、玩家状态（出局）、有无终局结果。
 /// 全部取自公开快照，不含任何私有信息。
