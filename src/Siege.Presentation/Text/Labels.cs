@@ -230,6 +230,66 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(mark), mark, "未知棋串标记。"),
     };
 
+    // ---------- 新玩法（simul-a，同时决策）：文案用"单位 / 整体 / 岛 / 部署"，不写"棋盘 / 棋子" ----------
+
+    /// <summary>新局面板玩法选项的显示名。</summary>
+    public static string GameModeName(MapSelect.GameMode mode) => mode switch
+    {
+        MapSelect.GameMode.Classic => "经典（轮流部署）",
+        MapSelect.GameMode.Simul => "新玩法（同时部署）",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知玩法。"),
+    };
+
+    /// <summary>新局面板选新玩法时的开头说明。</summary>
+    public static string SimulIntro =>
+        $"新玩法：全员同时准备、同时揭晓；同一格有多人部署时比战力（基础战力 + 回合开始时相接的己方单位数），并列掷骰。"
+        + $"每回合最多部署 {Core.Simul.SimulRules.DeployLimit} 个单位，同一座岛上自己的落点之间至少隔一格；活形内部格双方都不能部署。"
+        + "全灭不判负；可部署格占满、全员一回合不部署或到回合上限即终局。只开小图（浮空岛）。";
+
+    /// <summary>新玩法下点了大图尺寸时的提示（K4）。</summary>
+    public static string SimulTierLocked => "新玩法只开小图（浮空岛）。";
+
+    /// <summary>新玩法的回合标题。</summary>
+    public static string SimulRoundTitle(int round) => $"第 {round} 回合";
+
+    /// <summary>新玩法里一名玩家本回合的提交状态（对手只显示这一项，Q09）。</summary>
+    public static string SimulSubmitted(bool submitted) => submitted ? "已提交" : "准备中";
+
+    /// <summary>新玩法 AI 决策中的提示（D7）。</summary>
+    public static string SimulAiThinking => "AI 思考中…";
+
+    /// <summary>新玩法的终局原因。</summary>
+    public static string SimulEndReason(Core.Simul.SimulEndReason reason) => reason switch
+    {
+        Core.Simul.SimulEndReason.LastPlayerStanding => "只剩一名参赛玩家",
+        Core.Simul.SimulEndReason.BoardFull => "可部署格已占满",
+        Core.Simul.SimulEndReason.NoDeployRound => "全员一回合未部署",
+        Core.Simul.SimulEndReason.RoundCap => "到达回合上限",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "未知终局原因。"),
+    };
+
+    /// <summary>
+    /// 冲突的横幅文字：<c>E5 冲突：金方(P0) 3 : 银方(P1) 2，金方(P0) 胜</c>；有掷骰时在胜者前加 <c>掷骰 3 : 3 → 5 : 2，</c>。
+    /// 战力与骰点原样取自 Core 的冲突记录，本层不重算。
+    /// </summary>
+    public static string SimulConflictBanner(Core.Simul.SimulConflict conflict)
+    {
+        ArgumentNullException.ThrowIfNull(conflict);
+        string powers = string.Join(" : ", conflict.Entrants.Select(e => $"{Player(e.Player)} {e.Power}"));
+        string dice = conflict.Rolls.IsEmpty ? string.Empty : "掷骰 " + string.Join(" → ", conflict.Rolls.Select(r => string.Join(" : ", r.Select(d => d.Value)))) + "，";
+        return $"{conflict.Cell.ToNotation()} 冲突：{powers}，{dice}{Player(conflict.Winner)} 胜";
+    }
+
+    /// <summary>冲突格上的飘字：只写战力比与胜方，如 <c>3 : 2 金方胜</c>；有掷骰时写 <c>掷骰 5 : 2 金方胜</c>（末轮骰点）。</summary>
+    public static string SimulConflictCallout(Core.Simul.SimulConflict conflict)
+    {
+        ArgumentNullException.ThrowIfNull(conflict);
+        string winner = FactionTable.For(conflict.Winner).Name;
+        return conflict.Rolls.IsEmpty
+            ? $"{string.Join(" : ", conflict.Entrants.Select(e => e.Power))} {winner}胜"
+            : $"掷骰 {string.Join(" : ", conflict.Rolls[^1].Select(d => d.Value))} {winner}胜";
+    }
+
     /// <summary>坐标列表，围棋记法，顿号分隔。</summary>
     public static string Coords(IEnumerable<Coord> coords) => string.Join("、", coords.Select(c => c.ToNotation()));
 

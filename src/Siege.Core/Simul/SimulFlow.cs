@@ -436,6 +436,9 @@ public sealed class SimulFlow
         };
     }
 
+    /// <summary>按观察者投影出现有表现层能吃的公开快照、补充载荷、本人手牌与本人暂放预演（<see cref="SimulProjection.For"/>）。零副作用。</summary>
+    public SimulViewerPayload PublishFor(PlayerId viewer) => SimulProjection.For(this, viewer);
+
     // ---------- 内部 ----------
 
     /// <summary>回合开始（J2-1）：定顺位、记 S0、按顺位逐人开准备（部署上限 <see cref="SimulRules.DeployLimit"/>）并预抽征召候选（K5）。</summary>
