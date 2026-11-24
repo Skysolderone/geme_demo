@@ -25,7 +25,7 @@ terrain-bonus 段 B 把岛内岩石障碍改成可落子的岩石地表后，障
 - [x] 构建 0 警告；快测（`Category!=Slow&Category!=Perf`）全绿。
 - [x] 规格 visual-style-baseline「棋盘台面的可视表现」补正文与 4 条 Scenario，各有同名测试；变异 5 条（瀑布口、八邻、对夹、占位、中立轮廓）均红。
 - [x] 近景对照图 `art/shore-islets/compare-link-1-4.png`（main 9a294c6c vs 新版，南岸 Z3 / 西岸 H20）。
-- [ ] 用户看图定稿。
+- [x] 用户看图定稿（2026-11-24）。
 
 ## Notes
 
