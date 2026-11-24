@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/core/index.md", "reason": "核心开发规范入口与质量检查"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、单一实现、视图分离"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "随机子流隔离（新增 simul-dice）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、变异验证"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "坐标记法与四邻接"}
+{"file": ".trellis/tasks/11-24-simul-a/design.md", "reason": "J 实现决策、算例 E1–E11、K 缺口裁决"}
+{"file": ".trellis/tasks/11-24-simul-a/implement.md", "reason": "分阶段步骤与通用约束"}
