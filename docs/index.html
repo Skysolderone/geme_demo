@@ -158,10 +158,10 @@
       <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
       <p class="lead">2–4 方在一块 60×60 的大陆上各自选点插旗，旗与旗之间至少隔 20 格。前三个大回合只在旗帜周围 13×13 里筑阵，第四个大回合起全图开放：像围棋一样围住对手的棋串把它提走，抢地块、夺信物，把“加值 × 倍率”滚成势力。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.10.0/Siege-windows-x64-v0.10.0.zip">下载 Windows 版<span>64 位 · 约 74 MB · v0.10.0</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.11.0/Siege-windows-x64-v0.11.0.zip">下载 Windows 版<span>64 位 · 约 74 MB · v0.11.0</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.10.0 卡通地形版（2026-11-24）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <p class="note">当前版本 v0.11.0 新玩法版（2026-11-25），新增同时部署的「新玩法」模式。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
       <div class="shot"><img src="assets/hero-v0100.jpg" width="1600" height="900" alt="v0.10.0 对局实拍：小图第 37 大回合，卡通描边的四方单位分布在草地、岩石与浅滩上，左侧一条河道与木桥，四周是浮空岛与天空"></div>
     </div>
   </div>
@@ -226,17 +226,17 @@
       <div class="dl">
         <div class="card" style="--c:var(--ink)">
           <h3>Windows</h3>
-          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.10.0/Siege-windows-x64-v0.10.0.zip">Siege-windows-x64-v0.10.0.zip<span>Windows 10 / 11，64 位 · v0.10.0</span></a>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.11.0/Siege-windows-x64-v0.11.0.zip">Siege-windows-x64-v0.11.0.zip<span>Windows 10 / 11，64 位 · v0.11.0</span></a>
           <ol>
             <li>解压整个文件夹（<code>Siege.exe</code>、<code>Siege.pck</code> 和 <code>data_Siege.Godot_windows_x86_64</code> 要放在一起，别只拿出 exe）。</li>
             <li>运行 <code>Siege.exe</code>。</li>
             <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
           </ol>
-          <p class="note" style="word-break:break-all">SHA256：<code>B04ABFA8B2F411EAA97DE753045A25AF390A7339AAD605E55024DB4C773903DD</code></p>
+          <p class="note" style="word-break:break-all">SHA256：<code>C05BE90F2D086357756F13D1073A348BE1E5CBE31D6F65EACB87685A71B99DEA</code></p>
         </div>
         <div class="card" style="--c:var(--line)">
           <h3>macOS</h3>
-          <p>v0.10.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
+          <p>v0.11.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
         </div>
       </div>
       <p class="note">显卡需要支持 Vulkan。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
@@ -258,6 +258,7 @@
             <tr><td>手牌</td><td><kbd>H</kbd> 打开手牌面板；<kbd>V</kbd> 收起征募面板</td></tr>
             <tr><td>匠人</td><td><kbd>E</kbd> 轮换地形改造目标（搭桥 / 立栅 / 烧林）</td></tr>
             <tr><td>视角</td><td>方向键或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移，按住鼠标左键拖动地图，<kbd>M</kbd> 全局预览，<kbd>空格</kbd> 回到自己的棋盘，<kbd>F</kbd> 切换跟随对手镜头</td></tr>
+            <tr><td>新玩法</td><td>新局面板“玩法”一行选“新玩法”（只开小图）→ 点出生座位开局；手牌选类型 → 点浅青色格暂放 → <kbd>Enter</kbd> 提交，<kbd>Backspace</kbd> 撤回提交，<kbd>P</kbd> 本回合不部署，<kbd>C</kbd> 清空暂放</td></tr>
             <tr><td>返回</td><td><kbd>Esc</kbd></td></tr>
           </tbody>
         </table>
@@ -281,6 +282,16 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.11.0 新玩法版 <time datetime="2026-11-25">2026-11-25</time></h3>
+        <ul>
+          <li><b>新玩法（同时部署）</b>：与原有玩法并列，原有玩法不变。每回合全员同时征召、暂放，提交后统一揭晓；每回合最多部署 3 个单位，同一回合自己在同一座岛上的落点不能相邻（含斜邻）。</li>
+          <li><b>同格冲突</b>：几方选中同一格时比战力（基础战力：堡垒 4、其余 1，再加回合开始时与该格相接的己方单位数）；最高战力并列时掷 d6。落败方的单位不落下，手牌照扣。</li>
+          <li><b>按顺位围杀与全灭不判负</b>：按上回合势力排名的顺位先后提子，互相堵死时顺位靠前者保住；单位全部被围杀也不出局，可以继续重建。活形内部空格双方都不能进入，算作所有者的领地。</li>
+          <li><b>终局</b>：所有可部署格占满、整回合无人部署、到达回合上限或只剩一人时终局；4 人局前两名获胜。</li>
+          <li>已知：新玩法 AI 是最简单的贪心打法，常抢同一格、不会改造地形；新玩法暂不支持存档和大图。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.10.0 卡通地形版 <time datetime="2026-11-24">2026-11-24</time></h3>
         <ul>
           <li><b>卡通画面</b>：十种单位换成带描边的卡通角色 / 建筑；地块与浮岛换卡通材质与新色板，18 类装饰改为卡通描边造型，天空重新调色，界面统一。</li>
