@@ -1531,7 +1531,8 @@ public sealed partial class BoardView : Node3D
         }
 
         // Low cloud rings remain under the island and away from the playing surface.
-        for (int variant = 0; variant < TerrainParts.Cloud.Variants; variant++)
+        // 选座前（小图插旗阶段视图里没有格、没有岛面）不摆云团：它们本应藏在岛底下，没有岛面挡着会从上方整片露成白色块。
+        for (int variant = 0; islandCells.Count > 0 && variant < TerrainParts.Cloud.Variants; variant++)
         {
             var transforms = new List<Transform3D>();
             int count = 16;
